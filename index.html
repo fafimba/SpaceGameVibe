@@ -97,10 +97,9 @@
     <div id="gameContainer">
         <canvas id="game"></canvas>
         <div id="touchControls">
-            <div id="joystickZone" class="touch-zone">
-                <div id="joystickBase">
-                    <div id="joystickKnob"></div>
-                </div>
+            <div id="joystickZone" class="touch-zone"></div>
+            <div id="joystickBase">
+                <div id="joystickKnob"></div>
             </div>
         </div>
     </div>
@@ -1404,7 +1403,7 @@
                 const angleDiff = normalizeAngle(joystickAngle - player.angle);
                 if (Math.abs(angleDiff) > JOYSTICK_ROTATION_THRESHOLD) {
                     // Near-instant rotation: lerp 90% of the way each frame
-                    player.angle = player.angle + angleDiff * 0.9;
+                    player.angle = player.angle + angleDiff * 0.06;
                     targetRotation = 0; // Bypass normal rotation system
                 }
             }
