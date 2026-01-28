@@ -64,15 +64,14 @@
         }
 
         #joystickBase {
-            position: absolute;
+            position: fixed;
             width: 80px;
             height: 80px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 50%;
-            left: 50%;
-            bottom: calc(50px + env(safe-area-inset-bottom, 0px));
-            transform: translateX(-50%);
+            display: none;
+            pointer-events: none;
         }
 
         #joystickKnob {
@@ -297,8 +296,8 @@
                 nodeType: 'rectangle'
             },
             'homing_guidance': {
-                name: 'Homing Guidance',
-                description: 'Missiles track enemies',
+                name: 'Rapid Barrage',
+                description: '+75% missile fire rate',
                 prereqs: ['missile_launcher'],
                 cost: 1,
                 color: '#FF9A6B',
@@ -306,8 +305,8 @@
                 nodeType: 'circle'
             },
             'cluster_payload': {
-                name: 'Cluster Payload',
-                description: '+1 missile per volley',
+                name: 'Ricochet Warhead',
+                description: 'Spawn 2 mini missiles on hit',
                 prereqs: ['missile_launcher'],
                 cost: 1,
                 color: '#FFB84D',
@@ -315,8 +314,8 @@
                 nodeType: 'circle'
             },
             'armor_piercing': {
-                name: 'Armor-Piercing Tips',
-                description: '+2 missile damage',
+                name: 'Heavy Payload',
+                description: '+3 missile & explosion damage',
                 prereqs: ['missile_launcher'],
                 cost: 1,
                 color: '#A8A8A8',
@@ -929,7 +928,7 @@
                     } else if (gameState === 'paused') {
                         gameState = 'playing';
                     } else if (gameState === 'skilltree') {
-                        gameState = 'playing';
+                        closeSkillTree();
                     }
                 }
                 
@@ -938,13 +937,20 @@
                     if (gameState === 'playing') {
                         if (skillPoints > 0) {
                             gameState = 'skilltree';
+                            // Hide joystick when skill tree opens
+                            joystickActive = false;
+                            joystickMagnitude = 0;
+                            const jb = document.getElementById('joystickBase');
+                            const jz = document.getElementById('joystickZone');
+                            if (jb) jb.style.display = 'none';
+                            if (jz) jz.style.display = 'none';
                         } else {
                             gameState = 'paused';
                         }
                     } else if (gameState === 'paused') {
                         gameState = 'playing';
                     } else if (gameState === 'skilltree') {
-                        gameState = 'playing';
+                        closeSkillTree();
                     }
                 }
 
@@ -1036,9 +1042,23 @@
                     return;
                 }
 
+                if (gameState === 'skilltree') {
+                    return; // Don't activate joystick during skill tree
+                }
+
                 joystickTouch = e.touches[0];
                 joystickActive = true;
-                updateJoystick(joystickTouch);
+
+                // Position joystick centered at touch point
+                joystickBase.style.display = 'block';
+                joystickBase.style.left = (joystickTouch.clientX - 40) + 'px';
+                joystickBase.style.top = (joystickTouch.clientY - 40) + 'px';
+
+                // Reset knob to center
+                joystickKnob.style.left = '26px';
+                joystickKnob.style.top = '26px';
+                joystickMagnitude = 0;
+
                 e.preventDefault();
             });
             
@@ -1055,6 +1075,7 @@
                 joystickMagnitude = 0;
                 joystickKnob.style.left = '26px';
                 joystickKnob.style.top = '26px';
+                joystickBase.style.display = 'none';
             });
             
             function updateJoystick(touch) {
@@ -1378,11 +1399,13 @@
             if (input.rotateLeft) targetRotation -= ROTATION_SPEED;
             if (input.rotateRight) targetRotation += ROTATION_SPEED;
             
-            // Touch joystick rotation
+            // Touch joystick rotation - almost instant rotation towards joystick direction
             if (joystickActive && joystickMagnitude > JOYSTICK_DEADZONE) {
                 const angleDiff = normalizeAngle(joystickAngle - player.angle);
                 if (Math.abs(angleDiff) > JOYSTICK_ROTATION_THRESHOLD) {
-                    targetRotation = Math.sign(angleDiff) * ROTATION_SPEED;
+                    // Near-instant rotation: lerp 90% of the way each frame
+                    player.angle = player.angle + angleDiff * 0.9;
+                    targetRotation = 0; // Bypass normal rotation system
                 }
             }
             
@@ -1427,11 +1450,24 @@
             // Invulnerability
             player.invulnerable = Math.max(0, player.invulnerable - deltaTime);
             
-            // Auto-fire (only when enemy is in aim cone)
+            // Auto-fire laser (only when enemy is in aim cone)
             player.fireTimer -= deltaTime;
             if (player.fireTimer <= 0 && hasEnemyInAimCone()) {
                 fireBullet();
                 player.fireTimer = getWeaponStats().fireRate;
+            }
+
+            // Auto-fire rockets (independent system, 360º detection)
+            if (!player.rocketTimer) player.rocketTimer = 0;
+            player.rocketTimer -= deltaTime;
+            const stats = getWeaponStats();
+            if (stats.hasRockets && player.rocketTimer <= 0) {
+                const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, 600);
+                if (nearbyEnemies.length > 0) {
+                    fireRocket(nearbyEnemies);
+                    // Fixed cooldown: 1.5s base, 0.9s with cadence upgrade
+                    player.rocketTimer = stats.rocketCadence ? 0.9 : 1.5;
+                }
             }
             
             // Idle bob
@@ -1479,17 +1515,26 @@
             fireRate = Math.max(0.1, fireRate); // Minimum fire rate
 
             // Missile Launcher branch
+            let rocketCadence = false;
+            let rocketExplosionDamage = 3;
+            let rocketExplosionRadius = 80;
+            let rocketRicochet = false;
+
             if (unlockedSkills.includes('missile_launcher')) {
                 hasRockets = true;
             }
-            if (unlockedSkills.includes('cluster_payload')) {
-                rocketCount = 2;
+            if (unlockedSkills.includes('homing_guidance')) {
+                rocketCadence = true; // Higher fire rate for missiles
             }
             if (unlockedSkills.includes('armor_piercing')) {
-                rocketDamage += 2;
+                rocketDamage += 3;
+                rocketExplosionDamage += 2;
+            }
+            if (unlockedSkills.includes('cluster_payload')) {
+                rocketRicochet = true; // Spawns mini rockets on impact
             }
 
-            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser };
+            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketCadence, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet };
         }
 
         function hasEnemyInAimCone() {
@@ -1597,27 +1642,57 @@
                     bullets.push(spreadBullet);
                 }
             }
-            
-            // Fire ROCKETS if unlocked (random chance per shot)
-            if (stats.hasRockets && Math.random() < 0.4) {
-                for (let i = 0; i < stats.rocketCount; i++) {
-                    const offset = (Math.random() - 0.5) * 0.5;
-                    const rocket = pools.bullet.acquire();
-                    rocket.x = player.x;
-                    rocket.y = player.y;
-                    rocket.vx = Math.cos(playerRad + offset) * 200;
-                    rocket.vy = Math.sin(playerRad + offset) * 200;
-                    rocket.life = 3;
-                    rocket.damage = stats.rocketDamage;
-                    rocket.type = 'rocket';
-                    rocket.color = SKILL_TREE['missile_launcher'].color;
-                    rocket.piercing = false;
-                    rocket.turnRate = 150;
-                    bullets.push(rocket);
+        }
+
+        // Fire rockets independently (360º enemy detection)
+        function fireRocket(nearbyEnemies) {
+            const stats = getWeaponStats();
+
+            // Find closest enemy to aim at
+            let closestEnemy = null;
+            let closestDist = Infinity;
+            for (const e of nearbyEnemies) {
+                const dx = e.x - player.x;
+                const dy = e.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestEnemy = e;
                 }
             }
+
+            if (!closestEnemy) return;
+
+            for (let i = 0; i < stats.rocketCount; i++) {
+                // Predict enemy position based on velocity
+                const rocketSpeed = 400;
+                const timeToTarget = closestDist / rocketSpeed;
+                const predictedX = closestEnemy.x + (closestEnemy.vx || 0) * timeToTarget * 0.5;
+                const predictedY = closestEnemy.y + (closestEnemy.vy || 0) * timeToTarget * 0.5;
+
+                // Aim towards predicted position with slight spread
+                const angleToTarget = Math.atan2(predictedY - player.y, predictedX - player.x);
+                const offset = (Math.random() - 0.5) * 0.3;
+
+                const rocket = pools.bullet.acquire();
+                rocket.x = player.x;
+                rocket.y = player.y;
+                rocket.vx = Math.cos(angleToTarget + offset) * rocketSpeed;
+                rocket.vy = Math.sin(angleToTarget + offset) * rocketSpeed;
+                rocket.life = 3;
+                rocket.damage = stats.rocketDamage;
+                rocket.explosionDamage = stats.rocketExplosionDamage;
+                rocket.explosionRadius = stats.rocketExplosionRadius;
+                rocket.hasRicochet = stats.rocketRicochet;
+                rocket.type = 'rocket';
+                rocket.color = COLORS.PLAYER;
+                rocket.piercing = false;
+                rocket.turnRate = 180;
+                rocket.trail = [];
+                bullets.push(rocket);
+            }
         }
-        
+
         function spawnThrusterParticle() {
             const rad = (player.angle + 180) * Math.PI / 180;
             const spread = (Math.random() - 0.5) * 0.5;
@@ -1643,8 +1718,8 @@
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
                 
-                // Rocket homing behavior
-                if (b.type === 'rocket') {
+                // Rocket and mini-rocket homing behavior
+                if (b.type === 'rocket' || b.type === 'mini_rocket') {
                     // Find nearest enemy using spatial grid
                     let nearestDist = Infinity;
                     let nearestEnemy = null;
@@ -1660,38 +1735,35 @@
                     }
                     
                     if (nearestEnemy) {
-                        const dx = nearestEnemy.x - b.x;
-                        const dy = nearestEnemy.y - b.y;
+                        // Predict enemy position based on velocity
+                        const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+                        const timeToTarget = nearestDist / Math.max(speed, 100);
+                        const predictedX = nearestEnemy.x + (nearestEnemy.vx || 0) * timeToTarget * 0.7;
+                        const predictedY = nearestEnemy.y + (nearestEnemy.vy || 0) * timeToTarget * 0.7;
+
+                        const dx = predictedX - b.x;
+                        const dy = predictedY - b.y;
                         const targetAngle = Math.atan2(dy, dx);
                         const currentAngle = Math.atan2(b.vy, b.vx);
                         let angleDiff = targetAngle - currentAngle;
                         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                        
+
                         const maxTurn = (b.turnRate * Math.PI / 180) * deltaTime;
                         const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
                         const newAngle = currentAngle + turn;
-                        const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
-                        const newSpeed = Math.min(speed + 200 * deltaTime, 450);
+                        const newSpeed = Math.min(speed + 300 * deltaTime, 650);
                         b.vx = Math.cos(newAngle) * newSpeed;
                         b.vy = Math.sin(newAngle) * newSpeed;
                     }
-                    
-                    // Spawn trail particles (reduced frequency when many entities)
-                    const totalEntities = bullets.length + enemies.length;
-                    const trailChance = totalEntities > 100 ? 0.2 : 0.5;
-                    if (Math.random() < trailChance) {
-                        const p = pools.particle.acquire();
-                        p.x = b.x;
-                        p.y = b.y;
-                        p.vx = (Math.random() - 0.5) * 30;
-                        p.vy = (Math.random() - 0.5) * 30;
-                        p.life = 0.2;
-                        p.maxLife = 0.2;
-                        p.size = 3;
-                        p.color = COLORS.PLAYER;
-                        p.type = 'rocket_trail';
-                        particles.push(p);
+
+                    // Store trail positions for line rendering
+                    if (!b.trail) b.trail = [];
+                    const isMini = b.type === 'mini_rocket';
+                    const maxTrailLength = isMini ? 25 : 50;
+                    b.trail.unshift({ x: b.x, y: b.y });
+                    if (b.trail.length > maxTrailLength) {
+                        b.trail.pop();
                     }
                 }
 
@@ -2256,6 +2328,14 @@
             // Open skill tree
             gameState = 'skilltree';
 
+            // Hide joystick and disable touch zone when skill tree opens
+            joystickActive = false;
+            joystickMagnitude = 0;
+            const joystickBase = document.getElementById('joystickBase');
+            const joystickZone = document.getElementById('joystickZone');
+            if (joystickBase) joystickBase.style.display = 'none';
+            if (joystickZone) joystickZone.style.display = 'none';
+
             // Effects (more intense if multiple levels)
             const intensity = Math.min(levelsGained, 3);
             triggerFlash(COLORS.XP, 0.2 + intensity * 0.1, 200);
@@ -2323,6 +2403,9 @@
         // Close skill tree and resume game
         function closeSkillTree() {
             gameState = 'playing';
+            // Re-enable joystick zone
+            const joystickZone = document.getElementById('joystickZone');
+            if (joystickZone) joystickZone.style.display = 'block';
         }
         
         // Find closest node in a direction for keyboard navigation
@@ -2503,11 +2586,75 @@
                 }
 
                 if (bulletDestroyed) {
+                    // Rocket explosion damage in area
+                    if (b.type === 'rocket' && b.explosionRadius > 0) {
+                        const explosionX = b.x;
+                        const explosionY = b.y;
+                        const explosionRadius = b.explosionRadius;
+                        const explosionDamage = b.explosionDamage;
+
+                        // Visual explosion effect - more impactful
+                        spawnRocketExplosion(explosionX, explosionY, explosionRadius);
+
+                        // Damage all enemies in explosion radius
+                        const enemiesInBlast = spatialGrid.queryRadius(explosionX, explosionY, explosionRadius);
+                        for (const blastEnemy of enemiesInBlast) {
+                            const dx = blastEnemy.x - explosionX;
+                            const dy = blastEnemy.y - explosionY;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist <= explosionRadius) {
+                                // Damage falls off with distance
+                                const falloff = 1 - (dist / explosionRadius) * 0.5;
+                                const dmg = Math.ceil(explosionDamage * falloff);
+                                blastEnemy.hp -= dmg;
+                                const config = ENEMY_TYPES[blastEnemy.type];
+                                spawnFloatingText(blastEnemy.x, blastEnemy.y - config.radius, dmg.toString(), COLORS.PLAYER);
+                                spawnHitParticles(blastEnemy.x, blastEnemy.y, COLORS.PLAYER);
+                                if (blastEnemy.hp <= 0) {
+                                    const idx = enemies.indexOf(blastEnemy);
+                                    if (idx !== -1) killEnemy(blastEnemy, idx);
+                                }
+                            }
+                        }
+
+                        // Ricochet: spawn 2 smaller homing missiles
+                        if (b.hasRicochet) {
+                            const ricochetTargets = spatialGrid.queryRadius(explosionX, explosionY, 400);
+                            let targetsFound = 0;
+                            for (const target of ricochetTargets) {
+                                if (targetsFound >= 2) break;
+                                if (target.hp <= 0) continue;
+
+                                const angle = Math.atan2(target.y - explosionY, target.x - explosionX);
+                                const spread = (Math.random() - 0.5) * 0.3;
+
+                                const miniRocket = pools.bullet.acquire();
+                                miniRocket.x = explosionX;
+                                miniRocket.y = explosionY;
+                                miniRocket.vx = Math.cos(angle + spread) * 550;
+                                miniRocket.vy = Math.sin(angle + spread) * 550;
+                                miniRocket.life = 1.5;
+                                miniRocket.damage = Math.ceil(b.damage * 0.5);
+                                miniRocket.explosionDamage = 0;
+                                miniRocket.explosionRadius = 0;
+                                miniRocket.hasRicochet = false;
+                                miniRocket.type = 'mini_rocket';
+                                miniRocket.color = COLORS.PLAYER;
+                                miniRocket.piercing = false;
+                                miniRocket.turnRate = 250;
+                                miniRocket.size = 0.6;
+                                miniRocket.trail = [];
+                                bullets.push(miniRocket);
+                                targetsFound++;
+                            }
+                        }
+                    }
+
                     pools.bullet.release(b);
                     fastRemove(bullets, i);
                 }
             }
-            
+
             // Enemy vs Player (using spatial grid for nearby enemies only)
             const nearbyEnemiesForPlayer = spatialGrid.queryRadius(player.x, player.y, 100);
             for (const e of nearbyEnemiesForPlayer) {
@@ -2686,7 +2833,57 @@
                 particles.push(p);
             }
         }
-        
+
+        // Rocket explosion - more impactful visual
+        function spawnRocketExplosion(x, y, radius) {
+            // Shockwave ring effect
+            const shockwave = pools.particle.acquire();
+            shockwave.x = x;
+            shockwave.y = y;
+            shockwave.vx = 0;
+            shockwave.vy = 0;
+            shockwave.life = 0.3;
+            shockwave.maxLife = 0.3;
+            shockwave.size = 5;
+            shockwave.maxSize = radius * 1.5;
+            shockwave.color = COLORS.PLAYER;
+            shockwave.type = 'shockwave';
+            particles.push(shockwave);
+
+            // Outer ring of particles
+            const ringCount = 12;
+            for (let i = 0; i < ringCount; i++) {
+                const angle = (i / ringCount) * Math.PI * 2;
+                const p = pools.particle.acquire();
+                p.x = x;
+                p.y = y;
+                p.vx = Math.cos(angle) * (120 + Math.random() * 60);
+                p.vy = Math.sin(angle) * (120 + Math.random() * 60);
+                p.life = 0.4 + Math.random() * 0.2;
+                p.maxLife = 0.5;
+                p.size = 3 + Math.random() * 2;
+                p.color = COLORS.PLAYER;
+                p.type = 'explosion';
+                particles.push(p);
+            }
+
+            // Inner burst particles
+            for (let i = 0; i < 8; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const p = pools.particle.acquire();
+                p.x = x;
+                p.y = y;
+                p.vx = Math.cos(angle) * (40 + Math.random() * 40);
+                p.vy = Math.sin(angle) * (40 + Math.random() * 40);
+                p.life = 0.3 + Math.random() * 0.2;
+                p.maxLife = 0.4;
+                p.size = 4 + Math.random() * 3;
+                p.color = COLORS.PLAYER;
+                p.type = 'explosion';
+                particles.push(p);
+            }
+        }
+
         function spawnHitParticles(x, y, color) {
             for (let i = 0; i < 5; i++) {
                 const angle = Math.random() * Math.PI * 2;
@@ -3006,11 +3203,13 @@
         
         function renderBullets() {
             // Sort bullets by type for batched rendering
-            const byType = { laser: [], beam: [], rocket: [], spread: [] };
+            const byType = { laser: [], beam: [], rocket: [], spread: [], mini_rocket: [] };
 
             for (const b of bullets) {
                 if (shouldRenderEntity(b, CULLING_DISTANCES.bullets)) {
-                    byType[b.type || 'laser'].push(b);
+                    const type = b.type || 'laser';
+                    if (byType[type]) byType[type].push(b);
+                    else byType.laser.push(b);
                 }
             }
 
@@ -3066,23 +3265,78 @@
                 }
             }
 
-            // Batch render rockets (need rotation transforms)
+            // Batch render rockets with trail
             if (byType.rocket.length > 0) {
-                ctx.strokeStyle = COLORS.PLAYER;
-                ctx.lineWidth = 2;
                 ctx.shadowColor = COLORS.PLAYER;
                 ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 10 : 0;
 
                 for (const b of byType.rocket) {
+                    // Draw trail as fading line
+                    if (b.trail && b.trail.length > 1) {
+                        for (let t = 0; t < b.trail.length - 1; t++) {
+                            const alpha = 1 - (t / b.trail.length);
+                            const width = 2 * (1 - t / b.trail.length);
+                            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+                            ctx.lineWidth = width;
+                            ctx.beginPath();
+                            ctx.moveTo(b.trail[t].x, b.trail[t].y);
+                            ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Draw rocket
+                    ctx.strokeStyle = COLORS.PLAYER;
+                    ctx.lineWidth = 2;
                     const angle = Math.atan2(b.vy, b.vx);
                     ctx.save();
                     ctx.translate(b.x, b.y);
                     ctx.rotate(angle);
                     ctx.beginPath();
-                    ctx.moveTo(8, 0);
+                    ctx.moveTo(10, 0);
                     ctx.lineTo(-6, -5);
                     ctx.lineTo(-4, 0);
                     ctx.lineTo(-6, 5);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // Batch render mini rockets with trail (same player color)
+            if (byType.mini_rocket.length > 0) {
+                ctx.shadowColor = COLORS.PLAYER;
+                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 6 : 0;
+
+                for (const b of byType.mini_rocket) {
+                    // Draw trail as fading line
+                    if (b.trail && b.trail.length > 1) {
+                        for (let t = 0; t < b.trail.length - 1; t++) {
+                            const alpha = 1 - (t / b.trail.length);
+                            const width = 1.5 * (1 - t / b.trail.length);
+                            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+                            ctx.lineWidth = width;
+                            ctx.beginPath();
+                            ctx.moveTo(b.trail[t].x, b.trail[t].y);
+                            ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Draw mini rocket
+                    ctx.strokeStyle = COLORS.PLAYER;
+                    ctx.lineWidth = 1.5;
+                    const angle = Math.atan2(b.vy, b.vx);
+                    const scale = b.size || 0.6;
+                    ctx.save();
+                    ctx.translate(b.x, b.y);
+                    ctx.rotate(angle);
+                    ctx.scale(scale, scale);
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0);
+                    ctx.lineTo(-5, -4);
+                    ctx.lineTo(-3, 0);
+                    ctx.lineTo(-5, 4);
                     ctx.closePath();
                     ctx.stroke();
                     ctx.restore();
@@ -3304,8 +3558,16 @@
                 ctx.shadowColor = p.color;
                 ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 6 : 0;
                 ctx.lineWidth = 2;
-                
-                if (p.type === 'shard') {
+
+                if (p.type === 'shockwave') {
+                    // Expanding ring effect
+                    const progress = 1 - (p.life / p.maxLife);
+                    const currentSize = p.size + (p.maxSize - p.size) * progress;
+                    ctx.lineWidth = 3 * alpha;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (p.type === 'shard') {
                     // Line spark style
                     ctx.save();
                     ctx.translate(p.x, p.y);
