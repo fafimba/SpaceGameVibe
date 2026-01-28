@@ -47,12 +47,13 @@
         }
         
         #joystickZone {
-            left: 0;
+            left: 50%;
             bottom: 0;
-            width: 40%;
+            width: 50%;
             height: 50%;
+            transform: translateX(-50%);
         }
-        
+
         #joystickBase {
             position: absolute;
             width: 120px;
@@ -60,8 +61,9 @@
             background: rgba(127, 219, 255, 0.15);
             border: 2px solid rgba(127, 219, 255, 0.4);
             border-radius: 50%;
-            left: 30px;
+            left: 50%;
             bottom: 30px;
+            transform: translateX(-50%);
         }
         
         #joystickKnob {
@@ -1045,7 +1047,62 @@
                 joystickMagnitude = Math.min(dist / JOYSTICK_MAX_DISTANCE, 1);
                 joystickAngle = Math.atan2(dy, dx) * 180 / Math.PI;
             }
-            
+
+            // Skill tree touch support
+            canvas.addEventListener('touchstart', (e) => {
+                if (gameState !== 'skilltree') return;
+
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = CANVAS_WIDTH / rect.width;
+                const scaleY = CANVAS_HEIGHT / rect.height;
+                const touchX = (touch.clientX - rect.left) * scaleX;
+                const touchY = (touch.clientY - rect.top) * scaleY;
+
+                // Check if touch is on any skill node
+                for (const skillId of Object.keys(TREE_LAYOUT)) {
+                    const pos = TREE_LAYOUT[skillId];
+                    const skill = SKILL_TREE[skillId];
+                    let hitRadius = SKILL_NODE_RADIUS + 15; // Extra tolerance for touch
+
+                    // Adjust hit area for different node types
+                    if (skill.nodeType === 'hexagon') {
+                        hitRadius = 70;
+                    } else if (skill.nodeType === 'rectangle') {
+                        // Rectangle hit test
+                        const halfW = MAIN_NODE_WIDTH / 2 + 10;
+                        const halfH = MAIN_NODE_HEIGHT / 2 + 10;
+                        if (touchX >= pos.x - halfW && touchX <= pos.x + halfW &&
+                            touchY >= pos.y - halfH && touchY <= pos.y + halfH) {
+                            if (selectedNode === skillId && canUnlockSkill(skillId)) {
+                                unlockSkill(skillId);
+                            } else {
+                                selectedNode = skillId;
+                            }
+                            e.preventDefault();
+                            return;
+                        }
+                        continue;
+                    }
+
+                    // Circle hit test
+                    const dx = touchX - pos.x;
+                    const dy = touchY - pos.y;
+                    if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                        if (selectedNode === skillId && canUnlockSkill(skillId)) {
+                            unlockSkill(skillId);
+                        } else {
+                            selectedNode = skillId;
+                        }
+                        e.preventDefault();
+                        return;
+                    }
+                }
+
+                // If touch is not on any node, close skill tree
+                closeSkillTree();
+                e.preventDefault();
+            });
         }
 
         // ============================================================
@@ -2214,13 +2271,13 @@
         // Unlock a skill
         function unlockSkill(skillId) {
             if (!canUnlockSkill(skillId)) return false;
-            
+
             const skill = SKILL_TREE[skillId];
             skillPoints -= skill.cost;
             unlockedSkills.push(skillId);
-            
+
             spawnFloatingText(player.x, player.y - 40, skill.name + '!', skill.color);
-            
+
             // Celebration particles
             for (let i = 0; i < 15; i++) {
                 const angle = Math.random() * Math.PI * 2;
@@ -2234,7 +2291,10 @@
                     type: 'levelup'
                 });
             }
-            
+
+            // Auto-close skill tree after unlocking
+            closeSkillTree();
+
             return true;
         }
         
