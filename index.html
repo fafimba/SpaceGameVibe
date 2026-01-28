@@ -76,27 +76,6 @@
             transition: none;
         }
         
-        #dashButton {
-            right: 30px;
-            bottom: 50px;
-            width: 80px;
-            height: 80px;
-            background: rgba(255, 221, 87, 0.2);
-            border: 3px solid rgba(255, 221, 87, 0.6);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #FFDD57;
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        
-        #dashButton.on-cooldown {
-            opacity: 0.4;
-        }
-        
         @media (pointer: coarse) {
             #touchControls {
                 display: block;
@@ -113,7 +92,6 @@
                     <div id="joystickKnob"></div>
                 </div>
             </div>
-            <div id="dashButton" class="touch-zone">DASH</div>
         </div>
     </div>
 
@@ -129,8 +107,14 @@
         // CONSTANTS
         // ============================================================
         
-        const CANVAS_WIDTH = 1920;
-        const CANVAS_HEIGHT = 1080;
+        // Canvas dimensions - set dynamically based on device
+        let CANVAS_WIDTH = 1920;
+        let CANVAS_HEIGHT = 1080;
+
+        // Detect mobile device
+        function isMobile() {
+            return (('ontouchstart' in window) || (navigator.maxTouchPoints > 0)) && window.innerWidth < 1024;
+        }
         
         // Physics
         const ROTATION_SPEED = 260;          // deg/sec
@@ -145,8 +129,6 @@
         const PLAYER_COLLISION_RADIUS = 20;
         const PLAYER_VISUAL_RADIUS = 24;
         const PLAYER_MAX_HP = 3;
-        const DASH_IMPULSE = 350;
-        const DASH_COOLDOWN = 4;
         
         // Weapons
         const AUTO_FIRE_INTERVAL = 0.35;
@@ -450,7 +432,6 @@
             rotateRight: false,
             thrust: false,
             reverse: false,
-            dash: false,
             pause: false
         };
         
@@ -458,7 +439,6 @@
         let joystickActive = false;
         let joystickAngle = 0;
         let joystickMagnitude = 0;
-        let touchDash = false;
         
         // Player
         let player = null;
@@ -778,9 +758,18 @@
         // ============================================================
         
         function init() {
+            // Set canvas dimensions based on device
+            if (isMobile()) {
+                CANVAS_WIDTH = 1080;
+                CANVAS_HEIGHT = 1920;
+            } else {
+                CANVAS_WIDTH = 1920;
+                CANVAS_HEIGHT = 1080;
+            }
+
             canvas.width = CANVAS_WIDTH;
             canvas.height = CANVAS_HEIGHT;
-            
+
             generateBackground();
             setupInput();
             setupTouchControls();
@@ -831,7 +820,6 @@
                 angle: -90, // Pointing up
                 hp: PLAYER_MAX_HP,
                 fireTimer: 0,
-                dashCooldown: 0,
                 invulnerable: 0,
                 thrusterScale: 0,
                 bobOffset: 0,
@@ -985,8 +973,6 @@
             input.rotateRight = keys['ArrowRight'] || keys['KeyD'];
             input.thrust = keys['ArrowUp'] || keys['KeyW'];
             input.reverse = keys['ArrowDown'] || keys['KeyS'];
-            input.dash = keys['Space'];
-            
             // Apply touch input
             if (joystickActive) {
                 if (joystickMagnitude > JOYSTICK_THRUST_THRESHOLD) {
@@ -995,18 +981,13 @@
                 // Joystick rotation handled directly in player update
             }
             
-            if (touchDash) {
-                input.dash = true;
-                touchDash = false;
-            }
         }
         
         function setupTouchControls() {
             const joystickZone = document.getElementById('joystickZone');
             const joystickBase = document.getElementById('joystickBase');
             const joystickKnob = document.getElementById('joystickKnob');
-            const dashButton = document.getElementById('dashButton');
-            
+
             let joystickTouch = null;
             const baseRect = { x: 30, y: 0, cx: 90, cy: 0 };
             
@@ -1065,18 +1046,6 @@
                 joystickAngle = Math.atan2(dy, dx) * 180 / Math.PI;
             }
             
-            dashButton.addEventListener('touchstart', (e) => {
-                if (gameState === 'menu' || gameState === 'gameOver') {
-                    gameState = 'playing';
-                    resetGame();
-                    return;
-                }
-
-                if (gameState === 'playing' && player && player.dashCooldown <= 0) {
-                    touchDash = true;
-                }
-                e.preventDefault();
-            });
         }
 
         // ============================================================
@@ -1368,20 +1337,6 @@
             player.x += player.vx * deltaTime;
             player.y += player.vy * deltaTime;
 
-            // Dash
-            player.dashCooldown = Math.max(0, player.dashCooldown - deltaTime);
-            
-            if (input.dash && player.dashCooldown <= 0) {
-                player.vx += Math.cos(rad) * DASH_IMPULSE;
-                player.vy += Math.sin(rad) * DASH_IMPULSE;
-                player.dashCooldown = DASH_COOLDOWN;
-                player.invulnerable = 0.2;
-                
-                triggerShake(4, 150);
-                spawnDashParticles();
-                idleTimer = 0;
-            }
-            
             // Invulnerability
             player.invulnerable = Math.max(0, player.invulnerable - deltaTime);
             
@@ -1593,24 +1548,6 @@
             particles.push(p);
         }
         
-        function spawnDashParticles() {
-            const rad = (player.angle + 180) * Math.PI / 180;
-            for (let i = 0; i < 12; i++) {
-                const spread = (Math.random() - 0.5) * 1.2;
-                const p = pools.particle.acquire();
-                p.x = player.x;
-                p.y = player.y;
-                p.vx = Math.cos(rad + spread) * (150 + Math.random() * 100);
-                p.vy = Math.sin(rad + spread) * (150 + Math.random() * 100);
-                p.life = 0.3 + Math.random() * 0.2;
-                p.maxLife = 0.5;
-                p.size = 4 + Math.random() * 4;
-                p.color = '#FFFFFF';
-                p.type = 'dash';
-                particles.push(p);
-            }
-        }
-
         // ============================================================
         // BULLETS
         // ============================================================
@@ -3410,7 +3347,6 @@
                 ['S / ↓', 'Reverse'],
                 ['A / ←', 'Rotate Left'],
                 ['D / →', 'Rotate Right'],
-                ['SPACE', 'Dash'],
                 ['P / ESC', 'Pause']
             ];
             
@@ -3434,7 +3370,7 @@
             ctx.fillStyle = COLORS.UI_SECONDARY;
             ctx.font = 'italic 12px "Segoe UI", sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Touch: Left joystick to move, Right button to dash', CANVAS_WIDTH / 2, startY + 180);
+            ctx.fillText('Touch: Use joystick to move', CANVAS_WIDTH / 2, startY + 180);
         }
         
         function renderHUD() {
@@ -3478,20 +3414,6 @@
                 ctx.fill();
             }
             
-            // Dash cooldown bar
-            if (player.dashCooldown > 0) {
-                const barWidth = 60;
-                const barHeight = 6;
-                const barX = CANVAS_WIDTH - 25 - barWidth;
-                const barY = 52;
-                const progress = 1 - (player.dashCooldown / DASH_COOLDOWN);
-                
-                ctx.fillStyle = '#333';
-                ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = COLORS.GOLD;
-                ctx.fillRect(barX, barY, barWidth * progress, barHeight);
-            }
-            
             // Time (bottom-center)
             ctx.textAlign = 'center';
             ctx.font = '18px "Segoe UI", sans-serif';
@@ -3504,22 +3426,11 @@
             ctx.textAlign = 'left';
             ctx.font = '11px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('CONTROLS:', 15, CANVAS_HEIGHT - 80);
-            ctx.fillText('W/↑ THRUST', 15, CANVAS_HEIGHT - 65);
-            ctx.fillText('A/← ROTATE L', 15, CANVAS_HEIGHT - 50);
-            ctx.fillText('D/→ ROTATE R', 15, CANVAS_HEIGHT - 35);
-            ctx.fillText('SPACE/TAP DASH', 15, CANVAS_HEIGHT - 20);
-            
-            // Update dash button state
-            const dashButton = document.getElementById('dashButton');
-            if (dashButton) {
-                if (player.dashCooldown > 0) {
-                    dashButton.classList.add('on-cooldown');
-                } else {
-                    dashButton.classList.remove('on-cooldown');
-                }
-            }
-            
+            ctx.fillText('CONTROLS:', 15, CANVAS_HEIGHT - 65);
+            ctx.fillText('W/↑ THRUST', 15, CANVAS_HEIGHT - 50);
+            ctx.fillText('A/← ROTATE L', 15, CANVAS_HEIGHT - 35);
+            ctx.fillText('D/→ ROTATE R', 15, CANVAS_HEIGHT - 20);
+
             // XP Bar (bottom of screen)
             const xpBarWidth = 300;
             const xpBarHeight = 12;
