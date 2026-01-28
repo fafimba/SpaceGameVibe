@@ -326,7 +326,7 @@
             // ORBITAL SHIELD branch (cyan/teal theme)
             'orbital_shield': {
                 name: 'ORBITAL SHIELD',
-                description: '2 rotating orbs damage enemies',
+                description: '3 fast rotating orbs damage enemies',
                 prereqs: ['arsenal'],
                 cost: 1,
                 color: '#00DFFF',
@@ -334,8 +334,8 @@
                 nodeType: 'rectangle'
             },
             'regen_capacitors': {
-                name: 'Regenerative Capacitors',
-                description: 'Orbs regenerate faster',
+                name: 'Orbital Expansion',
+                description: '+2 orbs (5 total)',
                 prereqs: ['orbital_shield'],
                 cost: 1,
                 color: '#7B68EE',
@@ -343,8 +343,8 @@
                 nodeType: 'circle'
             },
             'shockwave_emitter': {
-                name: 'Shockwave Emitter',
-                description: 'Orbs emit damaging waves',
+                name: 'Orbital Amplification',
+                description: 'Orbs +50% size',
                 prereqs: ['orbital_shield'],
                 cost: 1,
                 color: '#00FF88',
@@ -353,7 +353,7 @@
             },
             'energy_absorption': {
                 name: 'Energy Absorption',
-                description: '+1 orbital, +1 damage',
+                description: 'Orbs deal +2 damage',
                 prereqs: ['orbital_shield'],
                 cost: 1,
                 color: '#FF69B4',
@@ -362,30 +362,50 @@
             }
         };
         
-        // Skill Tree visual layout positions (vertical layout for portrait/mobile)
-        const TREE_LAYOUT = {
-            // Root hexagon at top center
-            'arsenal':          { x: 960, y: 120 },
-            // Left column - Laser Cannon branch
-            'laser_cannon':     { x: 480, y: 300 },
-            'rapid_fire':       { x: 480, y: 480 },
-            'piercing_lens':    { x: 480, y: 660 },
-            'beam_splitter':    { x: 480, y: 840 },
-            // Center column - Missile Launcher branch
-            'missile_launcher': { x: 960, y: 300 },
-            'homing_guidance':  { x: 960, y: 480 },
-            'cluster_payload':  { x: 960, y: 660 },
-            'armor_piercing':   { x: 960, y: 840 },
-            // Right column - Orbital Shield branch
-            'orbital_shield':   { x: 1440, y: 300 },
-            'regen_capacitors': { x: 1440, y: 480 },
-            'shockwave_emitter':{ x: 1440, y: 660 },
-            'energy_absorption':{ x: 1440, y: 840 }
-        };
+        // Skill Tree layout - calculated dynamically based on canvas size
+        let TREE_LAYOUT = {};
+        let SKILL_NODE_RADIUS = 24;
+        let MAIN_NODE_WIDTH = 110;
+        let MAIN_NODE_HEIGHT = 50;
 
-        const SKILL_NODE_RADIUS = 32;
-        const MAIN_NODE_WIDTH = 180;
-        const MAIN_NODE_HEIGHT = 70;
+        function updateTreeLayout() {
+            const centerX = CANVAS_WIDTH / 2;
+            const colSpacing = Math.min(140, CANVAS_WIDTH / 4.5);
+            const rowSpacing = Math.min(130, CANVAS_HEIGHT / 8);
+
+            // Adjust node sizes for screen size
+            if (CANVAS_WIDTH >= 1000) {
+                SKILL_NODE_RADIUS = 28;
+                MAIN_NODE_WIDTH = 140;
+                MAIN_NODE_HEIGHT = 60;
+            } else {
+                SKILL_NODE_RADIUS = 22;
+                MAIN_NODE_WIDTH = 100;
+                MAIN_NODE_HEIGHT = 45;
+            }
+
+            const startY = 70;
+
+            TREE_LAYOUT = {
+                // Root hexagon at top center
+                'arsenal':          { x: centerX, y: startY },
+                // Left column - Laser Cannon branch
+                'laser_cannon':     { x: centerX - colSpacing, y: startY + rowSpacing },
+                'rapid_fire':       { x: centerX - colSpacing, y: startY + rowSpacing * 2 },
+                'piercing_lens':    { x: centerX - colSpacing, y: startY + rowSpacing * 3 },
+                'beam_splitter':    { x: centerX - colSpacing, y: startY + rowSpacing * 4 },
+                // Center column - Missile Launcher branch
+                'missile_launcher': { x: centerX, y: startY + rowSpacing },
+                'homing_guidance':  { x: centerX, y: startY + rowSpacing * 2 },
+                'cluster_payload':  { x: centerX, y: startY + rowSpacing * 3 },
+                'armor_piercing':   { x: centerX, y: startY + rowSpacing * 4 },
+                // Right column - Orbital Shield branch
+                'orbital_shield':   { x: centerX + colSpacing, y: startY + rowSpacing },
+                'regen_capacitors': { x: centerX + colSpacing, y: startY + rowSpacing * 2 },
+                'shockwave_emitter':{ x: centerX + colSpacing, y: startY + rowSpacing * 3 },
+                'energy_absorption':{ x: centerX + colSpacing, y: startY + rowSpacing * 4 }
+            };
+        }
 
         // ============================================================
         // GAME STATE
@@ -781,6 +801,7 @@
             canvas.width = CANVAS_WIDTH;
             canvas.height = CANVAS_HEIGHT;
 
+            updateTreeLayout();
             generateBackground();
             setupInput();
             setupTouchControls();
@@ -2359,57 +2380,66 @@
         }
 
         function updateOrbitals() {
-            let orbitalCount = 2; // Base count from orbital_shield
-            if (unlockedSkills.includes('energy_absorption')) orbitalCount += 1;
-            const orbitalRadius = 55;
-            let orbitalSpeed = 2.3;
-            // Regenerative capacitors makes orbitals faster
-            if (unlockedSkills.includes('regen_capacitors')) orbitalSpeed = 3.5;
+            let orbitalCount = 3; // Base count from orbital_shield
+            if (unlockedSkills.includes('regen_capacitors')) orbitalCount += 2; // Orbital Expansion adds 2 (total 5)
+            const orbitalRadius = 85; // Increased distance from player
+            let orbitalSpeed = 6.5; // Much faster rotation
 
-            // Ensure we have the right number of orbitals
-            while (orbitals.length < orbitalCount) {
-                orbitals.push({ angle: (Math.PI * 2 / orbitalCount) * orbitals.length, hitCooldown: 0 });
-            }
-            while (orbitals.length > orbitalCount) {
-                orbitals.pop();
+            // Handle orbital count changes with equidistant positioning
+            if (orbitals.length !== orbitalCount) {
+                // Preserve the first orbital's angle to maintain rotation continuity
+                const baseAngle = orbitals.length > 0 ? orbitals[0].angle : 0;
+                const angleIncrement = Math.PI * 2 / orbitalCount;
+
+                // Recalculate all orbitals with new equidistant positions
+                orbitals = [];
+                for (let i = 0; i < orbitalCount; i++) {
+                    orbitals.push({
+                        angle: baseAngle + angleIncrement * i,
+                        hitCooldown: 0
+                    });
+                }
             }
 
             // Update orbital positions and check collisions
             for (let i = 0; i < orbitals.length; i++) {
                 const orb = orbitals[i];
                 orb.angle += orbitalSpeed * deltaTime;
-                orb.hitCooldown = Math.max(0, orb.hitCooldown - deltaTime);
+                if (!orb.hitEnemies) orb.hitEnemies = {}; // Track cooldown per enemy
 
                 const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
                 const orbY = player.y + Math.sin(orb.angle) * orbitalRadius;
 
                 // Check collision with nearby enemies (using spatial grid)
-                if (orb.hitCooldown <= 0) {
-                    const nearbyEnemies = spatialGrid.queryRadius(orbX, orbY, 50);
-                    for (const e of nearbyEnemies) {
-                        const config = ENEMY_TYPES[e.type];
-                        const dx = orbX - e.x;
-                        const dy = orbY - e.y;
-                        const distSq = dx * dx + dy * dy;
-                        const collisionDist = config.radius + 12;
+                const nearbyEnemies = spatialGrid.queryRadius(orbX, orbY, 50);
+                for (const e of nearbyEnemies) {
+                    // Per-enemy cooldown check
+                    if (orb.hitEnemies[e.id] && orb.hitEnemies[e.id] > 0) {
+                        orb.hitEnemies[e.id] -= deltaTime;
+                        continue;
+                    }
 
-                        if (distSq < collisionDist * collisionDist) {
-                            let orbitalDamage = 1;
-                            if (unlockedSkills.includes('energy_absorption')) orbitalDamage += 1;
-                            if (unlockedSkills.includes('shockwave_emitter')) orbitalDamage += 1;
-                            e.hp -= orbitalDamage;
-                            orb.hitCooldown = 0.3;
+                    const config = ENEMY_TYPES[e.type];
+                    const dx = orbX - e.x;
+                    const dy = orbY - e.y;
+                    const distSq = dx * dx + dy * dy;
+                    const collisionDist = config.radius + 12;
 
-                            // Show damage floating text
-                            spawnFloatingText(e.x, e.y - config.radius, orbitalDamage.toString(), SKILL_TREE['orbital_shield'].color);
-                            spawnHitParticles(e.x, e.y, config.color);
+                    if (distSq < collisionDist * collisionDist) {
+                        let orbitalDamage = 2; // Base damage
+                        if (unlockedSkills.includes('energy_absorption')) orbitalDamage += 2; // Energy Absorption boost
+                        e.hp -= orbitalDamage;
+                        orb.hitEnemies[e.id] = 0.15; // Cooldown per enemy (can hit same enemy again after 0.15s)
 
-                            if (e.hp <= 0) {
-                                const enemyIndex = enemies.indexOf(e);
-                                if (enemyIndex !== -1) killEnemy(e, enemyIndex);
-                            }
-                            break;
+                        // Show damage floating text
+                        spawnFloatingText(e.x, e.y - config.radius, orbitalDamage.toString(), SKILL_TREE['orbital_shield'].color);
+                        spawnHitParticles(e.x, e.y, config.color);
+
+                        if (e.hp <= 0) {
+                            const enemyIndex = enemies.indexOf(e);
+                            if (enemyIndex !== -1) killEnemy(e, enemyIndex);
                         }
+                        // No break - can hit multiple enemies per frame
                     }
                 }
             }
@@ -2788,8 +2818,7 @@
                 lastMilestone = milestone;
                 milestoneActive = true;
                 milestoneTimer = 1200;
-                triggerSlowmo(300);
-                
+
                 // Gold particles
                 for (let i = 0; i < 20; i++) {
                     particles.push({
@@ -2952,24 +2981,26 @@
         
         function renderOrbitals() {
             if (!unlockedSkills.includes('orbital_shield') || !player) return;
-            
+
             const orbitalRadius = 55;
-            
+            let orbitalSize = 13; // Base size
+            if (unlockedSkills.includes('shockwave_emitter')) orbitalSize *= 1.5; // +50% size boost
+
             // Outline style for orbitals
             ctx.strokeStyle = COLORS.PLAYER;
             ctx.lineWidth = 2.5;
             ctx.shadowColor = COLORS.PLAYER;
             ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
-            
+
             for (const orb of orbitals) {
                 const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
                 const orbY = player.y + Math.sin(orb.angle) * orbitalRadius;
-                
+
                 ctx.beginPath();
-                ctx.arc(orbX, orbY, 10, 0, Math.PI * 2);
+                ctx.arc(orbX, orbY, orbitalSize, 0, Math.PI * 2);
                 ctx.stroke();
             }
-            
+
             ctx.shadowBlur = 0;
         }
         
@@ -3557,11 +3588,12 @@
 
             ctx.textAlign = 'center';
 
-            // Skill points indicator (top right)
-            ctx.font = 'bold 22px "Segoe UI", sans-serif';
+            // Skill points indicator (top right, adaptive size)
+            const isMobileCanvas = CANVAS_WIDTH < 1000;
+            ctx.font = `bold ${isMobileCanvas ? 14 : 22}px "Segoe UI", sans-serif`;
             ctx.fillStyle = skillPoints > 0 ? '#FFD700' : '#888888';
             ctx.textAlign = 'right';
-            ctx.fillText('Skill Points: ' + skillPoints, CANVAS_WIDTH - 40, 50);
+            ctx.fillText('Skill Points: ' + skillPoints, CANVAS_WIDTH - (isMobileCanvas ? 15 : 40), isMobileCanvas ? 30 : 50);
             ctx.textAlign = 'center';
 
             // Helper function to draw hexagon
@@ -3607,7 +3639,7 @@
                     let startX = prereqPos.x;
                     let startY = prereqPos.y;
                     if (prereqSkill.nodeType === 'hexagon') {
-                        startY = prereqPos.y + 70; // Bottom edge of hexagon
+                        startY = prereqPos.y + (CANVAS_WIDTH >= 1000 ? 50 : 38); // Bottom edge of hexagon
                     } else if (prereqSkill.nodeType === 'rectangle') {
                         startY = prereqPos.y + MAIN_NODE_HEIGHT / 2 + 10;
                     } else {
@@ -3661,8 +3693,8 @@
                 ctx.globalAlpha = nodeAlpha;
 
                 if (skill.nodeType === 'hexagon') {
-                    // Arsenal hexagon node
-                    const hexSize = 65;
+                    // Arsenal hexagon node (size adapts to screen)
+                    const hexSize = CANVAS_WIDTH >= 1000 ? 50 : 38;
 
                     // Hexagon fill
                     drawHexagon(pos.x, pos.y, hexSize);
@@ -3671,11 +3703,11 @@
 
                     // Hexagon border
                     ctx.strokeStyle = isSelected ? '#FFD700' : skill.color;
-                    ctx.lineWidth = isSelected ? 4 : 3;
+                    ctx.lineWidth = isSelected ? 3 : 2;
                     ctx.stroke();
 
                     // Inner hexagon
-                    drawHexagon(pos.x, pos.y, hexSize - 8);
+                    drawHexagon(pos.x, pos.y, hexSize - 6);
                     ctx.strokeStyle = skill.color;
                     ctx.lineWidth = 1;
                     ctx.globalAlpha = 0.5;
@@ -3683,21 +3715,23 @@
                     ctx.globalAlpha = nodeAlpha;
 
                     // Icon (ship/rocket)
+                    const iconScale = hexSize / 50;
                     ctx.fillStyle = skill.color;
                     ctx.beginPath();
-                    ctx.moveTo(pos.x + 20, pos.y);
-                    ctx.lineTo(pos.x - 15, pos.y - 12);
-                    ctx.lineTo(pos.x - 8, pos.y);
-                    ctx.lineTo(pos.x - 15, pos.y + 12);
+                    ctx.moveTo(pos.x + 15 * iconScale, pos.y);
+                    ctx.lineTo(pos.x - 10 * iconScale, pos.y - 9 * iconScale);
+                    ctx.lineTo(pos.x - 5 * iconScale, pos.y);
+                    ctx.lineTo(pos.x - 10 * iconScale, pos.y + 9 * iconScale);
                     ctx.closePath();
                     ctx.fill();
 
-                    // Label (inside hexagon for vertical layout)
-                    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                    // Label (inside hexagon)
+                    const fontSize = CANVAS_WIDTH >= 1000 ? 10 : 8;
+                    ctx.font = `bold ${fontSize}px "Segoe UI", sans-serif`;
                     ctx.fillStyle = '#FFFFFF';
                     ctx.textAlign = 'center';
-                    ctx.fillText('SHIP', pos.x, pos.y - 8);
-                    ctx.fillText('ARSENAL', pos.x, pos.y + 8);
+                    ctx.fillText('SHIP', pos.x, pos.y - 5 * iconScale);
+                    ctx.fillText('ARSENAL', pos.x, pos.y + 6 * iconScale);
 
                 } else if (skill.nodeType === 'rectangle') {
                     // Main weapon nodes (rectangles)
@@ -3750,19 +3784,17 @@
                         ctx.fill();
                     }
 
-                    // Label
-                    ctx.font = 'bold 13px "Segoe UI", sans-serif';
+                    // Label (compact - smaller font for mobile)
+                    ctx.font = 'bold 11px "Segoe UI", sans-serif';
                     ctx.fillStyle = '#FFFFFF';
                     ctx.textAlign = 'center';
-                    ctx.fillText(skill.name, pos.x + 15, pos.y + 4);
+                    ctx.fillText(skill.name, pos.x + 10, pos.y + 4);
 
-                    // Cost indicator to the right
+                    // Cost indicator below
                     if (!isUnlocked) {
-                        ctx.font = '11px "Segoe UI", sans-serif';
+                        ctx.font = 'bold 10px "Segoe UI", sans-serif';
                         ctx.fillStyle = canUnlock ? '#FFD700' : '#666666';
-                        ctx.textAlign = 'left';
-                        ctx.fillText('+' + skill.cost, rx + rectW + 10, pos.y + 4);
-                        ctx.textAlign = 'center';
+                        ctx.fillText('+' + skill.cost, pos.x, ry + rectH + 14);
                     }
 
                 } else {
@@ -3891,28 +3923,13 @@
                         ctx.fillRect(pos.x - 1, pos.y - 5, 2, 10);
                     }
 
-                    // Label to the side of node (vertical layout)
-                    ctx.font = '10px "Segoe UI", sans-serif';
-                    ctx.fillStyle = isUnlocked ? '#FFFFFF' : (canUnlock ? '#AAAAAA' : '#666666');
-                    ctx.textAlign = 'left';
-
-                    // Display name to the right of the node
-                    const labelX = pos.x + SKILL_NODE_RADIUS + 8;
-                    const words = skill.name.split(' ');
-                    if (words.length > 1) {
-                        ctx.fillText(words[0], labelX, pos.y - 4);
-                        ctx.fillText(words.slice(1).join(' '), labelX, pos.y + 8);
-                    } else {
-                        ctx.fillText(skill.name, labelX, pos.y + 3);
-                    }
-
-                    // Cost indicator
+                    // Cost indicator below node (compact layout - no text labels)
                     if (!isUnlocked && skill.cost > 0) {
-                        ctx.font = '9px "Segoe UI", sans-serif';
+                        ctx.font = 'bold 9px "Segoe UI", sans-serif';
                         ctx.fillStyle = canUnlock ? '#FFD700' : '#555555';
-                        ctx.fillText('+' + skill.cost, labelX, pos.y + 20);
+                        ctx.textAlign = 'center';
+                        ctx.fillText('+' + skill.cost, pos.x, pos.y + SKILL_NODE_RADIUS + 12);
                     }
-                    ctx.textAlign = 'center';
                 }
                 ctx.globalAlpha = 1;
             }
@@ -3923,10 +3940,10 @@
                 const isUnlocked = unlockedSkills.includes(selectedNode);
                 const canUnlock = canUnlockSkill(selectedNode);
 
-                const panelW = 450;
-                const panelH = 90;
+                const panelW = isMobileCanvas ? CANVAS_WIDTH - 40 : 450;
+                const panelH = isMobileCanvas ? 75 : 90;
                 const panelX = CANVAS_WIDTH / 2 - panelW / 2;
-                const panelY = CANVAS_HEIGHT - panelH - 30;
+                const panelY = CANVAS_HEIGHT - panelH - (isMobileCanvas ? 15 : 30);
 
                 // Panel background
                 ctx.fillStyle = 'rgba(10, 15, 30, 0.95)';
@@ -3937,38 +3954,41 @@
                 ctx.stroke();
 
                 // Skill name
-                ctx.font = 'bold 18px "Segoe UI", sans-serif';
+                ctx.font = `bold ${isMobileCanvas ? 14 : 18}px "Segoe UI", sans-serif`;
                 ctx.fillStyle = skill.color;
                 ctx.textAlign = 'center';
-                ctx.fillText(skill.name, CANVAS_WIDTH / 2, panelY + 28);
+                ctx.fillText(skill.name, CANVAS_WIDTH / 2, panelY + (isMobileCanvas ? 22 : 28));
 
                 // Description
-                ctx.font = '13px "Segoe UI", sans-serif';
+                ctx.font = `${isMobileCanvas ? 11 : 13}px "Segoe UI", sans-serif`;
                 ctx.fillStyle = '#AAAAAA';
-                ctx.fillText(skill.description, CANVAS_WIDTH / 2, panelY + 50);
+                ctx.fillText(skill.description, CANVAS_WIDTH / 2, panelY + (isMobileCanvas ? 40 : 50));
 
                 // Status
+                const statusY = panelY + (isMobileCanvas ? 58 : 72);
                 if (isUnlocked) {
                     ctx.fillStyle = '#00FF88';
-                    ctx.fillText('UNLOCKED', CANVAS_WIDTH / 2, panelY + 72);
+                    ctx.fillText('UNLOCKED', CANVAS_WIDTH / 2, statusY);
                 } else if (canUnlock) {
                     ctx.fillStyle = '#FFD700';
-                    ctx.fillText('Press ENTER to unlock (Cost: ' + skill.cost + ')', CANVAS_WIDTH / 2, panelY + 72);
+                    const unlockText = isMobileCanvas ? 'Tap to unlock (Cost: ' + skill.cost + ')' : 'Press ENTER to unlock (Cost: ' + skill.cost + ')';
+                    ctx.fillText(unlockText, CANVAS_WIDTH / 2, statusY);
                 } else if (skillPoints < skill.cost) {
                     ctx.fillStyle = '#FF6666';
-                    ctx.fillText('Need ' + skill.cost + ' skill point(s)', CANVAS_WIDTH / 2, panelY + 72);
+                    ctx.fillText('Need ' + skill.cost + ' skill point(s)', CANVAS_WIDTH / 2, statusY);
                 } else {
                     ctx.fillStyle = '#FF6666';
                     const missingPrereqs = skill.prereqs.filter(p => !unlockedSkills.includes(p));
-                    ctx.fillText('Requires: ' + missingPrereqs.map(p => SKILL_TREE[p].name).join(', '), CANVAS_WIDTH / 2, panelY + 72);
+                    ctx.fillText('Requires: ' + missingPrereqs.map(p => SKILL_TREE[p].name).join(', '), CANVAS_WIDTH / 2, statusY);
                 }
             }
 
-            // Instructions at bottom
-            ctx.font = '13px "Segoe UI", sans-serif';
+            // Instructions at bottom (different for mobile/desktop)
+            ctx.font = `${isMobileCanvas ? 10 : 13}px "Segoe UI", sans-serif`;
             ctx.fillStyle = '#666666';
             ctx.textAlign = 'center';
-            ctx.fillText('Arrow Keys to navigate | ENTER to unlock | ESC to close', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 10);
+            const instructions = isMobileCanvas ? 'Tap node to select | Tap again to unlock' : 'Arrow Keys to navigate | ENTER to unlock | ESC to close';
+            ctx.fillText(instructions, CANVAS_WIDTH / 2, CANVAS_HEIGHT - 8);
         }
         
         function renderPauseOverlay() {
