@@ -128,7 +128,7 @@
         }
         
         // Physics
-        const ROTATION_SPEED = 260;          // deg/sec
+        const ROTATION_SPEED = 300;          // deg/sec
         const THRUST_ACCEL = 1400;           // px/sec²
         const REVERSE_ACCEL = 450;           // px/sec²
         const MAX_SPEED = 400;               // px/sec
@@ -362,25 +362,25 @@
             }
         };
         
-        // Skill Tree visual layout positions (horizontal layout like the reference image)
+        // Skill Tree visual layout positions (vertical layout for portrait/mobile)
         const TREE_LAYOUT = {
-            // Root hexagon on the left
-            'arsenal':          { x: 200, y: 540 },
-            // Top branch - Laser Cannon
-            'laser_cannon':     { x: 520, y: 220 },
-            'rapid_fire':       { x: 820, y: 220 },
-            'piercing_lens':    { x: 1020, y: 220 },
-            'beam_splitter':    { x: 1220, y: 220 },
-            // Middle branch - Missile Launcher
-            'missile_launcher': { x: 520, y: 540 },
-            'homing_guidance':  { x: 820, y: 540 },
-            'cluster_payload':  { x: 1020, y: 540 },
-            'armor_piercing':   { x: 1220, y: 540 },
-            // Bottom branch - Orbital Shield
-            'orbital_shield':   { x: 520, y: 860 },
-            'regen_capacitors': { x: 820, y: 860 },
-            'shockwave_emitter':{ x: 1020, y: 860 },
-            'energy_absorption':{ x: 1220, y: 860 }
+            // Root hexagon at top center
+            'arsenal':          { x: 960, y: 120 },
+            // Left column - Laser Cannon branch
+            'laser_cannon':     { x: 480, y: 300 },
+            'rapid_fire':       { x: 480, y: 480 },
+            'piercing_lens':    { x: 480, y: 660 },
+            'beam_splitter':    { x: 480, y: 840 },
+            // Center column - Missile Launcher branch
+            'missile_launcher': { x: 960, y: 300 },
+            'homing_guidance':  { x: 960, y: 480 },
+            'cluster_payload':  { x: 960, y: 660 },
+            'armor_piercing':   { x: 960, y: 840 },
+            // Right column - Orbital Shield branch
+            'orbital_shield':   { x: 1440, y: 300 },
+            'regen_capacitors': { x: 1440, y: 480 },
+            'shockwave_emitter':{ x: 1440, y: 660 },
+            'energy_absorption':{ x: 1440, y: 840 }
         };
 
         const SKILL_NODE_RADIUS = 32;
@@ -3592,7 +3592,7 @@
                 ctx.closePath();
             }
 
-            // Draw connections first (behind nodes)
+            // Draw connections first (behind nodes) - vertical layout
             ctx.lineWidth = 3;
             for (const skillId of Object.keys(SKILL_TREE)) {
                 const skill = SKILL_TREE[skillId];
@@ -3603,23 +3603,23 @@
                     const prereqSkill = SKILL_TREE[prereqId];
                     const isPrereqUnlocked = unlockedSkills.includes(prereqId);
 
-                    // Calculate start position based on prereq node type
+                    // Calculate start position based on prereq node type (bottom edge)
                     let startX = prereqPos.x;
                     let startY = prereqPos.y;
                     if (prereqSkill.nodeType === 'hexagon') {
-                        startX = prereqPos.x + 70; // Right edge of hexagon
+                        startY = prereqPos.y + 70; // Bottom edge of hexagon
                     } else if (prereqSkill.nodeType === 'rectangle') {
-                        startX = prereqPos.x + MAIN_NODE_WIDTH / 2 + 10;
+                        startY = prereqPos.y + MAIN_NODE_HEIGHT / 2 + 10;
                     } else {
-                        startX = prereqPos.x + SKILL_NODE_RADIUS + 5;
+                        startY = prereqPos.y + SKILL_NODE_RADIUS + 5;
                     }
 
-                    // Calculate end position
-                    let endX = pos.x;
+                    // Calculate end position (top edge of target node)
+                    let endY = pos.y;
                     if (skill.nodeType === 'rectangle') {
-                        endX = pos.x - MAIN_NODE_WIDTH / 2 - 10;
+                        endY = pos.y - MAIN_NODE_HEIGHT / 2 - 10;
                     } else {
-                        endX = pos.x - SKILL_NODE_RADIUS - 5;
+                        endY = pos.y - SKILL_NODE_RADIUS - 5;
                     }
 
                     // Connection line color
@@ -3630,10 +3630,10 @@
                     ctx.moveTo(startX, startY);
                     // Curved connection for branch splits from arsenal
                     if (prereqId === 'arsenal') {
-                        const midX = (startX + endX) / 2;
-                        ctx.bezierCurveTo(midX, startY, midX, pos.y, endX, pos.y);
+                        const midY = (startY + endY) / 2;
+                        ctx.bezierCurveTo(startX, midY, pos.x, midY, pos.x, endY);
                     } else {
-                        ctx.lineTo(endX, pos.y);
+                        ctx.lineTo(pos.x, endY);
                     }
                     ctx.stroke();
 
@@ -3643,7 +3643,7 @@
                     ctx.arc(startX, startY, 4, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.arc(endX, pos.y, 4, 0, Math.PI * 2);
+                    ctx.arc(pos.x, endY, 4, 0, Math.PI * 2);
                     ctx.fill();
                 }
                 ctx.globalAlpha = 1;
@@ -3692,12 +3692,12 @@
                     ctx.closePath();
                     ctx.fill();
 
-                    // Label
-                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    // Label (inside hexagon for vertical layout)
+                    ctx.font = 'bold 12px "Segoe UI", sans-serif';
                     ctx.fillStyle = '#FFFFFF';
                     ctx.textAlign = 'center';
-                    ctx.fillText('SHIP', pos.x, pos.y - 25);
-                    ctx.fillText('ARSENAL', pos.x, pos.y + 35);
+                    ctx.fillText('SHIP', pos.x, pos.y - 8);
+                    ctx.fillText('ARSENAL', pos.x, pos.y + 8);
 
                 } else if (skill.nodeType === 'rectangle') {
                     // Main weapon nodes (rectangles)
@@ -3756,11 +3756,13 @@
                     ctx.textAlign = 'center';
                     ctx.fillText(skill.name, pos.x + 15, pos.y + 4);
 
-                    // Cost indicator below
+                    // Cost indicator to the right
                     if (!isUnlocked) {
                         ctx.font = '11px "Segoe UI", sans-serif';
                         ctx.fillStyle = canUnlock ? '#FFD700' : '#666666';
-                        ctx.fillText('+' + skill.cost + ' POINT', pos.x, ry + rectH + 18);
+                        ctx.textAlign = 'left';
+                        ctx.fillText('+' + skill.cost, rx + rectW + 10, pos.y + 4);
+                        ctx.textAlign = 'center';
                     }
 
                 } else {
@@ -3889,26 +3891,28 @@
                         ctx.fillRect(pos.x - 1, pos.y - 5, 2, 10);
                     }
 
-                    // Label below node
+                    // Label to the side of node (vertical layout)
                     ctx.font = '10px "Segoe UI", sans-serif';
                     ctx.fillStyle = isUnlocked ? '#FFFFFF' : (canUnlock ? '#AAAAAA' : '#666666');
-                    ctx.textAlign = 'center';
+                    ctx.textAlign = 'left';
 
-                    // Split long names
+                    // Display name to the right of the node
+                    const labelX = pos.x + SKILL_NODE_RADIUS + 8;
                     const words = skill.name.split(' ');
                     if (words.length > 1) {
-                        ctx.fillText(words[0], pos.x, pos.y + SKILL_NODE_RADIUS + 14);
-                        ctx.fillText(words.slice(1).join(' '), pos.x, pos.y + SKILL_NODE_RADIUS + 26);
+                        ctx.fillText(words[0], labelX, pos.y - 4);
+                        ctx.fillText(words.slice(1).join(' '), labelX, pos.y + 8);
                     } else {
-                        ctx.fillText(skill.name, pos.x, pos.y + SKILL_NODE_RADIUS + 14);
+                        ctx.fillText(skill.name, labelX, pos.y + 3);
                     }
 
                     // Cost indicator
                     if (!isUnlocked && skill.cost > 0) {
                         ctx.font = '9px "Segoe UI", sans-serif';
                         ctx.fillStyle = canUnlock ? '#FFD700' : '#555555';
-                        ctx.fillText('+' + skill.cost, pos.x, pos.y + SKILL_NODE_RADIUS + 40);
+                        ctx.fillText('+' + skill.cost, labelX, pos.y + 20);
                     }
+                    ctx.textAlign = 'center';
                 }
                 ctx.globalAlpha = 1;
             }
