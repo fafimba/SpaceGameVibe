@@ -1,0 +1,205 @@
+---
+description: Stellar Swarm game architecture and systems documentation
+globs: index.html
+alwaysApply: true
+---
+
+# Stellar Swarm - Game Architecture
+
+Single-file HTML5 Canvas arcade survival game. All code lives in `index.html`.
+
+> **IMPORTANT**: When modifying `index.html`, if any change affects something documented in this file (constants, systems, functions, entity structures, game states, etc.), you MUST update this architecture file to reflect those changes. Keep documentation in sync with code.
+
+## Core Structure
+
+```
+index.html
+├── CSS (lines 7-105) - Styles for touch controls, joystick UI
+├── HTML (lines 107-118) - Canvas container + touch controls overlay
+└── JavaScript IIFE (lines 120-2691) - Full game logic
+```
+
+## Game States
+
+`gameState` variable controls flow: `menu` → `playing` ↔ `paused` / `skilltree` → `gameOver`
+
+## Constants (lines 129-365)
+
+| Category | Key Constants |
+|----------|---------------|
+| Canvas | 1920x1080 resolution |
+| Physics | ROTATION_SPEED=240°/s, THRUST_ACCEL=800, MAX_SPEED=420, DRAG_FACTOR=0.162 |
+| Player | PLAYER_SIZE=48, HP=3, DASH_COOLDOWN=4s, AUTO_FIRE_INTERVAL=0.35s |
+| Enemies | SCOUT, KAMIKAZE, SPINNER, TANK (each with unique behavior) |
+| Skill Tree | SKILL_TREE object defines all skills, TREE_LAYOUT defines node positions |
+
+## Entity Pools (arrays)
+
+- `bullets[]` - Player projectiles (laser, spread, beam, rockets)
+- `enemies[]` - All enemy types
+- `enemyBullets[]` - Spinner projectiles
+- `particles[]` - Visual effects (capped at 300, 100 in lowPerfMode)
+- `floatingTexts[]` - Damage numbers and skill unlock notifications
+- `pickups[]` - Health/weapon drops
+- `xpOrbs[]` - Experience orbs with magnet effect
+- `orbitals[]` - Orbital shield positions
+
+## Player Object
+
+```javascript
+player = {
+    x, y, vx, vy, angle,    // Position & physics
+    hp, invulnerable,        // Health system
+    fireTimer, dashCooldown, // Cooldowns
+    thrusterScale, bobOffset // Visual state
+}
+```
+
+## Skill Tree System (SKILL_TREE object)
+
+Skills are unlocked with skill points earned on level-up. Each skill has prerequisites.
+
+### Skill Branches
+
+| Branch | Skills | Effect |
+|--------|--------|--------|
+| Laser Base | `laser_base` | Starting weapon (auto-unlocked) |
+| Damage | `laser_dmg1`, `laser_dmg2` | +1, +2 damage |
+| Fire Rate | `laser_rate1`, `laser_rate2` | Faster firing (-0.05s, -0.08s) |
+| Spread | `spread1`, `spread2` | Multishot (3, 5 bullets in cone) |
+| Pierce | `beam1`, `beam2` | Piercing shot (replaces main laser) |
+| Orbital | `orbital1`, `orbital2`, `orbital_dmg` | Rotating damage orbs |
+| Rockets | `rockets1`, `rockets2`, `rockets_dmg` | Homing missiles |
+
+### Skill Tree State Variables
+
+```javascript
+skillPoints = 0;              // Points available to spend
+unlockedSkills = ['laser_base']; // Array of unlocked skill IDs
+selectedNode = 'laser_base';  // Currently selected node in UI
+```
+
+### Key Functions
+
+- `getWeaponStats()` - Computes current damage, fire rate, pierce, spread, rockets from unlocked skills
+- `canUnlockSkill(skillId)` - Checks if skill can be unlocked (prereqs met, cost affordable)
+- `unlockSkill(skillId)` - Unlocks a skill, deducts skill points
+- `findNodeInDirection(fromNode, direction)` - Keyboard navigation in skill tree UI
+
+## Enemy Types (ENEMY_TYPES object)
+
+| Type | Base HP | Behavior |
+|------|---------|----------|
+| SCOUT | 1 | Basic pursuer |
+| KAMIKAZE | 1 | Fast, dies on contact |
+| SPINNER | 1 | Fires 6-bullet radial pattern |
+| TANK | 3 | Slow, burst charges, splits into 2 scouts on death |
+
+**HP Scaling**: Enemy HP scales with player level: `hp = ceil(baseHp * (1 + (playerLevel - 1) * 0.15))` (+15% per level)
+
+Spawn probability scales with score: TANK >5000pts, SPINNER >2000pts, KAMIKAZE after wave 10.
+
+## Core Game Loop
+
+```
+gameLoop() → update() → render()
+             ├── updateInput()
+             ├── updateSpawnSystem()
+             ├── updatePlayer()
+             ├── updateBullets() (includes rocket homing)
+             ├── updateEnemies() (AI, separation, Spinner firing)
+             ├── updateEnemyBullets()
+             ├── updateParticles()
+             ├── updatePickups()
+             ├── updateXPOrbs()
+             ├── updateWeapons() (orbitals)
+             ├── checkCollisions()
+             └── updateEffects()
+```
+
+## Collision System
+
+- Bullet vs Enemy: Damage + floating damage text, kill → spawn XP, maybe pickup, TANK splits
+- Enemy vs Player: Near-miss detection (+5pts, slow-mo), damage if contact
+- Enemy Bullet vs Player: Same near-miss/damage logic
+- Orbital vs Enemy: Damage + floating damage text with 0.3s hit cooldown
+
+## Effects System
+
+| Effect | Trigger |
+|--------|---------|
+| `triggerShake(intensity, duration)` | Hits, dash, death |
+| `triggerFlash(color, opacity, duration)` | Damage, near-miss, level-up |
+| `triggerSlowmo(duration)` | Near-miss, milestones, death |
+| Screen shake uses `ctx.translate()` with random offset |
+
+## Scoring
+
+- `score += deltaTime` (survival bonus)
+- Kill points multiplied by chain: `CHAIN_MULTIPLIERS = [1, 1.2, 1.5, 2, 2.5, 3]`
+- Chain window: 2.2s, +0.5 per kill, decays over time
+- Near-miss: +5pts + slow-mo
+- Milestones every 5000pts
+
+## XP & Leveling
+
+- XP per level: `XP_PER_LEVEL_BASE * 1.4^(level-1)`
+- Orbs have magnet radius (220px), pull toward player
+- Level-up grants 1 skill point and opens skill tree (`gameState = 'skilltree'`)
+- Player can reopen skill tree with P key if skill points available
+
+## Input Handling
+
+Keyboard: 
+- WASD/Arrows for movement
+- Space for dash
+- P opens skill tree (if skill points available) or pauses
+- Esc for pause/close skill tree
+- In skill tree: Arrows/WASD to navigate, Enter/Space to unlock
+
+Touch: Virtual joystick (left 40% of screen), dash button (bottom right)
+
+## Performance Optimization
+
+- `lowPerfMode` activates if avgFrameTime > 40ms
+- Reduces MAX_ENEMIES from 120 to 60
+- Reduces max particles from 300 to 100
+- Spawn interval decays: starts at 0.35s, minimum 0.06s
+
+## Visual Style (Neon Outline Aesthetic)
+
+All game entities use outline-only rendering with glow effects (no fills):
+- **Player**: Triangle outline with `lineWidth: 3`, `shadowBlur: 15`
+- **Enemies**: Circles/triangles/hexagons outline with `lineWidth: 3`, `shadowBlur: 12`
+- **Orbitals**: Circle outlines with `lineWidth: 2.5`
+- **Pickups/XP Orbs**: Diamond outlines with `lineWidth: 2-2.5`
+- **Bullets**: Lines/strokes only (laser, beam, spread, rockets)
+- **Enemy Bullets**: Small circle outlines
+- **Particles**: Line sparks instead of filled circles
+
+## Rendering Order (render function)
+
+1. Background (gradient + nebulas)
+2. Pickups → Enemies → XP Orbs → Bullets → Enemy Bullets → Player → Orbitals → Particles → Floating Texts
+3. Flash overlay
+4. UI (HUD, menus, overlays)
+
+## LocalStorage
+
+High score saved as `StellarSwarm_highscore_v1`
+
+## Key Functions Reference
+
+| Function | Purpose |
+|----------|---------|
+| `resetGame()` | Initialize all state for new game |
+| `fireBullet()` | Fire all equipped weapons with auto-aim |
+| `getWeaponStats()` | Compute weapon stats from unlocked skills |
+| `spawnEnemy()` | Create enemy based on score/wave (with HP scaling) |
+| `killEnemy()` | Handle death, XP, TANK split |
+| `collectXP()` | Add XP, check level-up |
+| `damagePlayer()` | Reduce HP, i-frames, check game over |
+| `checkCollisions()` | All collision detection (shows damage floats) |
+| `canUnlockSkill()` | Check if skill prerequisites are met |
+| `unlockSkill()` | Unlock a skill from the tree |
+| `renderSkillTree()` | Draw skill tree UI overlay |
