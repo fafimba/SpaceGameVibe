@@ -127,10 +127,10 @@
         
         // Physics
         const ROTATION_SPEED = 300;          // deg/sec
-        const THRUST_ACCEL = 1400;           // px/sec²
+        const THRUST_ACCEL = 2200;           // px/sec²
         const REVERSE_ACCEL = 450;           // px/sec²
-        const MAX_SPEED = 400;               // px/sec
-        const DRAG_FACTOR = -0.028;             // Increased drag to reduce inertia
+        const MAX_SPEED = 600;               // px/sec
+        const DRAG_FACTOR = 0.5;             // Increased drag to reduce inertia
         const BULLET_SPEED = 1350;           // px/sec
         
         // Player
@@ -195,7 +195,6 @@
         // XP & Level System
         const XP_PER_LEVEL_BASE = 25;
         const XP_PER_LEVEL_GROWTH = 1.4;
-        const XP_ORB_SPEED = 280;
         const XP_ORB_MAGNET_RADIUS = 220;
 
         // Touch Controls
@@ -205,6 +204,7 @@
 
         // Auto-Aim
         const AUTO_AIM_CONE_DEGREES = 30; // ±30° = 60° total cone
+        const AUTO_AIM_MAX_DISTANCE = 700; // px - max range for laser auto-aim
 
         // Enemy Spawn
         const ENEMY_SPAWN_OFFSET_MIN = 50;
@@ -307,7 +307,7 @@
             },
             'homing_guidance': {
                 name: 'Rapid Barrage',
-                description: '+75% missile fire rate',
+                description: 'Double burst (6 missiles per salvo)',
                 prereqs: ['missile_launcher'],
                 cost: 1,
                 color: '#FF9A6B',
@@ -368,6 +368,43 @@
                 color: '#FF69B4',
                 icon: 'absorb',
                 nodeType: 'circle'
+            },
+            // LIGHTNING RAY branch (electric purple/blue theme)
+            'lightning_ray': {
+                name: 'LIGHTNING RAY',
+                description: 'Chain lightning hits nearby enemies',
+                prereqs: ['arsenal'],
+                cost: 1,
+                color: '#9F7AEA',
+                icon: 'lightning',
+                nodeType: 'rectangle'
+            },
+            'chain_amplifier': {
+                name: 'Chain Amplifier',
+                description: '+3 chain bounces (6 total)',
+                prereqs: ['lightning_ray'],
+                cost: 1,
+                color: '#B794F4',
+                icon: 'chain',
+                nodeType: 'circle'
+            },
+            'rapid_discharge': {
+                name: 'Rapid Discharge',
+                description: '+50% lightning fire rate',
+                prereqs: ['lightning_ray'],
+                cost: 1,
+                color: '#63B3ED',
+                icon: 'discharge',
+                nodeType: 'circle'
+            },
+            'extended_arc': {
+                name: 'Extended Arc',
+                description: '+50% detection & chain range',
+                prereqs: ['lightning_ray'],
+                cost: 1,
+                color: '#4FD1C5',
+                icon: 'arc',
+                nodeType: 'circle'
             }
         };
         
@@ -412,7 +449,12 @@
                 'orbital_shield':   { x: centerX + colSpacing, y: startY + rowSpacing },
                 'regen_capacitors': { x: centerX + colSpacing, y: startY + rowSpacing * 2 },
                 'shockwave_emitter':{ x: centerX + colSpacing, y: startY + rowSpacing * 3 },
-                'energy_absorption':{ x: centerX + colSpacing, y: startY + rowSpacing * 4 }
+                'energy_absorption':{ x: centerX + colSpacing, y: startY + rowSpacing * 4 },
+                // Far right column - Lightning Ray branch
+                'lightning_ray':    { x: centerX + colSpacing * 2, y: startY + rowSpacing },
+                'chain_amplifier':  { x: centerX + colSpacing * 2, y: startY + rowSpacing * 2 },
+                'rapid_discharge':  { x: centerX + colSpacing * 2, y: startY + rowSpacing * 3 },
+                'extended_arc':     { x: centerX + colSpacing * 2, y: startY + rowSpacing * 4 }
             };
         }
 
@@ -504,6 +546,19 @@
                 showFloatingText(player.x, player.y - 50, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
                 createTextExplosion(player.x, player.y, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
             },
+            'chain': () => {
+                // Unlock lightning ray and all lightning upgrades
+                if (!unlockedSkills.includes('lightning_ray')) {
+                    unlockedSkills.push('lightning_ray');
+                }
+                ['chain_amplifier', 'rapid_discharge', 'extended_arc'].forEach(skill => {
+                    if (!unlockedSkills.includes(skill)) {
+                        unlockedSkills.push(skill);
+                    }
+                });
+                showFloatingText(player.x, player.y - 50, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
+                createTextExplosion(player.x, player.y, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
+            },
             'full': () => {
                 // Unlock ALL skills
                 Object.keys(SKILL_TREE).forEach(skill => {
@@ -533,6 +588,7 @@
         let pickups = [];
         let xpOrbs = [];
         let orbitals = [];
+        let lightningEffects = [];
 
         // Camera system
         let camera = {
@@ -932,7 +988,8 @@
             pickups = [];
             xpOrbs = [];
             orbitals = [];
-            
+            lightningEffects = [];
+
             score = 0;
             gameTime = 0;
             chainMultiplier = 0;
@@ -1476,7 +1533,7 @@
                 const angleDiff = normalizeAngle(joystickAngle - player.angle);
                 if (Math.abs(angleDiff) > JOYSTICK_ROTATION_THRESHOLD) {
                     // Near-instant rotation: lerp 90% of the way each frame
-                    player.angle = player.angle + angleDiff * 0.06;
+                    player.angle = player.angle + angleDiff * 0.1;
                     targetRotation = 0; // Bypass normal rotation system
                 }
             }
@@ -1536,12 +1593,23 @@
             if (stats.hasRockets && player.rocketTimer <= 0) {
                 const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, 600);
                 if (nearbyEnemies.length > 0) {
-                    fireRocket(nearbyEnemies);
-                    // Fixed cooldown: 1.0s base, 0.6s with cadence upgrade
-                    player.rocketTimer = stats.rocketCadence ? 0.6 : 1.0;
+                    fireRocket(nearbyEnemies, stats);
+                    // Cooldown fijo de 1.0s (la habilidad ahora aumenta la ráfaga, no la cadencia)
+                    player.rocketTimer = 1.0;
                 }
             }
-            
+
+            // Auto-fire lightning (independent system, 360º detection)
+            if (!player.lightningTimer) player.lightningTimer = 0;
+            player.lightningTimer -= deltaTime;
+            if (stats.hasLightning && player.lightningTimer <= 0) {
+                const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, stats.lightningRange);
+                if (nearbyEnemies.length > 0) {
+                    fireLightning(nearbyEnemies, stats);
+                    player.lightningTimer = stats.lightningCadence;
+                }
+            }
+
             // Idle bob
             if (idleTimer > 2) {
                 player.bobTimer += deltaTime;
@@ -1587,7 +1655,7 @@
             fireRate = Math.max(0.1, fireRate); // Minimum fire rate
 
             // Missile Launcher branch
-            let rocketCadence = false;
+            let rocketBurstCount = 3; // Misiles por ráfaga (3 normal, 6 con habilidad)
             let rocketExplosionDamage = 3;
             let rocketExplosionRadius = 80;
             let rocketRicochet = false;
@@ -1596,7 +1664,7 @@
                 hasRockets = true;
             }
             if (unlockedSkills.includes('homing_guidance')) {
-                rocketCadence = true; // Higher fire rate for missiles
+                rocketBurstCount = 6; // Ráfaga doble de misiles
             }
             if (unlockedSkills.includes('armor_piercing')) {
                 rocketDamage += 3;
@@ -1606,7 +1674,29 @@
                 rocketRicochet = true; // Spawns mini rockets on impact
             }
 
-            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketCadence, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet };
+            // Lightning Ray branch
+            let hasLightning = false;
+            let lightningBounces = 3;
+            let lightningCadence = 1.2;
+            let lightningRange = 225;
+            let lightningChainRange = 350;
+            let lightningDamage = 2;
+
+            if (unlockedSkills.includes('lightning_ray')) {
+                hasLightning = true;
+            }
+            if (unlockedSkills.includes('chain_amplifier')) {
+                lightningBounces = 6;
+            }
+            if (unlockedSkills.includes('rapid_discharge')) {
+                lightningCadence = 0.8;
+            }
+            if (unlockedSkills.includes('extended_arc')) {
+                lightningRange = 650;
+                lightningChainRange = 500;
+            }
+
+            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketBurstCount, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet, hasLightning, lightningBounces, lightningCadence, lightningRange, lightningChainRange, lightningDamage };
         }
 
         function hasEnemyInAimCone() {
@@ -1616,6 +1706,10 @@
             for (const enemy of enemies) {
                 const dx = enemy.x - player.x;
                 const dy = enemy.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > AUTO_AIM_MAX_DISTANCE) continue;
+
                 const angleToEnemy = Math.atan2(dy, dx);
                 const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
 
@@ -1636,9 +1730,10 @@
             const stats = getWeaponStats();
             const bulletSpeed = BULLET_SPEED;
             
-            // Auto-aim: find enemy within frontal cone
+            // Auto-aim: find enemy within frontal cone and predict intercept point
             let targetRad = playerRad;
             let closestDist = Infinity;
+            let closestEnemy = null;
             const aimCone = AUTO_AIM_CONE_DEGREES * Math.PI / 180;
 
             for (const enemy of enemies) {
@@ -1648,10 +1743,32 @@
                 const angleToEnemy = Math.atan2(dy, dx);
                 const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
 
-                if (angleDiff <= aimCone && dist < closestDist) {
+                if (angleDiff <= aimCone && dist < closestDist && dist <= AUTO_AIM_MAX_DISTANCE) {
                     closestDist = dist;
-                    targetRad = angleToEnemy;
+                    closestEnemy = enemy;
                 }
+            }
+
+            // Calculate intercept point (lead the target)
+            if (closestEnemy) {
+                const evx = closestEnemy.vx || 0;
+                const evy = closestEnemy.vy || 0;
+
+                // Iterative approximation for intercept point (2 iterations for accuracy)
+                let predictedX = closestEnemy.x;
+                let predictedY = closestEnemy.y;
+
+                for (let i = 0; i < 2; i++) {
+                    const dx = predictedX - noseX;
+                    const dy = predictedY - noseY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const timeToTarget = dist / bulletSpeed;
+
+                    predictedX = closestEnemy.x + evx * timeToTarget;
+                    predictedY = closestEnemy.y + evy * timeToTarget;
+                }
+
+                targetRad = Math.atan2(predictedY - noseY, predictedX - noseX);
             }
             
             // Fire main weapon (LASER or BEAM if pierce unlocked)
@@ -1717,10 +1834,8 @@
             }
         }
 
-        // Fire rockets independently (360º enemy detection)
-        function fireRocket(nearbyEnemies) {
-            const stats = getWeaponStats();
-
+        // Fire rockets in burst (360º enemy detection)
+        function fireRocket(nearbyEnemies, stats) {
             // Find closest enemy to aim at
             let closestEnemy = null;
             let closestDist = Infinity;
@@ -1736,61 +1851,204 @@
 
             if (!closestEnemy) return;
 
-            for (let i = 0; i < stats.rocketCount; i++) {
-                // Predict enemy position based on velocity
-                const rocketSpeed = 600;
-                const timeToTarget = closestDist / rocketSpeed;
-                const predictedX = closestEnemy.x + (closestEnemy.vx || 0) * timeToTarget * 0.5;
-                const predictedY = closestEnemy.y + (closestEnemy.vy || 0) * timeToTarget * 0.5;
+            // Disparar ráfaga de misiles con delays
+            const burstCount = stats.rocketBurstCount; // 3 normal, 6 con habilidad
+            const delayBetweenRockets = 50; // ms entre cada misil de la ráfaga
+            const angleSpread = 0.4; // Dispersión angular total de la ráfaga (radianes)
 
-                // Aim towards predicted position with slight spread
-                const angleToTarget = Math.atan2(predictedY - player.y, predictedX - player.x);
-                const offset = (Math.random() - 0.5) * 0.3;
+            for (let i = 0; i < burstCount; i++) {
+                setTimeout(() => {
+                    // Recalcular posición del enemigo para cada misil (puede haberse movido)
+                    const currentDx = closestEnemy.x - player.x;
+                    const currentDy = closestEnemy.y - player.y;
+                    const currentDist = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
 
-                const rocket = pools.bullet.acquire();
-                rocket.x = player.x;
-                rocket.y = player.y;
-                
-                // === COMPORTAMIENTO DE MISIL REALISTA ===
-                // Fase 1: Impulso inicial
-                const initialSpeed = 1000; // 👈 VELOCIDAD INICIAL RÁPIDA
-                const boostDuration = 0.3; // 👈 DURACIÓN DEL IMPULSO (segundos)
-                
-                // Fase 2: Navegación (girando)
-                const cruiseSpeed = 150; // 👈 VELOCIDAD DE NAVEGACIÓN (lenta para girar bien)
-                
-                // Fase 3: Aproximación final
-                const finalSpeed = 1200; // 👈 VELOCIDAD FINAL (cuando apunta al objetivo)
-                const angleThreshold = 10.2; // 👈 UMBRAL DE ÁNGULO PARA ACELERAR (radianes)
-                
-                // Configuración del misil
-                rocket.currentSpeed = initialSpeed;
-                rocket.targetSpeed = initialSpeed;
-                rocket.initialSpeed = initialSpeed;
-                rocket.cruiseSpeed = cruiseSpeed;
-                rocket.finalSpeed = finalSpeed;
-                rocket.boostTimer = boostDuration;
-                rocket.angleThreshold = angleThreshold;
-                rocket.targetAngle = angleToTarget;
-                rocket.hasCompletedBoostPhase = false; // 👈 CONTROLAR QUE EL FRENADO SOLO OCURRE UNA VEZ
-                
-                // Spawn perpendicular al objetivo
-                const spawnAngle = angleToTarget - Math.PI; // 👈 ANGULO DE SPAWN (-90°)
-                rocket.vx = Math.cos(spawnAngle) * initialSpeed;
-                rocket.vy = Math.sin(spawnAngle) * initialSpeed;
-                
-                // Propiedades estándar
-                rocket.life = 2; // 👈 VIDA REDUCIDA (2 segundos en lugar de 3)
-                rocket.damage = stats.rocketDamage;
-                rocket.explosionDamage = stats.rocketExplosionDamage;
-                rocket.explosionRadius = stats.rocketExplosionRadius;
-                rocket.hasRicochet = stats.rocketRicochet;
-                rocket.type = 'rocket';
-                rocket.color = COLORS.PLAYER;
-                rocket.piercing = false;
-                rocket.turnRate = 300;
-                rocket.trail = [];
-                bullets.push(rocket);
+                    // Predict enemy position based on velocity
+                    const rocketSpeed = 600;
+                    const timeToTarget = currentDist / rocketSpeed;
+                    const predictedX = closestEnemy.x + (closestEnemy.vx || 0) * timeToTarget * 0.5;
+                    const predictedY = closestEnemy.y + (closestEnemy.vy || 0) * timeToTarget * 0.5;
+
+                    // Ángulo base hacia el objetivo
+                    const baseAngle = Math.atan2(predictedY - player.y, predictedX - player.x);
+
+                    // Calcular offset angular para efecto de ráfaga
+                    // Distribuye los misiles en un abanico
+                    const angleOffset = (i / (burstCount - 1) - 0.5) * angleSpread + (Math.random() - 0.5) * 0.1;
+                    const angleToTarget = baseAngle + (burstCount > 1 ? angleOffset : 0);
+
+                    const rocket = pools.bullet.acquire();
+                    rocket.x = player.x;
+                    rocket.y = player.y;
+
+                    // === COMPORTAMIENTO DE MISIL REALISTA ===
+                    // Fase 1: Impulso inicial
+                    const initialSpeed = 1000;
+                    const boostDuration = 0.3;
+
+                    // Fase 2: Navegación (girando)
+                    const cruiseSpeed = 150;
+
+                    // Fase 3: Aproximación final
+                    const finalSpeed = 1200;
+                    const angleThreshold = 10.2;
+
+                    // Configuración del misil
+                    rocket.currentSpeed = initialSpeed;
+                    rocket.targetSpeed = initialSpeed;
+                    rocket.initialSpeed = initialSpeed;
+                    rocket.cruiseSpeed = cruiseSpeed;
+                    rocket.finalSpeed = finalSpeed;
+                    rocket.boostTimer = boostDuration;
+                    rocket.angleThreshold = angleThreshold;
+                    rocket.targetAngle = angleToTarget;
+                    rocket.hasCompletedBoostPhase = false;
+
+                    // Spawn perpendicular al objetivo con variación por misil
+                    const spawnAngle = angleToTarget - Math.PI;
+                    rocket.vx = Math.cos(spawnAngle) * initialSpeed;
+                    rocket.vy = Math.sin(spawnAngle) * initialSpeed;
+
+                    // Propiedades estándar
+                    rocket.life = 2;
+                    rocket.damage = stats.rocketDamage;
+                    rocket.explosionDamage = stats.rocketExplosionDamage;
+                    rocket.explosionRadius = stats.rocketExplosionRadius;
+                    rocket.hasRicochet = stats.rocketRicochet;
+                    rocket.type = 'rocket';
+                    rocket.color = COLORS.PLAYER;
+                    rocket.piercing = false;
+                    rocket.turnRate = 300;
+                    rocket.trail = [];
+                    bullets.push(rocket);
+                }, i * delayBetweenRockets);
+            }
+        }
+
+        function fireLightning(nearbyEnemies, stats) {
+            // Find closest enemy to start the chain
+            let closestEnemy = null;
+            let closestDist = Infinity;
+
+            for (const e of nearbyEnemies) {
+                const dx = e.x - player.x;
+                const dy = e.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestEnemy = e;
+                }
+            }
+
+            if (!closestEnemy) return;
+
+            // Build the lightning chain - collect all targets first, then apply damage
+            const chainPoints = [{ x: player.x, y: player.y }];
+            const chainTargets = [];
+            const hitEnemies = new Set();
+            let currentTarget = closestEnemy;
+            let bounceCount = 0;
+
+            // Phase 1: Build the chain (find all targets)
+            while (currentTarget && bounceCount < stats.lightningBounces) {
+                chainPoints.push({ x: currentTarget.x, y: currentTarget.y });
+                chainTargets.push(currentTarget);
+                hitEnemies.add(currentTarget);
+                bounceCount++;
+
+                // Find next closest enemy within chain range from current target
+                const lastHitX = currentTarget.x;
+                const lastHitY = currentTarget.y;
+
+                let nextTarget = null;
+                let nextDist = Infinity;
+
+                for (const candidate of enemies) {
+                    if (hitEnemies.has(candidate)) continue;
+                    if (candidate.hp <= 0) continue;
+
+                    const dx = candidate.x - lastHitX;
+                    const dy = candidate.y - lastHitY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist <= stats.lightningChainRange && dist < nextDist) {
+                        nextDist = dist;
+                        nextTarget = candidate;
+                    }
+                }
+
+                currentTarget = nextTarget;
+            }
+
+            // Phase 2: Apply damage to all targets and kill dead enemies
+            const enemiesToKill = [];
+            for (const target of chainTargets) {
+                const config = ENEMY_TYPES[target.type];
+                target.hp -= stats.lightningDamage;
+
+                // Visual feedback
+                spawnFloatingText(target.x, target.y - config.radius,
+                    stats.lightningDamage.toString(), SKILL_TREE['lightning_ray'].color);
+                spawnHitParticles(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+
+                if (target.hp <= 0) {
+                    enemiesToKill.push(target);
+                }
+            }
+
+            // Phase 3: Kill dead enemies (after chain is complete)
+            for (const target of enemiesToKill) {
+                const enemyIndex = enemies.indexOf(target);
+                if (enemyIndex !== -1) {
+                    killEnemy(target, enemyIndex);
+                }
+            }
+
+            // Create lightning visual effect with pre-computed zigzag
+            if (chainPoints.length > 1) {
+                // Generate zigzag path between each pair of points
+                const zigzagPoints = [];
+                for (let i = 0; i < chainPoints.length - 1; i++) {
+                    const start = chainPoints[i];
+                    const end = chainPoints[i + 1];
+
+                    // Add start point
+                    if (i === 0) zigzagPoints.push({ x: start.x, y: start.y });
+
+                    // Calculate distance and direction
+                    const dx = end.x - start.x;
+                    const dy = end.y - start.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    // Number of zigzag segments based on distance
+                    const segments = Math.max(3, Math.floor(dist / 30));
+                    const perpX = -dy / dist;
+                    const perpY = dx / dist;
+
+                    // Generate zigzag points
+                    for (let s = 1; s < segments; s++) {
+                        const t = s / segments;
+                        const baseX = start.x + dx * t;
+                        const baseY = start.y + dy * t;
+
+                        // Alternating zigzag with random offset (narrower)
+                        const zigzagAmount = (Math.random() * 12 + 6) * (s % 2 === 0 ? 1 : -1);
+                        zigzagPoints.push({
+                            x: baseX + perpX * zigzagAmount,
+                            y: baseY + perpY * zigzagAmount
+                        });
+                    }
+
+                    // Add end point
+                    zigzagPoints.push({ x: end.x, y: end.y });
+                }
+
+                lightningEffects.push({
+                    points: zigzagPoints,
+                    life: 0.2,
+                    maxLife: 0.2,
+                    color: SKILL_TREE['lightning_ray'].color
+                });
             }
         }
 
@@ -2542,6 +2800,8 @@
         // XP & LEVEL SYSTEM
         // ============================================================
         
+        const XP_ORB_TWEEN_DURATION = 0.35; // segundos para llegar al jugador
+
         function spawnXPOrb(x, y, value) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 30 + Math.random() * 40;
@@ -2551,10 +2811,11 @@
             orb.vx = Math.cos(angle) * speed;
             orb.vy = Math.sin(angle) * speed;
             orb.value = value;
-            orb.size = 2 + value * 0.5;
+            orb.size = 2 + value * 2;
             orb.life = 15;
             orb.bobTimer = Math.random() * Math.PI * 2;
             orb.magnetized = false;
+            orb.tweenTime = 0;
             xpOrbs.push(orb);
         }
         
@@ -2586,15 +2847,26 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
                 // Once magnetized, stay magnetized forever
-                if (dist < XP_ORB_MAGNET_RADIUS) {
+                if (dist < XP_ORB_MAGNET_RADIUS && !orb.magnetized) {
                     orb.magnetized = true;
+                    orb.tweenTime = 0;
                 }
-                
-                if (orb.magnetized && dist > 1) {
-                    // Move directly toward player at fixed speed
-                    const speed = 600;
-                    orb.x += (dx / dist) * speed * deltaTime;
-                    orb.y += (dy / dist) * speed * deltaTime;
+
+                if (orb.magnetized) {
+                    // Tween hacia el jugador en tiempo fijo
+                    orb.tweenTime += deltaTime;
+
+                    if (orb.tweenTime >= XP_ORB_TWEEN_DURATION) {
+                        // Tiempo agotado, ir directo al jugador
+                        orb.x = player.x;
+                        orb.y = player.y;
+                    } else {
+                        // Mover proporcionalmente al tiempo restante
+                        const remaining = XP_ORB_TWEEN_DURATION - orb.tweenTime;
+                        const moveRatio = Math.min(deltaTime / remaining, 1);
+                        orb.x += dx * moveRatio;
+                        orb.y += dy * moveRatio;
+                    }
                 } else {
                     // Initial drift before magnetized
                     orb.vx *= 0.98;
@@ -2793,6 +3065,19 @@
             // Orbital shields
             if (unlockedSkills.includes('orbital_shield')) {
                 updateOrbitals();
+            }
+            // Lightning effects
+            updateLightningEffects();
+        }
+
+        function updateLightningEffects() {
+            for (let i = lightningEffects.length - 1; i >= 0; i--) {
+                const effect = lightningEffects[i];
+                effect.life -= deltaTime;
+
+                if (effect.life <= 0) {
+                    lightningEffects.splice(i, 1);
+                }
             }
         }
 
@@ -3393,14 +3678,15 @@
 
             // Game entities (all rendered in world coordinates)
             if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver') {
+                renderXPOrbs(); // XP orbs render first (below everything)
                 renderPickups();
                 renderEnemies();
-                renderXPOrbs();
                 renderBullets();
                 renderEnemyBullets();
                 if (player && gameState !== 'gameOver') {
                     renderPlayer();
                     renderOrbitals();
+                    renderLightning();
                 }
                 renderParticles();
                 renderFloatingTexts();
@@ -3535,7 +3821,47 @@
 
             ctx.shadowBlur = 0;
         }
-        
+
+        function renderLightning() {
+            if (lightningEffects.length === 0) return;
+
+            for (const effect of lightningEffects) {
+                if (effect.points.length < 2) continue;
+
+                const alpha = effect.life / effect.maxLife;
+
+                // Render 3 layers: outer glow, mid glow, core
+                for (let layer = 2; layer >= 0; layer--) {
+                    ctx.beginPath();
+                    ctx.moveTo(effect.points[0].x, effect.points[0].y);
+
+                    // Draw through all pre-computed zigzag points
+                    for (let i = 1; i < effect.points.length; i++) {
+                        ctx.lineTo(effect.points[i].x, effect.points[i].y);
+                    }
+
+                    // Layer styling (narrow lightning)
+                    if (layer === 0) {
+                        // Core: bright white
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                        ctx.lineWidth = 1.5;
+                    } else if (layer === 1) {
+                        // Mid: purple
+                        ctx.strokeStyle = `rgba(159, 122, 234, ${alpha * 0.8})`;
+                        ctx.lineWidth = 3;
+                    } else {
+                        // Outer: blue glow
+                        ctx.strokeStyle = `rgba(99, 179, 237, ${alpha * 0.5})`;
+                        ctx.lineWidth = 6;
+                    }
+
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.stroke();
+                }
+            }
+        }
+
         function renderBullets() {
             // Sort bullets by type for batched rendering
             const byType = { laser: [], beam: [], rocket: [], spread: [], mini_rocket: [] };
@@ -4525,6 +4851,50 @@
                         ctx.stroke();
                         ctx.fillRect(pos.x - 5, pos.y - 1, 10, 2);
                         ctx.fillRect(pos.x - 1, pos.y - 5, 2, 10);
+                    } else if (skill.icon === 'lightning') {
+                        // Lightning bolt icon
+                        ctx.beginPath();
+                        ctx.moveTo(pos.x + 2, pos.y - 10);
+                        ctx.lineTo(pos.x - 4, pos.y);
+                        ctx.lineTo(pos.x + 1, pos.y);
+                        ctx.lineTo(pos.x - 3, pos.y + 10);
+                        ctx.lineTo(pos.x + 5, pos.y - 2);
+                        ctx.lineTo(pos.x, pos.y - 2);
+                        ctx.closePath();
+                        ctx.fill();
+                    } else if (skill.icon === 'chain') {
+                        // Chain links icon
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(pos.x - 4, pos.y - 2, 5, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(pos.x + 4, pos.y + 2, 5, 0, Math.PI * 2);
+                        ctx.stroke();
+                    } else if (skill.icon === 'discharge') {
+                        // Discharge/rate icon (multiple small bolts)
+                        ctx.lineWidth = 2;
+                        for (let i = 0; i < 3; i++) {
+                            const ox = (i - 1) * 6;
+                            ctx.beginPath();
+                            ctx.moveTo(pos.x + ox + 1, pos.y - 6);
+                            ctx.lineTo(pos.x + ox - 2, pos.y);
+                            ctx.lineTo(pos.x + ox, pos.y);
+                            ctx.lineTo(pos.x + ox - 2, pos.y + 6);
+                            ctx.stroke();
+                        }
+                    } else if (skill.icon === 'arc') {
+                        // Arc/range icon (concentric arcs)
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, 10, -Math.PI * 0.6, Math.PI * 0.6);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, 6, -Math.PI * 0.6, Math.PI * 0.6);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2);
+                        ctx.fill();
                     }
 
                     // Cost indicator below node (compact layout - no text labels)
