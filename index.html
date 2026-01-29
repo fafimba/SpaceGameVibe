@@ -76,13 +76,13 @@
 
         #joystickKnob {
             position: absolute;
-            width: 28px;
-            height: 28px;
+            width: 56px;
+            height: 56px;
             background: rgba(255, 255, 255, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.35);
             border-radius: 50%;
-            left: 26px;
-            top: 26px;
+            left: 12px;
+            top: 12px;
             transition: none;
         }
         
@@ -199,7 +199,7 @@
         const XP_ORB_MAGNET_RADIUS = 220;
 
         // Touch Controls
-        const JOYSTICK_MAX_DISTANCE = 26;
+        const JOYSTICK_MAX_DISTANCE = 38;
         const JOYSTICK_DEADZONE = 0.2;
         const JOYSTICK_THRUST_THRESHOLD = 0.3;
 
@@ -1127,8 +1127,8 @@
                 joystickBase.style.top = (joystickTouch.clientY - 40) + 'px';
 
                 // Reset knob to center
-                joystickKnob.style.left = '26px';
-                joystickKnob.style.top = '26px';
+                joystickKnob.style.left = '12px';
+                joystickKnob.style.top = '12px';
                 joystickMagnitude = 0;
 
                 e.preventDefault();
@@ -1145,8 +1145,8 @@
             joystickZone.addEventListener('touchend', () => {
                 joystickActive = false;
                 joystickMagnitude = 0;
-                joystickKnob.style.left = '26px';
-                joystickKnob.style.top = '26px';
+                joystickKnob.style.left = '12px';
+                joystickKnob.style.top = '12px';
                 joystickBase.style.display = 'none';
             });
             
@@ -1164,8 +1164,8 @@
                     dy = (dy / dist) * JOYSTICK_MAX_DISTANCE;
                 }
 
-                joystickKnob.style.left = (26 + dx) + 'px';
-                joystickKnob.style.top = (26 + dy) + 'px';
+                joystickKnob.style.left = (12 + dx) + 'px';
+                joystickKnob.style.top = (12 + dy) + 'px';
 
                 joystickMagnitude = Math.min(dist / JOYSTICK_MAX_DISTANCE, 1);
                 joystickAngle = Math.atan2(dy, dx) * 180 / Math.PI;
