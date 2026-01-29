@@ -130,7 +130,7 @@
         const THRUST_ACCEL = 1400;           // px/sec²
         const REVERSE_ACCEL = 450;           // px/sec²
         const MAX_SPEED = 400;               // px/sec
-        const DRAG_FACTOR = 0.3;             // Increased drag to reduce inertia
+        const DRAG_FACTOR = -0.028;             // Increased drag to reduce inertia
         const BULLET_SPEED = 1350;           // px/sec
         
         // Player
@@ -138,6 +138,8 @@
         const PLAYER_COLLISION_RADIUS = 20;
         const PLAYER_VISUAL_RADIUS = 24;
         const PLAYER_MAX_HP = 3;
+        const PLAYER_PIVOT_OFFSET = -5;
+        const PLAYER_MASS = 2.5;             // Mass factor: higher = more inertia, harder to change direction       // Offset del punto de pivote: positivo = hacia el morro, negativo = hacia la cola
         
         // Weapons
         const AUTO_FIRE_INTERVAL = 0.35;
@@ -209,14 +211,23 @@
         const ENEMY_SPAWN_OFFSET_RANGE = 30;
         const ENEMY_SEPARATION_PADDING = 8;
 
-        // Swarm Wave System
-        const SWARM_WAVE_INTERVAL_MIN = 25;   // Min seconds between swarm waves
-        const SWARM_WAVE_INTERVAL_MAX = 40;   // Max seconds between swarm waves
-        const SWARM_ARC_DEGREES = 200;        // Arc around player in degrees
-        const SWARM_ROWS = 4;                 // Number of rows in the swarm
-        const SWARM_ENEMIES_PER_ROW = 80;     // Enemies per row (320 total = massive wall)
-        const SWARM_ROW_SPACING = 22;         // Distance between rows
-        const SWARM_SPAWN_DISTANCE = 1300;    // Distance from player (well off-screen)
+        // Wave System - Vampire Survivor style
+        const WAVE_INTERVAL_BASE = 2.5;       // Base seconds between waves (gets faster with level)
+        const WAVE_INTERVAL_VARIANCE = 1.5;   // Random variance in seconds
+        const WAVE_SPAWN_DISTANCE = 850;      // Distance from player
+        const WAVE_PATTERNS = [
+            'arc',           // Enemies in an arc around player
+            'side',          // All enemies from one side
+            'pincer',        // Enemies from two opposite sides
+            'circle',        // Full circle around player
+            'line',          // Horizontal or vertical line
+            'cluster',       // Tight cluster from one direction
+            'spiral',        // Spiral pattern converging on player
+            'corners',       // From all 4 corners
+            'rush',          // Dense column rushing from one direction
+            'scatter',       // Random positions all around
+            'v_formation'    // V-shape formation
+        ];
 
         // Sector System - Infinite World
         const SECTOR_WIDTH = 3840;      // 2x viewport width
@@ -550,8 +561,9 @@
         let lastSpawnDecayTime = 0;
         let waveNumber = 0;
 
-        // Swarm wave system
-        let swarmWaveTimer = SWARM_WAVE_INTERVAL_MIN + Math.random() * (SWARM_WAVE_INTERVAL_MAX - SWARM_WAVE_INTERVAL_MIN);
+        // Wave system
+        let waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
+        let lastWavePattern = null;
         
         // Chain system
         let chainMultiplier = 0;
@@ -830,8 +842,8 @@
         function init() {
             // Set canvas dimensions based on device
             if (isMobile()) {
-                CANVAS_WIDTH = 540;
-                CANVAS_HEIGHT = 960;
+                CANVAS_WIDTH = 720;
+                CANVAS_HEIGHT = 1280;
             } else {
                 CANVAS_WIDTH = 1920;
                 CANVAS_HEIGHT = 1080;
@@ -941,7 +953,8 @@
             spawnInterval = INITIAL_SPAWN_INTERVAL_MAX;
             lastSpawnDecayTime = 0;
             waveNumber = 0;
-            swarmWaveTimer = SWARM_WAVE_INTERVAL_MIN + Math.random() * (SWARM_WAVE_INTERVAL_MAX - SWARM_WAVE_INTERVAL_MIN);
+            waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
+            lastWavePattern = null;
 
             shakeIntensity = 0;
             shakeDuration = 0;
@@ -1487,8 +1500,8 @@
                 player.thrusterScale = Math.max(0, player.thrusterScale - deltaTime / 0.12);
             }
             
-            player.vx += Math.cos(rad) * accel * deltaTime;
-            player.vy += Math.sin(rad) * accel * deltaTime;
+            player.vx += Math.cos(rad) * accel * deltaTime / PLAYER_MASS;
+            player.vy += Math.sin(rad) * accel * deltaTime / PLAYER_MASS;
             
             // Apply drag
             const dragMult = Math.exp(-DRAG_FACTOR * deltaTime);
@@ -1615,8 +1628,9 @@
 
         function fireBullet() {
             const playerRad = player.angle * Math.PI / 180;
-            const noseX = player.x + Math.cos(playerRad) * (PLAYER_SIZE / 2);
-            const noseY = player.y + Math.sin(playerRad) * (PLAYER_SIZE / 2);
+            const noseOffset = PLAYER_SIZE / 2 - PLAYER_PIVOT_OFFSET;
+            const noseX = player.x + Math.cos(playerRad) * noseOffset;
+            const noseY = player.y + Math.sin(playerRad) * noseOffset;
             
             // Get computed stats from skill tree
             const stats = getWeaponStats();
@@ -1783,10 +1797,11 @@
         function spawnThrusterParticle() {
             const rad = (player.angle + 180) * Math.PI / 180;
             const spread = (Math.random() - 0.5) * 0.5;
+            const tailOffset = 20 + PLAYER_PIVOT_OFFSET;
 
             const p = pools.particle.acquire();
-            p.x = player.x + Math.cos(rad) * 20;
-            p.y = player.y + Math.sin(rad) * 20;
+            p.x = player.x + Math.cos(rad) * tailOffset;
+            p.y = player.y + Math.sin(rad) * tailOffset;
             p.vx = Math.cos(rad + spread) * (100 + Math.random() * 50) + player.vx * 0.3;
             p.vy = Math.sin(rad + spread) * (100 + Math.random() * 50) + player.vy * 0.3;
             p.life = 0.3 + Math.random() * 0.2;
@@ -1953,56 +1968,239 @@
                 spawnTimer = spawnInterval + Math.random() * (spawnInterval * 0.5);
             }
 
-            // Swarm wave system
-            swarmWaveTimer -= deltaTime;
-            if (swarmWaveTimer <= 0) {
-                spawnSwarmWave();
-                swarmWaveTimer = SWARM_WAVE_INTERVAL_MIN + Math.random() * (SWARM_WAVE_INTERVAL_MAX - SWARM_WAVE_INTERVAL_MIN);
+            // Wave system - starts aggressively from level 2
+            if (playerLevel >= 2) {
+                waveTimer -= deltaTime;
+                if (waveTimer <= 0) {
+                    // Spawn 1-3 waves simultaneously at higher levels
+                    const simultaneousWaves = playerLevel >= 5 ? (Math.random() < 0.4 ? 2 : 1) : 1;
+                    for (let w = 0; w < simultaneousWaves; w++) {
+                        spawnWave();
+                    }
+                    // Faster waves as level increases (minimum 1.2 seconds between waves)
+                    const levelSpeedBonus = Math.min((playerLevel - 2) * 0.25, 1.8);
+                    waveTimer = Math.max(1.2, WAVE_INTERVAL_BASE - levelSpeedBonus) + Math.random() * WAVE_INTERVAL_VARIANCE;
+                }
             }
         }
 
-        function spawnSwarmWave() {
+        function spawnWave() {
             if (!player) return;
 
-            // Random starting angle for the arc (so it comes from different directions)
-            const centerAngle = Math.random() * 360;
-            const halfArc = SWARM_ARC_DEGREES / 2;
-            const startAngle = centerAngle - halfArc;
+            // Pick a random pattern different from the last one
+            let pattern;
+            do {
+                pattern = WAVE_PATTERNS[Math.floor(Math.random() * WAVE_PATTERNS.length)];
+            } while (pattern === lastWavePattern && WAVE_PATTERNS.length > 1);
+            lastWavePattern = pattern;
+
+            // Scale wave size with level (more enemies at higher levels)
+            const baseCount = 15 + Math.floor(playerLevel * 4);
+            const count = Math.min(baseCount, 60); // Cap at 60 per wave
 
             // Scale enemy HP based on player level
             const config = ENEMY_TYPES['SCOUT'];
             const hpMultiplier = 1 + (playerLevel - 1) * 0.15;
             const scaledHp = Math.ceil(config.hp * hpMultiplier);
 
-            for (let row = 0; row < SWARM_ROWS; row++) {
-                const distance = SWARM_SPAWN_DISTANCE + row * SWARM_ROW_SPACING;
+            const spawnPositions = [];
 
-                for (let i = 0; i < SWARM_ENEMIES_PER_ROW; i++) {
-                    // Distribute enemies evenly across the arc
-                    const angleOffset = (SWARM_ARC_DEGREES / (SWARM_ENEMIES_PER_ROW - 1)) * i;
-                    const angle = startAngle + angleOffset;
-                    const rad = angle * Math.PI / 180;
-
-                    const x = player.x + Math.cos(rad) * distance;
-                    const y = player.y + Math.sin(rad) * distance;
-
-                    const angleToPlayer = Math.atan2(player.y - y, player.x - x);
-
-                    const enemy = pools.enemy.acquire();
-                    enemy.x = x;
-                    enemy.y = y;
-                    enemy.vx = Math.cos(angleToPlayer) * config.speed * 0.5;
-                    enemy.vy = Math.sin(angleToPlayer) * config.speed * 0.5;
-                    enemy.angle = angleToPlayer * 180 / Math.PI;
-                    enemy.type = 'SCOUT';
-                    enemy.hp = scaledHp;
-                    enemy.maxHp = scaledHp;
-                    enemy.fireTimer = 0;
-                    enemy.burstCooldown = 0;
-                    enemy.spawnTime = gameTime;
-                    enemy.offScreenTime = 0;
-                    enemies.push(enemy);
+            switch (pattern) {
+                case 'arc': {
+                    // Arc around player (original pattern but smaller)
+                    const centerAngle = Math.random() * 360;
+                    const arcDegrees = 90 + Math.random() * 60; // 90-150 degree arc
+                    for (let i = 0; i < count; i++) {
+                        const angle = (centerAngle - arcDegrees/2 + (arcDegrees / (count - 1)) * i) * Math.PI / 180;
+                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 100;
+                        spawnPositions.push({
+                            x: player.x + Math.cos(angle) * dist,
+                            y: player.y + Math.sin(angle) * dist
+                        });
+                    }
+                    break;
                 }
+                case 'side': {
+                    // All from one side in a wall
+                    const side = Math.floor(Math.random() * 4); // 0=left, 1=right, 2=top, 3=bottom
+                    for (let i = 0; i < count; i++) {
+                        let x, y;
+                        const spread = (i - count/2) * 25;
+                        if (side === 0) { // Left
+                            x = player.x - WAVE_SPAWN_DISTANCE;
+                            y = player.y + spread;
+                        } else if (side === 1) { // Right
+                            x = player.x + WAVE_SPAWN_DISTANCE;
+                            y = player.y + spread;
+                        } else if (side === 2) { // Top
+                            x = player.x + spread;
+                            y = player.y - WAVE_SPAWN_DISTANCE;
+                        } else { // Bottom
+                            x = player.x + spread;
+                            y = player.y + WAVE_SPAWN_DISTANCE;
+                        }
+                        spawnPositions.push({ x, y });
+                    }
+                    break;
+                }
+                case 'pincer': {
+                    // From two opposite sides
+                    const horizontal = Math.random() > 0.5;
+                    const halfCount = Math.floor(count / 2);
+                    for (let i = 0; i < halfCount; i++) {
+                        const spread = (i - halfCount/2) * 30;
+                        if (horizontal) {
+                            spawnPositions.push({ x: player.x - WAVE_SPAWN_DISTANCE, y: player.y + spread });
+                            spawnPositions.push({ x: player.x + WAVE_SPAWN_DISTANCE, y: player.y + spread });
+                        } else {
+                            spawnPositions.push({ x: player.x + spread, y: player.y - WAVE_SPAWN_DISTANCE });
+                            spawnPositions.push({ x: player.x + spread, y: player.y + WAVE_SPAWN_DISTANCE });
+                        }
+                    }
+                    break;
+                }
+                case 'circle': {
+                    // Full circle around player
+                    for (let i = 0; i < count; i++) {
+                        const angle = (360 / count) * i * Math.PI / 180;
+                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 50;
+                        spawnPositions.push({
+                            x: player.x + Math.cos(angle) * dist,
+                            y: player.y + Math.sin(angle) * dist
+                        });
+                    }
+                    break;
+                }
+                case 'line': {
+                    // Diagonal line sweeping towards player
+                    const angle = Math.random() * 360 * Math.PI / 180;
+                    const perpAngle = angle + Math.PI / 2;
+                    for (let i = 0; i < count; i++) {
+                        const offset = (i - count/2) * 35;
+                        spawnPositions.push({
+                            x: player.x + Math.cos(angle) * WAVE_SPAWN_DISTANCE + Math.cos(perpAngle) * offset,
+                            y: player.y + Math.sin(angle) * WAVE_SPAWN_DISTANCE + Math.sin(perpAngle) * offset
+                        });
+                    }
+                    break;
+                }
+                case 'cluster': {
+                    // Tight cluster from one direction
+                    const angle = Math.random() * 360 * Math.PI / 180;
+                    for (let i = 0; i < count; i++) {
+                        const offsetAngle = angle + (Math.random() - 0.5) * 0.5;
+                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 150;
+                        spawnPositions.push({
+                            x: player.x + Math.cos(offsetAngle) * dist,
+                            y: player.y + Math.sin(offsetAngle) * dist
+                        });
+                    }
+                    break;
+                }
+                case 'spiral': {
+                    // Spiral pattern
+                    const startAngle = Math.random() * 360;
+                    for (let i = 0; i < count; i++) {
+                        const angle = (startAngle + i * 25) * Math.PI / 180;
+                        const dist = WAVE_SPAWN_DISTANCE + i * 15;
+                        spawnPositions.push({
+                            x: player.x + Math.cos(angle) * dist,
+                            y: player.y + Math.sin(angle) * dist
+                        });
+                    }
+                    break;
+                }
+                case 'corners': {
+                    // From all 4 corners
+                    const perCorner = Math.floor(count / 4);
+                    const corners = [
+                        { dx: -1, dy: -1 },
+                        { dx: 1, dy: -1 },
+                        { dx: -1, dy: 1 },
+                        { dx: 1, dy: 1 }
+                    ];
+                    for (const corner of corners) {
+                        for (let i = 0; i < perCorner; i++) {
+                            const spreadX = (Math.random() - 0.5) * 200;
+                            const spreadY = (Math.random() - 0.5) * 200;
+                            spawnPositions.push({
+                                x: player.x + corner.dx * WAVE_SPAWN_DISTANCE * 0.7 + spreadX,
+                                y: player.y + corner.dy * WAVE_SPAWN_DISTANCE * 0.7 + spreadY
+                            });
+                        }
+                    }
+                    break;
+                }
+                case 'rush': {
+                    // Dense column rushing from one direction
+                    const rushAngle = Math.random() * 360 * Math.PI / 180;
+                    const perpAngle = rushAngle + Math.PI / 2;
+                    const rows = 4;
+                    const perRow = Math.ceil(count / rows);
+                    for (let row = 0; row < rows; row++) {
+                        for (let i = 0; i < perRow; i++) {
+                            const offset = (i - perRow/2) * 20;
+                            const rowDist = row * 40;
+                            spawnPositions.push({
+                                x: player.x + Math.cos(rushAngle) * (WAVE_SPAWN_DISTANCE + rowDist) + Math.cos(perpAngle) * offset,
+                                y: player.y + Math.sin(rushAngle) * (WAVE_SPAWN_DISTANCE + rowDist) + Math.sin(perpAngle) * offset
+                            });
+                        }
+                    }
+                    break;
+                }
+                case 'scatter': {
+                    // Random positions all around (chaotic)
+                    for (let i = 0; i < count; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 300 - 150;
+                        spawnPositions.push({
+                            x: player.x + Math.cos(angle) * dist,
+                            y: player.y + Math.sin(angle) * dist
+                        });
+                    }
+                    break;
+                }
+                case 'v_formation': {
+                    // V-shape formation flying towards player
+                    const vAngle = Math.random() * 360 * Math.PI / 180;
+                    const halfCount = Math.floor(count / 2);
+                    for (let i = 0; i < halfCount; i++) {
+                        const offset = i * 30;
+                        const depth = i * 25;
+                        // Left wing of V
+                        spawnPositions.push({
+                            x: player.x + Math.cos(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.cos(vAngle + Math.PI/2) * offset,
+                            y: player.y + Math.sin(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.sin(vAngle + Math.PI/2) * offset
+                        });
+                        // Right wing of V
+                        spawnPositions.push({
+                            x: player.x + Math.cos(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.cos(vAngle - Math.PI/2) * offset,
+                            y: player.y + Math.sin(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.sin(vAngle - Math.PI/2) * offset
+                        });
+                    }
+                    break;
+                }
+            }
+
+            // Spawn all enemies in the wave
+            for (const pos of spawnPositions) {
+                const angleToPlayer = Math.atan2(player.y - pos.y, player.x - pos.x);
+
+                const enemy = pools.enemy.acquire();
+                enemy.x = pos.x;
+                enemy.y = pos.y;
+                enemy.vx = Math.cos(angleToPlayer) * config.speed * 0.5;
+                enemy.vy = Math.sin(angleToPlayer) * config.speed * 0.5;
+                enemy.angle = angleToPlayer * 180 / Math.PI;
+                enemy.type = 'SCOUT';
+                enemy.hp = scaledHp;
+                enemy.maxHp = scaledHp;
+                enemy.fireTimer = 0;
+                enemy.burstCooldown = 0;
+                enemy.spawnTime = gameTime;
+                enemy.offScreenTime = 0;
+                enemies.push(enemy);
             }
         }
         
@@ -3250,7 +3448,8 @@
             ctx.save();
             ctx.translate(p.x, p.y + p.bobOffset);
             ctx.rotate(p.angle * Math.PI / 180);
-            
+            ctx.translate(-PLAYER_PIVOT_OFFSET, 0);  // Aplica el offset del pivote
+
             // Invulnerability flash
             if (p.invulnerable > 0 && Math.floor(p.invulnerable * 10) % 2 === 0) {
                 ctx.globalAlpha = 0.5;
@@ -3285,13 +3484,13 @@
             ctx.strokeStyle = COLORS.PLAYER;
             ctx.lineWidth = 3;
             ctx.shadowColor = COLORS.PLAYER;
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 15 : 0;
+            ctx.shadowBlur = 20;
             
             ctx.beginPath();
-            ctx.moveTo(24, 0);
-            ctx.lineTo(-16, -14);
+            ctx.moveTo(22, 0);
+            ctx.lineTo(-12, -16);
             ctx.lineTo(-10, 0);
-            ctx.lineTo(-16, 14);
+            ctx.lineTo(-12, 16);
             ctx.closePath();
             ctx.stroke();
             
