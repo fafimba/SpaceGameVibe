@@ -191,7 +191,7 @@
         };
         
         // XP & Level System
-        const XP_PER_LEVEL_BASE = 10;
+        const XP_PER_LEVEL_BASE = 25;
         const XP_PER_LEVEL_GROWTH = 1.4;
         const XP_ORB_SPEED = 280;
         const XP_ORB_MAGNET_RADIUS = 220;
@@ -464,6 +464,47 @@
             pause: false
         };
         
+        // Cheat code system
+        let cheatCodeBuffer = '';
+        const CHEAT_CODES = {
+            'rocket': () => {
+                // Unlock missile launcher and all missile upgrades
+                if (!unlockedSkills.includes('missile_launcher')) {
+                    unlockedSkills.push('missile_launcher');
+                }
+                ['homing_guidance', 'cluster_payload', 'armor_piercing'].forEach(skill => {
+                    if (!unlockedSkills.includes(skill)) {
+                        unlockedSkills.push(skill);
+                    }
+                });
+                showFloatingText(player.x, player.y - 50, 'MISSILES UNLOCKED', '#FFD93D');
+                createTextExplosion(player.x, player.y, 'MISSILES UNLOCKED', '#FFD93D');
+            },
+            'orbit': () => {
+                // Unlock orbital shield and all shield upgrades
+                if (!unlockedSkills.includes('orbital_shield')) {
+                    unlockedSkills.push('orbital_shield');
+                }
+                ['regen_capacitors', 'shockwave_emitter', 'energy_absorption'].forEach(skill => {
+                    if (!unlockedSkills.includes(skill)) {
+                        unlockedSkills.push(skill);
+                    }
+                });
+                showFloatingText(player.x, player.y - 50, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
+                createTextExplosion(player.x, player.y, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
+            },
+            'full': () => {
+                // Unlock ALL skills
+                Object.keys(SKILL_TREE).forEach(skill => {
+                    if (!unlockedSkills.includes(skill)) {
+                        unlockedSkills.push(skill);
+                    }
+                });
+                showFloatingText(player.x, player.y - 50, 'ALL ABILITIES UNLOCKED', '#FFD700');
+                createTextExplosion(player.x, player.y, 'FULL ARSENAL', '#FFD700');
+            }
+        };
+        
         // Touch state
         let joystickActive = false;
         let joystickAngle = 0;
@@ -499,8 +540,8 @@
         
         // Skill Tree state
         let skillPoints = 0;
-        let unlockedSkills = ['arsenal'];
-        let selectedNode = 'arsenal';
+        let unlockedSkills = ['arsenal', 'laser_cannon'];
+        let selectedNode = 'laser_cannon';
         let hoveredNode = null;
         
         // Spawn system
@@ -892,8 +933,8 @@
             
             // Skill Tree reset
             skillPoints = 0;
-            unlockedSkills = ['arsenal'];
-            selectedNode = 'arsenal';
+            unlockedSkills = ['arsenal', 'laser_cannon'];
+            selectedNode = 'laser_cannon';
             hoveredNode = null;
             
             spawnTimer = 0;
@@ -920,6 +961,25 @@
         function setupInput() {
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
+                
+                // Handle cheat codes (only when playing)
+                if (gameState === 'playing' && e.key.length === 1) {
+                    cheatCodeBuffer += e.key.toLowerCase();
+                    
+                    // Check if any cheat code matches the buffer
+                    for (const [code, action] of Object.entries(CHEAT_CODES)) {
+                        if (cheatCodeBuffer.includes(code)) {
+                            action();
+                            cheatCodeBuffer = '';
+                            break;
+                        }
+                    }
+                    
+                    // Keep buffer manageable
+                    if (cheatCodeBuffer.length > 20) {
+                        cheatCodeBuffer = cheatCodeBuffer.slice(-10);
+                    }
+                }
                 
                 if (e.code === 'Escape') {
                     if (gameState === 'playing') {
@@ -1464,8 +1524,8 @@
                 const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, 600);
                 if (nearbyEnemies.length > 0) {
                     fireRocket(nearbyEnemies);
-                    // Fixed cooldown: 1.5s base, 0.9s with cadence upgrade
-                    player.rocketTimer = stats.rocketCadence ? 0.9 : 1.5;
+                    // Fixed cooldown: 1.0s base, 0.6s with cadence upgrade
+                    player.rocketTimer = stats.rocketCadence ? 0.6 : 1.0;
                 }
             }
             
@@ -1591,7 +1651,7 @@
                 bullet.life = BULLET_LIFETIME * 1.5;
                 bullet.damage = stats.damage;
                 bullet.type = 'beam';
-                bullet.color = SKILL_TREE['laser_cannon'].color;
+                bullet.color = COLORS.BULLET;
                 bullet.piercing = true;
                 bullet.hitEnemies = new Set();
                 bullets.push(bullet);
@@ -1664,7 +1724,7 @@
 
             for (let i = 0; i < stats.rocketCount; i++) {
                 // Predict enemy position based on velocity
-                const rocketSpeed = 400;
+                const rocketSpeed = 600;
                 const timeToTarget = closestDist / rocketSpeed;
                 const predictedX = closestEnemy.x + (closestEnemy.vx || 0) * timeToTarget * 0.5;
                 const predictedY = closestEnemy.y + (closestEnemy.vy || 0) * timeToTarget * 0.5;
@@ -1676,9 +1736,37 @@
                 const rocket = pools.bullet.acquire();
                 rocket.x = player.x;
                 rocket.y = player.y;
-                rocket.vx = Math.cos(angleToTarget + offset) * rocketSpeed;
-                rocket.vy = Math.sin(angleToTarget + offset) * rocketSpeed;
-                rocket.life = 3;
+                
+                // === COMPORTAMIENTO DE MISIL REALISTA ===
+                // Fase 1: Impulso inicial
+                const initialSpeed = 1000; // 👈 VELOCIDAD INICIAL RÁPIDA
+                const boostDuration = 0.3; // 👈 DURACIÓN DEL IMPULSO (segundos)
+                
+                // Fase 2: Navegación (girando)
+                const cruiseSpeed = 150; // 👈 VELOCIDAD DE NAVEGACIÓN (lenta para girar bien)
+                
+                // Fase 3: Aproximación final
+                const finalSpeed = 1200; // 👈 VELOCIDAD FINAL (cuando apunta al objetivo)
+                const angleThreshold = 10.2; // 👈 UMBRAL DE ÁNGULO PARA ACELERAR (radianes)
+                
+                // Configuración del misil
+                rocket.currentSpeed = initialSpeed;
+                rocket.targetSpeed = initialSpeed;
+                rocket.initialSpeed = initialSpeed;
+                rocket.cruiseSpeed = cruiseSpeed;
+                rocket.finalSpeed = finalSpeed;
+                rocket.boostTimer = boostDuration;
+                rocket.angleThreshold = angleThreshold;
+                rocket.targetAngle = angleToTarget;
+                rocket.hasCompletedBoostPhase = false; // 👈 CONTROLAR QUE EL FRENADO SOLO OCURRE UNA VEZ
+                
+                // Spawn perpendicular al objetivo
+                const spawnAngle = angleToTarget - Math.PI; // 👈 ANGULO DE SPAWN (-90°)
+                rocket.vx = Math.cos(spawnAngle) * initialSpeed;
+                rocket.vy = Math.sin(spawnAngle) * initialSpeed;
+                
+                // Propiedades estándar
+                rocket.life = 2; // 👈 VIDA REDUCIDA (2 segundos en lugar de 3)
                 rocket.damage = stats.rocketDamage;
                 rocket.explosionDamage = stats.rocketExplosionDamage;
                 rocket.explosionRadius = stats.rocketExplosionRadius;
@@ -1686,7 +1774,7 @@
                 rocket.type = 'rocket';
                 rocket.color = COLORS.PLAYER;
                 rocket.piercing = false;
-                rocket.turnRate = 180;
+                rocket.turnRate = 300;
                 rocket.trail = [];
                 bullets.push(rocket);
             }
@@ -1748,12 +1836,46 @@
                         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
+                        // === LÓGICA DE MISIL CON 3 FASES (SIN REINICIAR EN NUEVOS OBJETIVOS) ===
+                        
+                        // Actualizar timer del impulso inicial (SOLO la primera vez)
+                        if (b.boostTimer > 0) {
+                            b.boostTimer -= deltaTime;
+                            if (b.boostTimer <= 0) {
+                                // 👈 Cambiar a velocidad de navegación (fase 2) - SOLO UNA VEZ
+                                b.currentSpeed = b.cruiseSpeed;
+                                b.hasCompletedBoostPhase = true; // 👈 MARCAR QUE COMPLETÓ FASE DE FRENADO
+                            }
+                        }
+                        
+                        // SOLO aplicar lógica de aceleración si está fuera del boost inicial
+                        // Esto evita que se reinicie el frenado con nuevos objetivos
+                        if (b.hasCompletedBoostPhase) {
+                            const angleToTargetRad = Math.abs(angleDiff);
+                            
+                            // Fase 3: Aceleración final si apunta al objetivo
+                            if (angleToTargetRad < b.angleThreshold) {
+                                b.targetSpeed = b.finalSpeed; // 👈 VELOCIDAD FINAL
+                            } else {
+                                b.targetSpeed = b.cruiseSpeed; // 👈 VELOCIDAD DE NAVEGACIÓN
+                            }
+                            
+                            // Transición suave de velocidad
+                            const speedTransitionRate = 5.0; // 👈 VELOCIDAD DE TRANSICIÓN (más rápido = más abrupto)
+                            if (Math.abs(b.currentSpeed - b.targetSpeed) > 1) {
+                                const speedChange = (b.targetSpeed - b.currentSpeed) * speedTransitionRate * deltaTime;
+                                b.currentSpeed += speedChange;
+                            }
+                        }
+                        
+                        // Aplicar giro
                         const maxTurn = (b.turnRate * Math.PI / 180) * deltaTime;
                         const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
                         const newAngle = currentAngle + turn;
-                        const newSpeed = Math.min(speed + 300 * deltaTime, 650);
-                        b.vx = Math.cos(newAngle) * newSpeed;
-                        b.vy = Math.sin(newAngle) * newSpeed;
+                        
+                        // Aplicar velocidad actual
+                        b.vx = Math.cos(newAngle) * b.currentSpeed;
+                        b.vy = Math.sin(newAngle) * b.currentSpeed;
                     }
 
                     // Store trail positions for line rendering
@@ -2324,16 +2446,19 @@
         }
 
         function levelUp(levelsGained = 1) {
-            // Open skill tree
-            gameState = 'skilltree';
+            // Only open skill tree if there are still skills to unlock
+            if (!allSkillsUnlocked()) {
+                // Open skill tree
+                gameState = 'skilltree';
 
-            // Hide joystick and disable touch zone when skill tree opens
-            joystickActive = false;
-            joystickMagnitude = 0;
-            const joystickBase = document.getElementById('joystickBase');
-            const joystickZone = document.getElementById('joystickZone');
-            if (joystickBase) joystickBase.style.display = 'none';
-            if (joystickZone) joystickZone.style.display = 'none';
+                // Hide joystick and disable touch zone when skill tree opens
+                joystickActive = false;
+                joystickMagnitude = 0;
+                const joystickBase = document.getElementById('joystickBase');
+                const joystickZone = document.getElementById('joystickZone');
+                if (joystickBase) joystickBase.style.display = 'none';
+                if (joystickZone) joystickZone.style.display = 'none';
+            }
 
             // Effects (more intense if multiple levels)
             const intensity = Math.min(levelsGained, 3);
@@ -2367,6 +2492,18 @@
                 }
             }
             return available;
+        }
+        
+        // Check if all skills have been unlocked
+        function allSkillsUnlocked() {
+            // Count total unlockable skills (excluding the base 'arsenal' and 'laser_cannon' skills)
+            const totalSkills = Object.keys(SKILL_TREE).filter(skillId => 
+                skillId !== 'arsenal' && skillId !== 'laser_cannon'
+            ).length;
+            const unlockedCount = unlockedSkills.filter(skillId => 
+                skillId !== 'arsenal' && skillId !== 'laser_cannon'
+            ).length;
+            return unlockedCount >= totalSkills;
         }
         
         // Unlock a skill
@@ -3220,8 +3357,8 @@
 
                 for (const b of byType.laser) {
                     const angle = Math.atan2(b.vy, b.vx);
-                    ctx.lineWidth = 2 + (b.damage || 1);
-                    const len = 12 + (b.damage || 1) * 3;
+                    ctx.lineWidth = 4 + (b.damage || 1) * 1.5;
+                    const len = 20 + (b.damage || 1) * 4;
                     ctx.beginPath();
                     ctx.moveTo(b.x - Math.cos(angle) * len, b.y - Math.sin(angle) * len);
                     ctx.lineTo(b.x, b.y);
@@ -3237,9 +3374,9 @@
                     const angle = Math.atan2(b.vy, b.vx);
                     ctx.strokeStyle = b.color || COLORS.BULLET;
                     ctx.shadowColor = b.color || COLORS.BULLET;
-                    ctx.lineWidth = 2 + (b.damage || 1);
+                    ctx.lineWidth = 4 + (b.damage || 1) * 1.5;
 
-                    const len = 20;
+                    const len = 20 + (b.damage || 1) * 4;
                     ctx.beginPath();
                     ctx.moveTo(b.x - Math.cos(angle) * len, b.y - Math.sin(angle) * len);
                     ctx.lineTo(b.x, b.y);
@@ -3721,6 +3858,34 @@
                 ctx.fillText('CHAIN: x' + mult.toFixed(1), 20, 60);
             }
 
+            // XP Bar (top-center)
+            const xpBarWidth = 300;
+            const xpBarHeight = 12;
+            const xpBarX = (CANVAS_WIDTH - xpBarWidth) / 2;
+            const xpBarY = 75;
+            const xpProgress = playerXP / xpToNextLevel;
+            
+            // Background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(xpBarX - 2, xpBarY - 2, xpBarWidth + 4, xpBarHeight + 4);
+            
+            // Empty bar
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(xpBarX, xpBarY, xpBarWidth, xpBarHeight);
+            
+            // Filled bar
+            ctx.fillStyle = COLORS.XP;
+            ctx.shadowColor = COLORS.XP;
+            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 8 : 0;
+            ctx.fillRect(xpBarX, xpBarY, xpBarWidth * xpProgress, xpBarHeight);
+            ctx.shadowBlur = 0;
+            
+            // Level indicator
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 14px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_PRIMARY;
+            ctx.fillText('LV ' + playerLevel, CANVAS_WIDTH / 2, xpBarY - 5);
+
             // HP (top-right)
             ctx.textAlign = 'right';
             const heartSize = 20;
@@ -3761,34 +3926,6 @@
             ctx.fillText('A/← ROTATE L', 15, CANVAS_HEIGHT - 35);
             ctx.fillText('D/→ ROTATE R', 15, CANVAS_HEIGHT - 20);
 
-            // XP Bar (bottom of screen)
-            const xpBarWidth = 300;
-            const xpBarHeight = 12;
-            const xpBarX = (CANVAS_WIDTH - xpBarWidth) / 2;
-            const xpBarY = CANVAS_HEIGHT - 45;
-            const xpProgress = playerXP / xpToNextLevel;
-            
-            // Background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(xpBarX - 2, xpBarY - 2, xpBarWidth + 4, xpBarHeight + 4);
-            
-            // Empty bar
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(xpBarX, xpBarY, xpBarWidth, xpBarHeight);
-            
-            // Filled bar
-            ctx.fillStyle = COLORS.XP;
-            ctx.shadowColor = COLORS.XP;
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 8 : 0;
-            ctx.fillRect(xpBarX, xpBarY, xpBarWidth * xpProgress, xpBarHeight);
-            ctx.shadowBlur = 0;
-            
-            // Level indicator
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 14px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('LV ' + playerLevel, CANVAS_WIDTH / 2, xpBarY - 5);
-            
             // Unlocked skills indicators (right side)
             ctx.textAlign = 'right';
             ctx.font = '12px "Segoe UI", sans-serif';
@@ -3952,6 +4089,13 @@
 
                 const nodeAlpha = isUnlocked ? 1 : (canUnlock ? 0.9 : 0.5);
                 ctx.globalAlpha = nodeAlpha;
+
+                // Pulsing glow for purchasable skills
+                if (canUnlock && !isUnlocked) {
+                    const glowPulse = Math.sin(Date.now() / 400) * 0.5 + 0.5;
+                    ctx.shadowColor = skill.color;
+                    ctx.shadowBlur = 15 + glowPulse * 15;
+                }
 
                 if (skill.nodeType === 'hexagon') {
                     // Arsenal hexagon node (size adapts to screen)
@@ -4193,6 +4337,7 @@
                     }
                 }
                 ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
             }
 
             // Selected skill info panel (bottom center)
