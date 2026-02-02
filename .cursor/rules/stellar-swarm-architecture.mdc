@@ -28,7 +28,7 @@ index.html
 | Category | Key Constants |
 |----------|---------------|
 | Canvas | 1920x1080 resolution |
-| Physics | ROTATION_SPEED=240°/s, THRUST_ACCEL=800, MAX_SPEED=420, DRAG_FACTOR=0.162 |
+| Physics | ROTATION_SPEED=240°/s, THRUST_ACCEL=800, MAX_SPEED=420, DRAG_FACTOR=0.162, BULLET_SPEED=2000 |
 | Player | PLAYER_SIZE=48, HP=3, DASH_COOLDOWN=4s, AUTO_FIRE_INTERVAL=0.35s |
 | Enemies | SCOUT, KAMIKAZE, SPINNER, TANK (each with unique behavior) |
 | Skill Tree | SKILL_TREE object defines all skills, TREE_LAYOUT defines node positions |
@@ -95,7 +95,7 @@ selectedNode = 'laser_base';  // Currently selected node in UI
 | SPINNER | 1 | Fires 6-bullet radial pattern |
 | TANK | 3 | Slow, burst charges, splits into 2 scouts on death |
 
-**HP Scaling**: Enemy HP scales with player level: `hp = ceil(baseHp * (1 + (playerLevel - 1) * 0.15))` (+15% per level)
+**HP Scaling**: Enemy HP scales with player level: `hp = ceil(baseHp * (1 + (playerLevel - 1) * 0.30))` (+30% per level). Speed scaling removed.
 
 Spawn probability scales with score: TANK >5000pts, SPINNER >2000pts, KAMIKAZE after wave 10.
 
@@ -145,6 +145,7 @@ gameLoop() → update() → render()
 
 - XP per level: `XP_PER_LEVEL_BASE * 1.4^(level-1)`
 - Orbs have magnet radius (220px), pull toward player
+- **XP Merging**: Nearby orbs merge into one to reduce clutter (max value 100, size scales with value)
 - Level-up grants 1 skill point and opens skill tree (`gameState = 'skilltree'`)
 - Player can reopen skill tree with P key if skill points available
 
@@ -172,7 +173,8 @@ All game entities use outline-only rendering with glow effects (no fills):
 - **Player**: Triangle outline with `lineWidth: 3`, `shadowBlur: 15`
 - **Enemies**: Circles/triangles/hexagons outline with `lineWidth: 3`, `shadowBlur: 12`
 - **Orbitals**: Circle outlines with `lineWidth: 2.5`
-- **Pickups/XP Orbs**: Diamond outlines with `lineWidth: 2-2.5`
+- **Pickups**: Diamond outlines (Health), Square outlines (Magnet)
+- **XP Orbs**: Circle outlines with `lineWidth: 2` (size scales with value)
 - **Bullets**: Lines/strokes only (laser, beam, spread, rockets)
 - **Enemy Bullets**: Small circle outlines
 - **Particles**: Line sparks instead of filled circles

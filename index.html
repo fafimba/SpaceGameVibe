@@ -269,7 +269,10 @@
         const REVERSE_ACCEL = 450;           // px/sec²
         const MAX_SPEED = 600;               // px/sec
         const DRAG_FACTOR = 0.5;             // Increased drag to reduce inertia
-        const BULLET_SPEED = 1350;           // px/sec
+        const BULLET_SPEED = 2000;           // px/sec
+        const ORBITAL_RADIUS = 130;          // px - Radio base de los escudos orbitales
+        const ORBITAL_SIZE = 13;             // px - Tamaño base de cada esfera orbital
+        const ORBITAL_SPEED = 3;           // rad/sec - Velocidad base de rotacion
         
         // Player
         const PLAYER_SIZE = 48;
@@ -321,6 +324,7 @@
             BULLET: '#7FDBFF',
             ENEMY_BULLET: '#FF6B6B',
             POWERUP: '#00FFAA',
+            MAGNET: '#00FFFF',
             GOLD: '#FFDD57',
             RARE: '#C792FF',
             XP: '#00FFAA',
@@ -357,7 +361,7 @@
             'arc',           // Enemies in an arc around player
             'side',          // All enemies from one side
             'pincer',        // Enemies from two opposite sides
-            'circle',        // Full circle around player
+            'circle',        // Hexagonal staggered pattern (3 inner, 3 outer)
             'line',          // Horizontal or vertical line
             'cluster',       // Tight cluster from one direction
             'spiral',        // Spiral pattern converging on player
@@ -420,7 +424,7 @@
                 description: 'Laser penetrates enemies',
                 prereqs: ['laser_cannon'],
                 cost: 1,
-                color: '#00FF88',
+                color: '#FF6B5B',
                 icon: 'beam',
                 nodeType: 'circle'
             },
@@ -429,7 +433,7 @@
                 description: 'Fire 3 beams in a cone',
                 prereqs: ['laser_cannon'],
                 cost: 1,
-                color: '#C792FF',
+                color: '#FF6B5B',
                 icon: 'spread',
                 nodeType: 'circle'
             },
@@ -448,7 +452,7 @@
                 description: 'Double burst (6 missiles per salvo)',
                 prereqs: ['missile_launcher'],
                 cost: 1,
-                color: '#FF9A6B',
+                color: '#FFD93D',
                 icon: 'target',
                 nodeType: 'circle'
             },
@@ -457,7 +461,7 @@
                 description: 'Spawn 2 mini missiles on hit',
                 prereqs: ['missile_launcher'],
                 cost: 1,
-                color: '#FFB84D',
+                color: '#FFD93D',
                 icon: 'cluster',
                 nodeType: 'circle'
             },
@@ -466,7 +470,7 @@
                 description: '+3 missile & explosion damage',
                 prereqs: ['missile_launcher'],
                 cost: 1,
-                color: '#A8A8A8',
+                color: '#FFD93D',
                 icon: 'damage',
                 nodeType: 'circle'
             },
@@ -485,7 +489,7 @@
                 description: '+2 orbs (5 total)',
                 prereqs: ['orbital_shield'],
                 cost: 1,
-                color: '#7B68EE',
+                color: '#00DFFF',
                 icon: 'regen',
                 nodeType: 'circle'
             },
@@ -494,7 +498,7 @@
                 description: 'Orbs +50% size',
                 prereqs: ['orbital_shield'],
                 cost: 1,
-                color: '#00FF88',
+                color: '#00DFFF',
                 icon: 'shockwave',
                 nodeType: 'circle'
             },
@@ -503,7 +507,7 @@
                 description: 'Orbs deal +2 damage',
                 prereqs: ['orbital_shield'],
                 cost: 1,
-                color: '#FF69B4',
+                color: '#00DFFF',
                 icon: 'absorb',
                 nodeType: 'circle'
             },
@@ -522,7 +526,7 @@
                 description: '+3 chain bounces (6 total)',
                 prereqs: ['lightning_ray'],
                 cost: 1,
-                color: '#B794F4',
+                color: '#9F7AEA',
                 icon: 'chain',
                 nodeType: 'circle'
             },
@@ -531,7 +535,7 @@
                 description: '+50% lightning fire rate',
                 prereqs: ['lightning_ray'],
                 cost: 1,
-                color: '#63B3ED',
+                color: '#9F7AEA',
                 icon: 'discharge',
                 nodeType: 'circle'
             },
@@ -540,7 +544,7 @@
                 description: '+50% detection & chain range',
                 prereqs: ['lightning_ray'],
                 cost: 1,
-                color: '#4FD1C5',
+                color: '#9F7AEA',
                 icon: 'arc',
                 nodeType: 'circle'
             }
@@ -2321,13 +2325,36 @@
                     break;
                 }
                 case 'circle': {
-                    // Full circle around player
+                    // Hexagonal staggered pattern (3 inner, 3 outer)
+                    // Replaces the unfair "full circle" trap with escape routes
+                    const baseAngle = Math.random() * Math.PI * 2;
+                    // Screen half-width is 960, so 1100 ensures they are off-screen
+                    const innerDist = 1100; 
+                    const outerDist = 1500;
+
                     for (let i = 0; i < count; i++) {
-                        const angle = (360 / count) * i * Math.PI / 180;
-                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 50;
+                        // Distribute among 6 clusters
+                        const clusterIdx = i % 6;
+                        
+                        // Even indices (0, 2, 4) are inner (closest)
+                        // Odd indices (1, 3, 5) are outer (furthest, filling gaps)
+                        const isInner = clusterIdx % 2 === 0;
+                        
+                        // 6 points of hexagon: 0, 60, 120, 180, 240, 300 degrees
+                        const angleStep = Math.PI / 3; 
+                        const clusterAngle = baseAngle + (clusterIdx * angleStep);
+
+                        // Random spread within the cluster
+                        const spreadAngle = (Math.random() - 0.5) * 0.4; // ~20 degree spread
+                        const finalAngle = clusterAngle + spreadAngle;
+
+                        const baseDist = isInner ? innerDist : outerDist;
+                        const distVariation = Math.random() * 150; // Depth variation
+                        const dist = baseDist + distVariation;
+
                         spawnPositions.push({
-                            x: player.x + Math.cos(angle) * dist,
-                            y: player.y + Math.sin(angle) * dist
+                            x: player.x + Math.cos(finalAngle) * dist,
+                            y: player.y + Math.sin(finalAngle) * dist
                         });
                     }
                     break;
@@ -2506,8 +2533,8 @@
             const config = ENEMY_TYPES[type];
             const angleToPlayer = Math.atan2(player.y - y, player.x - x);
             
-            // Scale enemy HP based on player level (+15% per level)
-            const hpMultiplier = 1 + (playerLevel - 1) * 0.15;
+            // Scale enemy HP based on player level (+30% per level)
+            const hpMultiplier = 1 + (playerLevel - 1) * 0.30;
             const scaledHp = Math.ceil(config.hp * hpMultiplier);
 
             const enemy = pools.enemy.acquire();
@@ -2529,12 +2556,11 @@
         function updateEnemies() {
             if (!player) return; // Safety check
 
-            const scoreMultiplier = 1 + Math.floor(score / 5000) * 0.2;
-
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 const config = ENEMY_TYPES[e.type];
-                const speed = config.speed * scoreMultiplier;
+                // Speed scaling removed - constant speed
+                const speed = config.speed;
 
                 // Seek player with limited turn rate
                 const dx = player.x - e.x;
@@ -2723,13 +2749,29 @@
         // ============================================================
         
         function spawnPickup(x, y) {
-            const type = Math.random() < 0.7 ? 'health' : 'weapon';
+            // Always try to spawn a pickup, but the type determines if we actually do it
+            const rand = Math.random();
+            let type = null;
+            
+            // Adjusted probabilities to ensure they keep spawning
+            // 5% Magnet
+            // 15% Health
+            // 80% Nothing
+            
+            if (rand < 0.05) {
+                type = 'magnet'; 
+            } else if (rand < 0.20) {
+                type = 'health';
+            } else {
+                return; // 80% chance of no pickup
+            }
+            
             const pickup = pools.pickup.acquire();
             pickup.x = x;
             pickup.y = y;
             pickup.type = type;
-            pickup.life = 8;
-            pickup.bobTimer = 0;
+            pickup.life = 10;
+            pickup.bobTimer = Math.random() * Math.PI * 2;
             pickups.push(pickup);
         }
         
@@ -2769,9 +2811,27 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
                 if (dist < PLAYER_COLLISION_RADIUS + 15) {
-                    if (p.type === 'health' && player.hp < PLAYER_MAX_HP) {
-                        player.hp++;
-                        spawnFloatingText(p.x, p.y, '+HP', COLORS.POWERUP);
+                    if (p.type === 'health') {
+                        if (player.hp < PLAYER_MAX_HP) {
+                            player.hp++;
+                            spawnFloatingText(p.x, p.y, '+HP', COLORS.POWERUP);
+                        } else {
+                            score += 50;
+                            spawnFloatingText(p.x, p.y, '+50', COLORS.GOLD);
+                        }
+                    } else if (p.type === 'magnet') {
+                        // SUPER MAGNET EFFECT
+                        spawnFloatingText(player.x, player.y - 50, 'MAGNET!', COLORS.MAGNET);
+                        
+                        // Pull ALL orbs
+                        let pulledCount = 0;
+                        for (const orb of xpOrbs) {
+                            if (!orb.magnetized) {
+                                orb.magnetized = true;
+                                orb.tweenTime = 0;
+                                pulledCount++;
+                            }
+                        }
                     } else {
                         score += 20;
                         spawnFloatingText(p.x, p.y, '+20', COLORS.GOLD);
@@ -2788,7 +2848,7 @@
                             life: 0.4,
                             maxLife: 0.4,
                             size: 4,
-                            color: p.type === 'health' ? COLORS.POWERUP : COLORS.GOLD,
+                            color: p.type === 'magnet' ? COLORS.MAGNET : (p.type === 'health' ? COLORS.POWERUP : COLORS.GOLD),
                             type: 'pickup'
                         });
                     }
@@ -2806,6 +2866,50 @@
         const XP_ORB_TWEEN_DURATION = 0.35; // segundos para llegar al jugador
 
         function spawnXPOrb(x, y, value) {
+            // --- LÓGICA DE FUSIÓN (CLUMPING) ---
+            // Si hay orbes cerca, sumamos el valor a una existente en lugar de crear ruido visual
+            const MERGE_RADIUS = 60; // Distancia en píxeles para buscar orbes cercanas
+            const MAX_MERGE_VALUE = 100; // Valor máximo que puede acumular una sola orbe
+
+            // Solo activamos la búsqueda si ya hay algunas orbes para no gastar CPU innecesariamente
+            if (xpOrbs.length > 10) {
+                let bestOrb = null;
+                let minDst = MERGE_RADIUS * MERGE_RADIUS; // Distancia al cuadrado
+
+                for (const orb of xpOrbs) {
+                    // No fusionar con orbes que ya vuelan hacia el jugador (magnetizadas) o que están llenas
+                    if (orb.magnetized || orb.value >= MAX_MERGE_VALUE) continue;
+
+                    const dx = orb.x - x;
+                    const dy = orb.y - y;
+                    const dstSq = dx * dx + dy * dy;
+
+                    if (dstSq < minDst) {
+                        minDst = dstSq;
+                        bestOrb = orb;
+                    }
+                }
+
+                if (bestOrb) {
+                    // ¡Fusión! Sumamos valor a la orbe existente
+                    bestOrb.value += value;
+                    
+                    // Recalculamos tamaño: Usamos raíz cuadrada para que crezca suavemente y no tape todo
+                    // Base 2px + un factor del valor. Tope máximo de 10px.
+                    bestOrb.size = Math.min(10, 2 + Math.sqrt(bestOrb.value) * 1.5);
+                    
+                    // Reiniciamos su temporizador de vida para que no desaparezca
+                    bestOrb.life = 15;
+                    
+                    // Pequeño empujón visual para que se note que "recibió" energía
+                    bestOrb.vx += (Math.random() - 0.5) * 10;
+                    bestOrb.vy += (Math.random() - 0.5) * 10;
+                    
+                    return; // Terminamos aquí, NO creamos una nueva orbe
+                }
+            }
+            // -----------------------------------
+
             const angle = Math.random() * Math.PI * 2;
             const speed = 30 + Math.random() * 40;
             const orb = pools.xpOrb.acquire();
@@ -2814,7 +2918,10 @@
             orb.vx = Math.cos(angle) * speed;
             orb.vy = Math.sin(angle) * speed;
             orb.value = value;
-            orb.size = 2 + value * 2;
+            
+            // Tamaño inicial usando la misma fórmula suave
+            orb.size = Math.min(10, 2 + Math.sqrt(value) * 1.5);
+            
             orb.life = 15;
             orb.bobTimer = Math.random() * Math.PI * 2;
             orb.magnetized = false;
@@ -3265,8 +3372,8 @@
         function updateOrbitals() {
             let orbitalCount = 3; // Base count from orbital_shield
             if (unlockedSkills.includes('regen_capacitors')) orbitalCount += 2; // Orbital Expansion adds 2 (total 5)
-            const orbitalRadius = 85; // Increased distance from player
-            let orbitalSpeed = 6.5; // Much faster rotation
+            const orbitalRadius = ORBITAL_RADIUS; // Radio centralizado
+            let orbitalSpeed = ORBITAL_SPEED; // Velocidad centralizada
 
             // Handle orbital count changes with equidistant positioning
             if (orbitals.length !== orbitalCount) {
@@ -3306,7 +3413,7 @@
                     const dx = orbX - e.x;
                     const dy = orbY - e.y;
                     const distSq = dx * dx + dy * dy;
-                    const collisionDist = config.radius + 12;
+                    const collisionDist = config.radius + ORBITAL_SIZE;
 
                     if (distSq < collisionDist * collisionDist) {
                         let orbitalDamage = 2; // Base damage
@@ -3970,19 +4077,30 @@
                 // Skip rendering if too far from camera
                 if (!shouldRenderEntity(orb, CULLING_DISTANCES.xpOrbs)) continue;
 
-                // Filled circle style (coin-like) - no effects
-                ctx.fillStyle = COLORS.XP;
+                // Outline style (neon) - less visual noise
+                ctx.strokeStyle = COLORS.XP;
+                ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(orb.x, orb.y, orb.size, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.stroke();
+
+                // If orb has merged value (>1), fill the center to indicate potency
+                if (orb.value > 1) {
+                    ctx.fillStyle = COLORS.XP;
+                    ctx.globalAlpha = 0.6; // Semi-transparent fill
+                    ctx.beginPath();
+                    ctx.arc(orb.x, orb.y, orb.size * 0.6, 0, Math.PI * 2); // Smaller inner circle
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
             }
         }
         
         function renderOrbitals() {
             if (!unlockedSkills.includes('orbital_shield') || !player) return;
 
-            const orbitalRadius = 55;
-            let orbitalSize = 13; // Base size
+            const orbitalRadius = ORBITAL_RADIUS;
+            let orbitalSize = ORBITAL_SIZE; // Base size
             if (unlockedSkills.includes('shockwave_emitter')) orbitalSize *= 1.5; // +50% size boost
 
             // Outline style for orbitals
@@ -4363,6 +4481,9 @@
                 if (p.type === 'health') {
                     ctx.strokeStyle = COLORS.POWERUP;
                     ctx.shadowColor = COLORS.POWERUP;
+                } else if (p.type === 'magnet') {
+                    ctx.strokeStyle = COLORS.MAGNET;
+                    ctx.shadowColor = COLORS.MAGNET;
                 } else {
                     ctx.strokeStyle = COLORS.GOLD;
                     ctx.shadowColor = COLORS.GOLD;
@@ -4375,14 +4496,27 @@
                     ctx.globalAlpha = p.life / 2;
                 }
                 
-                // Diamond shape - outline only
-                ctx.beginPath();
-                ctx.moveTo(0, -10);
-                ctx.lineTo(8, 0);
-                ctx.lineTo(0, 10);
-                ctx.lineTo(-8, 0);
-                ctx.closePath();
-                ctx.stroke();
+                if (p.type === 'health') {
+                    // Diamond shape - outline only
+                    ctx.beginPath();
+                    ctx.moveTo(0, -10);
+                    ctx.lineTo(8, 0);
+                    ctx.lineTo(0, 10);
+                    ctx.lineTo(-8, 0);
+                    ctx.closePath();
+                    ctx.stroke();
+                } else if (p.type === 'magnet') {
+                    // Magnet shape (Square for simplicity and distinction)
+                    ctx.strokeRect(-8, -8, 16, 16);
+                    
+                    // Inner M or U shape
+                    ctx.beginPath();
+                    ctx.moveTo(-4, -4);
+                    ctx.lineTo(-4, 4);
+                    ctx.lineTo(4, 4);
+                    ctx.lineTo(4, -4);
+                    ctx.stroke();
+                }
                 
                 ctx.shadowBlur = 0;
                 ctx.restore();
