@@ -273,7 +273,12 @@
         const ORBITAL_RADIUS = 130;          // px - Radio base de los escudos orbitales
         const ORBITAL_SIZE = 13;             // px - Tamaño base de cada esfera orbital
         const ORBITAL_SPEED = 3;           // rad/sec - Velocidad base de rotacion
-        
+
+        // Garlic Aura
+        const AURA_BASE_RADIUS = 100;      // px
+        const AURA_BASE_DAMAGE = 1;        // damage per tick
+        const AURA_BASE_TICK_RATE = 0.5;   // seconds between ticks
+
         // Player
         const PLAYER_SIZE = 48;
         const PLAYER_COLLISION_RADIUS = 20;
@@ -545,6 +550,43 @@
                 color: '#9F7AEA',
                 icon: 'arc',
                 nodeType: 'circle'
+            },
+            // PLASMA FIELD branch (cyan theme - same as player)
+            'plasma_field': {
+                name: 'PLASMA FIELD',
+                description: 'Damaging energy field around the ship',
+                prereqs: ['arsenal'],
+                cost: 1,
+                color: '#7FDBFF',
+                icon: 'aura',
+                nodeType: 'rectangle'
+            },
+            'field_expansion': {
+                name: 'Field Expansion',
+                description: '+50% field radius',
+                prereqs: ['plasma_field'],
+                cost: 1,
+                color: '#7FDBFF',
+                icon: 'expand',
+                nodeType: 'circle'
+            },
+            'field_intensity': {
+                name: 'Field Intensity',
+                description: '+2 field damage',
+                prereqs: ['plasma_field'],
+                cost: 1,
+                color: '#7FDBFF',
+                icon: 'damage',
+                nodeType: 'circle'
+            },
+            'field_pulse': {
+                name: 'Rapid Pulse',
+                description: '+50% tick rate',
+                prereqs: ['plasma_field'],
+                cost: 1,
+                color: '#7FDBFF',
+                icon: 'pulse',
+                nodeType: 'circle'
             }
         };
         
@@ -678,6 +720,10 @@
         let pickups = [];
         let orbitals = [];
         let lightningEffects = [];
+        let auraState = {
+            tickTimer: 0,
+            pulseAnimation: 0
+        };
 
         // Camera system
         let camera = {
@@ -1112,6 +1158,7 @@
             pickups = [];
             orbitals = [];
             lightningEffects = [];
+            auraState = { tickTimer: 0, pulseAnimation: 0 };
 
             score = 0;
             gameTime = 0;
@@ -1733,7 +1780,26 @@
                 lightningChainRange = 500;
             }
 
-            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketBurstCount, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet, hasLightning, lightningBounces, lightningCadence, lightningRange, lightningChainRange, lightningDamage };
+            // Garlic Aura branch
+            let hasAura = false;
+            let auraRadius = AURA_BASE_RADIUS;
+            let auraDamage = AURA_BASE_DAMAGE;
+            let auraTickRate = AURA_BASE_TICK_RATE;
+
+            if (unlockedSkills.includes('plasma_field')) {
+                hasAura = true;
+            }
+            if (unlockedSkills.includes('field_expansion')) {
+                auraRadius *= 1.5;
+            }
+            if (unlockedSkills.includes('field_intensity')) {
+                auraDamage += 2;
+            }
+            if (unlockedSkills.includes('field_pulse')) {
+                auraTickRate *= 0.67;
+            }
+
+            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketBurstCount, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet, hasLightning, lightningBounces, lightningCadence, lightningRange, lightningChainRange, lightningDamage, hasAura, auraRadius, auraDamage, auraTickRate };
         }
 
         function hasEnemyInAimCone() {
@@ -3227,6 +3293,10 @@
             if (unlockedSkills.includes('orbital_shield')) {
                 updateOrbitals();
             }
+            // Plasma Field
+            if (unlockedSkills.includes('plasma_field')) {
+                updateAura();
+            }
             // Lightning effects
             updateLightningEffects();
         }
@@ -3303,6 +3373,47 @@
                             if (enemyIndex !== -1) killEnemy(e, enemyIndex);
                         }
                         // No break - can hit multiple enemies per frame
+                    }
+                }
+            }
+        }
+
+        function updateAura() {
+            const stats = getWeaponStats();
+            if (!stats.hasAura || !player) return;
+
+            // Update pulse animation
+            auraState.pulseAnimation += deltaTime * 3;
+
+            // Update tick timer
+            auraState.tickTimer += deltaTime;
+
+            // Only deal damage on tick intervals
+            if (auraState.tickTimer < stats.auraTickRate) return;
+            auraState.tickTimer = 0;
+
+            // Find all enemies within aura radius
+            const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, stats.auraRadius);
+
+            for (const e of nearbyEnemies) {
+                const config = ENEMY_TYPES[e.type];
+                const dx = e.x - player.x;
+                const dy = e.y - player.y;
+                const distSq = dx * dx + dy * dy;
+                const effectiveRadius = stats.auraRadius + config.radius;
+
+                if (distSq < effectiveRadius * effectiveRadius) {
+                    // Apply damage
+                    e.hp -= stats.auraDamage;
+
+                    // Visual feedback
+                    spawnFloatingText(e.x, e.y - config.radius, stats.auraDamage.toString(), SKILL_TREE['plasma_field'].color);
+                    spawnHitParticles(e.x, e.y, SKILL_TREE['plasma_field'].color);
+
+                    // Check for death
+                    if (e.hp <= 0) {
+                        const enemyIndex = enemies.indexOf(e);
+                        if (enemyIndex !== -1) killEnemy(e, enemyIndex);
                     }
                 }
             }
@@ -3885,6 +3996,7 @@
                 renderBullets();
                 renderEnemyBullets();
                 if (player && gameState !== 'gameOver') {
+                    renderAura();
                     renderPlayer();
                     renderOrbitals();
                     renderLightning();
@@ -3928,48 +4040,47 @@
             if (gridFadeIn < 0.01) return;
 
             // 4. Parallax grid (2 layers)
+            // Helper to handle negative modulo correctly
+            const mod = (n, m) => ((n % m) + m) % m;
 
-            // Far layer: 80px spacing, 0.05 opacity, 0.3x camera speed
-            const farSpacing = 40;
-            const farSpeed = 1;
-            const farOpacity = 0.02;
-            const farLineWidth = 2;
-            const farOffsetX = (camera.x * farSpeed) % farSpacing;
-            const farOffsetY = (camera.y * farSpeed) % farSpacing;
+            // Far layer: sparse grid, slow parallax (distant feel)
+            const farSpacing = 120;
+            const farSpeed = 0.15;
+            const farOpacity = 0.025;
+            const farLineWidth = 1;
+            const farOffsetX = mod(camera.x * farSpeed, farSpacing);
+            const farOffsetY = mod(camera.y * farSpeed, farSpacing);
             ctx.strokeStyle = `rgba(127, 219, 255, ${farOpacity * gridFadeIn})`;
+            ctx.lineWidth = farLineWidth;
             ctx.beginPath();
-            for (let x = -farOffsetX; x <= CANVAS_WIDTH; x += farSpacing) {
+            for (let x = -farOffsetX; x <= CANVAS_WIDTH + farSpacing; x += farSpacing) {
                 ctx.moveTo(x, 0);
                 ctx.lineTo(x, CANVAS_HEIGHT);
             }
-            for (let y = -farOffsetY; y <= CANVAS_HEIGHT; y += farSpacing) {
+            for (let y = -farOffsetY; y <= CANVAS_HEIGHT + farSpacing; y += farSpacing) {
                 ctx.moveTo(0, y);
                 ctx.lineTo(CANVAS_WIDTH, y);
             }
-            ctx.lineWidth = farLineWidth;
-
             ctx.stroke();
 
-
-            // Near layer: 40px spacing, 0.08 opacity, 0.6x camera speed
+            // Near layer: larger grid, faster parallax (closer feel)
             const nearSpacing = 400;
-            const nearSpeed = 1;
+            const nearSpeed = 0.4;
             const nearOpacity = 0.04;
-            const nearLineWidth = 5;
-            const nearOffsetX = (camera.x * nearSpeed) % nearSpacing;
-            const nearOffsetY = (camera.y * nearSpeed) % nearSpacing;
+            const nearLineWidth = 1.5;
+            const nearOffsetX = mod(camera.x * nearSpeed, nearSpacing);
+            const nearOffsetY = mod(camera.y * nearSpeed, nearSpacing);
             ctx.strokeStyle = `rgba(127, 219, 255, ${nearOpacity * gridFadeIn})`;
+            ctx.lineWidth = nearLineWidth;
             ctx.beginPath();
-            for (let x = -nearOffsetX; x <= CANVAS_WIDTH; x += nearSpacing) {
+            for (let x = -nearOffsetX; x <= CANVAS_WIDTH + nearSpacing; x += nearSpacing) {
                 ctx.moveTo(x, 0);
                 ctx.lineTo(x, CANVAS_HEIGHT);
             }
-            for (let y = -nearOffsetY; y <= CANVAS_HEIGHT; y += nearSpacing) {
+            for (let y = -nearOffsetY; y <= CANVAS_HEIGHT + nearSpacing; y += nearSpacing) {
                 ctx.moveTo(0, y);
                 ctx.lineTo(CANVAS_WIDTH, y);
             }
-            ctx.lineWidth = nearLineWidth;
-
             ctx.stroke();
 
             // 5. CRT Scanlines (cached pattern)
@@ -4038,6 +4149,42 @@
             ctx.stroke();
             
             ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        function renderAura() {
+            if (!unlockedSkills.includes('plasma_field') || !player) return;
+
+            const stats = getWeaponStats();
+            const auraColor = SKILL_TREE['plasma_field'].color;
+            const pulseOffset = Math.sin(auraState.pulseAnimation) * 5;
+            const currentRadius = stats.auraRadius + pulseOffset;
+
+            ctx.save();
+
+            // Outer glow ring
+            ctx.strokeStyle = auraColor;
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.6;
+            ctx.shadowColor = auraColor;
+            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 15 : 0;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, currentRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Semi-transparent fill
+            ctx.globalAlpha = 0.1;
+            ctx.fillStyle = auraColor;
+            ctx.fill();
+
+            // Inner ring
+            ctx.globalAlpha = 0.3;
+            ctx.lineWidth = 1.5;
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, currentRadius * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+
             ctx.restore();
         }
 
