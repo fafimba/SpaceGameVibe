@@ -324,7 +324,6 @@
             BULLET: '#7FDBFF',
             ENEMY_BULLET: '#FF6B6B',
             POWERUP: '#00FFAA',
-            MAGNET: '#00FFFF',
             GOLD: '#FFDD57',
             RARE: '#C792FF',
             XP: '#00FFAA',
@@ -337,7 +336,6 @@
         // XP & Level System
         const XP_PER_LEVEL_BASE = 25;
         const XP_PER_LEVEL_GROWTH = 1.4;
-        const XP_ORB_MAGNET_RADIUS = 220;
 
         // Touch Controls
         const JOYSTICK_MAX_DISTANCE = 38;
@@ -678,7 +676,6 @@
         let particles = [];
         let floatingTexts = [];
         let pickups = [];
-        let xpOrbs = [];
         let orbitals = [];
         let lightningEffects = [];
 
@@ -735,6 +732,10 @@
         // Background
         let nebulas = [];
         let cachedBgGradient = null;
+        let cachedScanlinePattern = null;
+        let cachedVignetteGradient = null;
+        let lastCacheWidth = 0;
+        let lastCacheHeight = 0;
 
         // Idle state
         let idleTimer = 0;
@@ -885,12 +886,6 @@
                 () => ({ x: 0, y: 0, type: '', life: 0, bobTimer: 0 }),
                 (obj) => { obj.x = 0; obj.y = 0; obj.type = ''; obj.life = 0; obj.bobTimer = 0; },
                 50
-            ),
-
-            xpOrb: new ObjectPool(
-                () => ({ x: 0, y: 0, vx: 0, vy: 0, value: 1, size: 4, life: 0, bobTimer: 0, magnetized: false }),
-                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.magnetized = false; },
-                200
             )
         };
 
@@ -899,7 +894,6 @@
             enemies: 6000,
             particles: 4000,
             pickups: 5000,
-            xpOrbs: 5000,
             floatingTexts: 3000,
             bullets: 5760,
             enemyBullets: 5760
@@ -925,8 +919,7 @@
                 enemies: 0,
                 particles: 0,
                 enemyBullets: 0,
-                pickups: 0,
-                xpOrbs: 0
+                pickups: 0
             },
 
             optimizationStats: {
@@ -950,7 +943,6 @@
                 this.entityCounts.particles = particles.length;
                 this.entityCounts.enemyBullets = enemyBullets.length;
                 this.entityCounts.pickups = pickups.length;
-                this.entityCounts.xpOrbs = xpOrbs.length;
 
                 this.optimizationStats.spatialGridCells = spatialGrid.cells.size;
             },
@@ -973,7 +965,6 @@
                 ctx.fillText(`Particles: ${this.entityCounts.particles}`, 20, y); y += 18;
                 ctx.fillText(`EnemyBullets: ${this.entityCounts.enemyBullets}`, 20, y); y += 18;
                 ctx.fillText(`Pickups: ${this.entityCounts.pickups}`, 20, y); y += 18;
-                ctx.fillText(`XPOrbs: ${this.entityCounts.xpOrbs}`, 20, y); y += 18;
                 ctx.fillText(`---`, 20, y); y += 18;
                 ctx.fillText(`Grid Cells: ${this.optimizationStats.spatialGridCells}`, 20, y); y += 18;
 
@@ -986,7 +977,43 @@
         // ============================================================
         // INITIALIZATION
         // ============================================================
-        
+
+        function initBackgroundCache() {
+            // Only regenerate if dimensions changed
+            if (lastCacheWidth === CANVAS_WIDTH && lastCacheHeight === CANVAS_HEIGHT) {
+                return;
+            }
+            lastCacheWidth = CANVAS_WIDTH;
+            lastCacheHeight = CANVAS_HEIGHT;
+
+            // Regenerate background gradient
+            cachedBgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            cachedBgGradient.addColorStop(0, COLORS.BG_TOP);
+            cachedBgGradient.addColorStop(1, COLORS.BG_BOTTOM);
+
+            // Create scanline pattern (1x4 canvas with alternating lines)
+            const scanlineCanvas = document.createElement('canvas');
+            scanlineCanvas.width = 1;
+            scanlineCanvas.height = 4;
+            const scanlineCtx = scanlineCanvas.getContext('2d');
+            scanlineCtx.fillStyle = 'rgba(127, 219, 255, 0.04)';
+            scanlineCtx.fillRect(0, 0, 1, 2);
+            // Lines 2-3 remain transparent
+            cachedScanlinePattern = ctx.createPattern(scanlineCanvas, 'repeat');
+
+            // Create vignette gradient
+            const centerX = CANVAS_WIDTH / 2;
+            const centerY = CANVAS_HEIGHT / 2;
+            const innerRadius = CANVAS_HEIGHT * 0.3;
+            const outerRadius = CANVAS_HEIGHT * 0.8;
+            cachedVignetteGradient = ctx.createRadialGradient(
+                centerX, centerY, innerRadius,
+                centerX, centerY, outerRadius
+            );
+            cachedVignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            cachedVignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+        }
+
         function init() {
             // Set canvas dimensions based on device
             if (isMobile()) {
@@ -1001,6 +1028,7 @@
             canvas.height = CANVAS_HEIGHT;
 
             generateBackground();
+            initBackgroundCache();
             setupInput();
             setupTouchControls();
             resizeCanvas();
@@ -1069,7 +1097,6 @@
             pools.enemyBullet.releaseAll(enemyBullets);
             pools.floatingText.releaseAll(floatingTexts);
             pools.pickup.releaseAll(pickups);
-            pools.xpOrb.releaseAll(xpOrbs);
 
             bullets = [];
             enemies = [];
@@ -1077,7 +1104,6 @@
             particles = [];
             floatingTexts = [];
             pickups = [];
-            xpOrbs = [];
             orbitals = [];
             lightningEffects = [];
 
@@ -1374,8 +1400,7 @@
                 bullets,
                 enemyBullets,
                 particles,
-                pickups,
-                xpOrbs
+                pickups
             ];
 
             for (const pool of entityPools) {
@@ -1496,7 +1521,6 @@
             updateParticles();
             updateFloatingTexts();
             updatePickups();
-            updateXPOrbs();
             updateWeapons();
             
             // Check collisions
@@ -2190,6 +2214,10 @@
                     }
                 }
 
+                // Store previous position for swept collision detection
+                b.prevX = b.x;
+                b.prevY = b.y;
+
                 b.x += b.vx * deltaTime;
                 b.y += b.vy * deltaTime;
                 b.life -= deltaTime;
@@ -2710,9 +2738,9 @@
             // Spawn explosion
             spawnExplosion(enemy.x, enemy.y, config.color, 12);
             
-            // Spawn XP orb
+            // Direct XP gain
             const xpValue = enemy.type === 'TANK' ? 3 : (enemy.type === 'SPINNER' ? 2 : 1);
-            spawnXPOrb(enemy.x, enemy.y, xpValue);
+            collectXP(xpValue);
             
             // Tank splits into scouts
             if (enemy.type === 'TANK') {
@@ -2752,15 +2780,11 @@
             // Always try to spawn a pickup, but the type determines if we actually do it
             const rand = Math.random();
             let type = null;
-            
-            // Adjusted probabilities to ensure they keep spawning
-            // 5% Magnet
-            // 15% Health
+
+            // 20% Health
             // 80% Nothing
-            
-            if (rand < 0.05) {
-                type = 'magnet'; 
-            } else if (rand < 0.20) {
+
+            if (rand < 0.20) {
                 type = 'health';
             } else {
                 return; // 80% chance of no pickup
@@ -2819,24 +2843,11 @@
                             score += 50;
                             spawnFloatingText(p.x, p.y, '+50', COLORS.GOLD);
                         }
-                    } else if (p.type === 'magnet') {
-                        // SUPER MAGNET EFFECT
-                        spawnFloatingText(player.x, player.y - 50, 'MAGNET!', COLORS.MAGNET);
-                        
-                        // Pull ALL orbs
-                        let pulledCount = 0;
-                        for (const orb of xpOrbs) {
-                            if (!orb.magnetized) {
-                                orb.magnetized = true;
-                                orb.tweenTime = 0;
-                                pulledCount++;
-                            }
-                        }
                     } else {
                         score += 20;
                         spawnFloatingText(p.x, p.y, '+20', COLORS.GOLD);
                     }
-                    
+
                     // Pickup effect
                     for (let j = 0; j < 8; j++) {
                         const angle = (Math.PI * 2 / 8) * j;
@@ -2848,7 +2859,7 @@
                             life: 0.4,
                             maxLife: 0.4,
                             size: 4,
-                            color: p.type === 'magnet' ? COLORS.MAGNET : (p.type === 'health' ? COLORS.POWERUP : COLORS.GOLD),
+                            color: p.type === 'health' ? COLORS.POWERUP : COLORS.GOLD,
                             type: 'pickup'
                         });
                     }
@@ -2862,150 +2873,6 @@
         // ============================================================
         // XP & LEVEL SYSTEM
         // ============================================================
-        
-        const XP_ORB_TWEEN_DURATION = 0.35; // segundos para llegar al jugador
-
-        function spawnXPOrb(x, y, value) {
-            // --- LÓGICA DE FUSIÓN (CLUMPING) ---
-            // Si hay orbes cerca, sumamos el valor a una existente en lugar de crear ruido visual
-            const MERGE_RADIUS = 60; // Distancia en píxeles para buscar orbes cercanas
-            const MAX_MERGE_VALUE = 100; // Valor máximo que puede acumular una sola orbe
-
-            // Solo activamos la búsqueda si ya hay algunas orbes para no gastar CPU innecesariamente
-            if (xpOrbs.length > 10) {
-                let bestOrb = null;
-                let minDst = MERGE_RADIUS * MERGE_RADIUS; // Distancia al cuadrado
-
-                for (const orb of xpOrbs) {
-                    // No fusionar con orbes que ya vuelan hacia el jugador (magnetizadas) o que están llenas
-                    if (orb.magnetized || orb.value >= MAX_MERGE_VALUE) continue;
-
-                    const dx = orb.x - x;
-                    const dy = orb.y - y;
-                    const dstSq = dx * dx + dy * dy;
-
-                    if (dstSq < minDst) {
-                        minDst = dstSq;
-                        bestOrb = orb;
-                    }
-                }
-
-                if (bestOrb) {
-                    // ¡Fusión! Sumamos valor a la orbe existente
-                    bestOrb.value += value;
-                    
-                    // Recalculamos tamaño: Usamos raíz cuadrada para que crezca suavemente y no tape todo
-                    // Base 2px + un factor del valor. Tope máximo de 10px.
-                    bestOrb.size = Math.min(10, 2 + Math.sqrt(bestOrb.value) * 1.5);
-                    
-                    // Reiniciamos su temporizador de vida para que no desaparezca
-                    bestOrb.life = 15;
-                    
-                    // Pequeño empujón visual para que se note que "recibió" energía
-                    bestOrb.vx += (Math.random() - 0.5) * 10;
-                    bestOrb.vy += (Math.random() - 0.5) * 10;
-                    
-                    return; // Terminamos aquí, NO creamos una nueva orbe
-                }
-            }
-            // -----------------------------------
-
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 30 + Math.random() * 40;
-            const orb = pools.xpOrb.acquire();
-            orb.x = x;
-            orb.y = y;
-            orb.vx = Math.cos(angle) * speed;
-            orb.vy = Math.sin(angle) * speed;
-            orb.value = value;
-            
-            // Tamaño inicial usando la misma fórmula suave
-            orb.size = Math.min(10, 2 + Math.sqrt(value) * 1.5);
-            
-            orb.life = 15;
-            orb.bobTimer = Math.random() * Math.PI * 2;
-            orb.magnetized = false;
-            orb.tweenTime = 0;
-            xpOrbs.push(orb);
-        }
-        
-        function updateXPOrbs() {
-            if (!player) return; // Safety check
-
-            for (let i = xpOrbs.length - 1; i >= 0; i--) {
-                const orb = xpOrbs[i];
-
-                // Transport XP orb if too far from player (wrap around world)
-                const relX = orb.x - player.x;
-                const relY = orb.y - player.y;
-
-                if (relX > SECTOR_WIDTH * 1.5) {
-                    orb.x -= 3 * SECTOR_WIDTH;
-                } else if (relX < -SECTOR_WIDTH * 1.5) {
-                    orb.x += 3 * SECTOR_WIDTH;
-                }
-
-                if (relY > SECTOR_HEIGHT * 1.5) {
-                    orb.y -= 3 * SECTOR_HEIGHT;
-                } else if (relY < -SECTOR_HEIGHT * 1.5) {
-                    orb.y += 3 * SECTOR_HEIGHT;
-                }
-
-                // Magnet effect - pull toward player
-                const dx = player.x - orb.x;
-                const dy = player.y - orb.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                // Once magnetized, stay magnetized forever
-                if (dist < XP_ORB_MAGNET_RADIUS && !orb.magnetized) {
-                    orb.magnetized = true;
-                    orb.tweenTime = 0;
-                }
-
-                if (orb.magnetized) {
-                    // Tween hacia el jugador en tiempo fijo
-                    orb.tweenTime += deltaTime;
-
-                    if (orb.tweenTime >= XP_ORB_TWEEN_DURATION) {
-                        // Tiempo agotado, ir directo al jugador
-                        orb.x = player.x;
-                        orb.y = player.y;
-                    } else {
-                        // Mover proporcionalmente al tiempo restante
-                        const remaining = XP_ORB_TWEEN_DURATION - orb.tweenTime;
-                        const moveRatio = Math.min(deltaTime / remaining, 1);
-                        orb.x += dx * moveRatio;
-                        orb.y += dy * moveRatio;
-                    }
-                } else {
-                    // Initial drift before magnetized
-                    orb.vx *= 0.98;
-                    orb.vy *= 0.98;
-                    orb.x += orb.vx * deltaTime;
-                    orb.y += orb.vy * deltaTime;
-                }
-                
-                // Collect
-                if (dist < PLAYER_COLLISION_RADIUS + orb.size) {
-                    collectXP(orb.value);
-                    
-                    // Pickup particles
-                    for (let j = 0; j < 4; j++) {
-                        const angle = (Math.PI * 2 / 4) * j;
-                        particles.push({
-                            x: orb.x, y: orb.y,
-                            vx: Math.cos(angle) * 40,
-                            vy: Math.sin(angle) * 40,
-                            life: 0.2, maxLife: 0.2,
-                            size: 3, color: COLORS.XP, type: 'xp'
-                        });
-                    }
-
-                    pools.xpOrb.release(orb);
-                    fastRemove(xpOrbs, i);
-                }
-            }
-        }
 
         function collectXP(amount) {
             playerXP += amount;
@@ -3438,7 +3305,42 @@
         // ============================================================
         // COLLISIONS
         // ============================================================
-        
+
+        // Swept collision: checks if line segment intersects circle
+        // Returns true if the line from (x1,y1) to (x2,y2) passes through circle at (cx,cy) with radius r
+        function lineCircleCollision(x1, y1, x2, y2, cx, cy, r) {
+            // Vector from start to end of line
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+
+            // Vector from start to circle center
+            const fx = x1 - cx;
+            const fy = y1 - cy;
+
+            // Quadratic equation coefficients: at^2 + bt + c = 0
+            const a = dx * dx + dy * dy;
+            const b = 2 * (fx * dx + fy * dy);
+            const c = fx * fx + fy * fy - r * r;
+
+            // If bullet didn't move (a ≈ 0), just check current position
+            if (a < 0.0001) {
+                return c <= 0;
+            }
+
+            const discriminant = b * b - 4 * a * c;
+
+            if (discriminant < 0) {
+                return false; // No intersection
+            }
+
+            const sqrtDisc = Math.sqrt(discriminant);
+            const t1 = (-b - sqrtDisc) / (2 * a);
+            const t2 = (-b + sqrtDisc) / (2 * a);
+
+            // Check if intersection happens within the line segment (t between 0 and 1)
+            return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1) || (t1 < 0 && t2 > 1);
+        }
+
         function checkCollisions() {
             if (!player) return;
             
@@ -3447,19 +3349,25 @@
                 const b = bullets[i];
                 let bulletDestroyed = false;
 
-                // Query only nearby enemies using spatial grid
-                const nearbyEnemies = spatialGrid.queryRadius(b.x, b.y, 100);
+                // Use previous position for swept collision (fallback to current if first frame)
+                const prevX = b.prevX !== undefined ? b.prevX : b.x;
+                const prevY = b.prevY !== undefined ? b.prevY : b.y;
+
+                // Query enemies along the bullet's path (expand search radius to cover movement)
+                const moveDistSq = (b.x - prevX) * (b.x - prevX) + (b.y - prevY) * (b.y - prevY);
+                const moveDist = Math.sqrt(moveDistSq);
+                const searchRadius = 100 + moveDist;
+                const midX = (b.x + prevX) / 2;
+                const midY = (b.y + prevY) / 2;
+                const nearbyEnemies = spatialGrid.queryRadius(midX, midY, searchRadius);
 
                 for (const e of nearbyEnemies) {
                     const config = ENEMY_TYPES[e.type];
                     const hitRadius = config.radius * 0.9; // Shrink hitbox 10%
-
-                    const dx = b.x - e.x;
-                    const dy = b.y - e.y;
-                    const distSq = dx * dx + dy * dy;
                     const collisionDist = hitRadius + 4;
 
-                    if (distSq < collisionDist * collisionDist) {
+                    // Use swept collision detection (line-circle intersection)
+                    if (lineCircleCollision(prevX, prevY, b.x, b.y, e.x, e.y, collisionDist)) {
                         // Check if piercing bullet already hit this enemy
                         if (b.piercing && b.hitEnemies && b.hitEnemies.has(e)) {
                             continue;
@@ -3966,7 +3874,6 @@
 
             // Game entities (all rendered in world coordinates)
             if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver') {
-                renderXPOrbs(); // XP orbs render first (below everything)
                 renderPickups();
                 renderEnemies();
                 renderBullets();
@@ -4003,17 +3910,67 @@
         }
 
         function renderBackground() {
-            // Cache the gradient - only create once
-            if (!cachedBgGradient) {
-                cachedBgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-                cachedBgGradient.addColorStop(0, COLORS.BG_TOP);
-                cachedBgGradient.addColorStop(1, COLORS.BG_BOTTOM);
-            }
+            // 1. Base gradient (cached in initBackgroundCache)
             ctx.fillStyle = cachedBgGradient;
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-            // Skip nebulas for better performance (they use radial gradients each frame)
-            // Nebulas are barely visible anyway with low opacity
+            // 2. Skip fancy effects in low performance mode
+            if (lowPerfMode) return;
+
+            // 3. Fade-in for grid effects (0 → 1 over 3 seconds)
+            const gridFadeIn = Math.min(1, gameTime / 5);
+            if (gridFadeIn < 0.01) return;
+
+            // 4. Parallax grid (2 layers)
+            ctx.lineWidth = 2;
+
+            // Far layer: 80px spacing, 0.05 opacity, 0.3x camera speed
+            // const farSpacing = 40;
+            // const farSpeed = 0.1;
+            // const farOffsetX = (camera.x * farSpeed) % farSpacing;
+            // const farOffsetY = (camera.y * farSpeed) % farSpacing;
+            // ctx.strokeStyle = `rgba(127, 219, 255, ${0.02 * gridFadeIn})`;
+            // ctx.beginPath();
+            // for (let x = -farOffsetX; x <= CANVAS_WIDTH; x += farSpacing) {
+            //     ctx.moveTo(x, 0);
+            //     ctx.lineTo(x, CANVAS_HEIGHT);
+            // }
+            // for (let y = -farOffsetY; y <= CANVAS_HEIGHT; y += farSpacing) {
+            //     ctx.moveTo(0, y);
+            //     ctx.lineTo(CANVAS_WIDTH, y);
+            // }
+            // ctx.stroke();
+
+            ctx.lineWidth = 5;
+
+            // Near layer: 40px spacing, 0.08 opacity, 0.6x camera speed
+            const nearSpacing = 400;
+            const nearSpeed = 1;
+            const nearOffsetX = (camera.x * nearSpeed) % nearSpacing;
+            const nearOffsetY = (camera.y * nearSpeed) % nearSpacing;
+            ctx.strokeStyle = `rgba(127, 219, 255, ${0.04 * gridFadeIn})`;
+            ctx.beginPath();
+            for (let x = -nearOffsetX; x <= CANVAS_WIDTH; x += nearSpacing) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CANVAS_HEIGHT);
+            }
+            for (let y = -nearOffsetY; y <= CANVAS_HEIGHT; y += nearSpacing) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(CANVAS_WIDTH, y);
+            }
+            ctx.stroke();
+
+            // 5. CRT Scanlines (cached pattern)
+            ctx.globalAlpha = 0.3 * gridFadeIn;
+            ctx.fillStyle = cachedScanlinePattern;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.globalAlpha = 1;
+
+            // 6. Vignette (cached gradient)
+            ctx.globalAlpha = gridFadeIn;
+            ctx.fillStyle = cachedVignetteGradient;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.globalAlpha = 1;
         }
 
 
@@ -4071,31 +4028,7 @@
             ctx.shadowBlur = 0;
             ctx.restore();
         }
-        
-        function renderXPOrbs() {
-            for (const orb of xpOrbs) {
-                // Skip rendering if too far from camera
-                if (!shouldRenderEntity(orb, CULLING_DISTANCES.xpOrbs)) continue;
 
-                // Outline style (neon) - less visual noise
-                ctx.strokeStyle = COLORS.XP;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(orb.x, orb.y, orb.size, 0, Math.PI * 2);
-                ctx.stroke();
-
-                // If orb has merged value (>1), fill the center to indicate potency
-                if (orb.value > 1) {
-                    ctx.fillStyle = COLORS.XP;
-                    ctx.globalAlpha = 0.6; // Semi-transparent fill
-                    ctx.beginPath();
-                    ctx.arc(orb.x, orb.y, orb.size * 0.6, 0, Math.PI * 2); // Smaller inner circle
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
-                }
-            }
-        }
-        
         function renderOrbitals() {
             if (!unlockedSkills.includes('orbital_shield') || !player) return;
 
@@ -4481,21 +4414,18 @@
                 if (p.type === 'health') {
                     ctx.strokeStyle = COLORS.POWERUP;
                     ctx.shadowColor = COLORS.POWERUP;
-                } else if (p.type === 'magnet') {
-                    ctx.strokeStyle = COLORS.MAGNET;
-                    ctx.shadowColor = COLORS.MAGNET;
                 } else {
                     ctx.strokeStyle = COLORS.GOLD;
                     ctx.shadowColor = COLORS.GOLD;
                 }
                 ctx.lineWidth = 2.5;
                 ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
-                
+
                 // Fade when about to expire
                 if (p.life < 2) {
                     ctx.globalAlpha = p.life / 2;
                 }
-                
+
                 if (p.type === 'health') {
                     // Diamond shape - outline only
                     ctx.beginPath();
@@ -4504,17 +4434,6 @@
                     ctx.lineTo(0, 10);
                     ctx.lineTo(-8, 0);
                     ctx.closePath();
-                    ctx.stroke();
-                } else if (p.type === 'magnet') {
-                    // Magnet shape (Square for simplicity and distinction)
-                    ctx.strokeRect(-8, -8, 16, 16);
-                    
-                    // Inner M or U shape
-                    ctx.beginPath();
-                    ctx.moveTo(-4, -4);
-                    ctx.lineTo(-4, 4);
-                    ctx.lineTo(4, 4);
-                    ctx.lineTo(4, -4);
                     ctx.stroke();
                 }
                 
