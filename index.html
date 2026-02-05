@@ -986,8 +986,14 @@
             lastCacheWidth = CANVAS_WIDTH;
             lastCacheHeight = CANVAS_HEIGHT;
 
-            // Regenerate background gradient
-            cachedBgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            // Regenerate background gradient (radial, lighter in center)
+            const bgCenterX = CANVAS_WIDTH / 2;
+            const bgCenterY = CANVAS_HEIGHT / 2;
+            const bgOuterRadius = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) * 0.8;
+            cachedBgGradient = ctx.createRadialGradient(
+                bgCenterX, bgCenterY, 0,
+                bgCenterX, bgCenterY, bgOuterRadius
+            );
             cachedBgGradient.addColorStop(0, COLORS.BG_TOP);
             cachedBgGradient.addColorStop(1, COLORS.BG_BOTTOM);
 
@@ -3922,33 +3928,37 @@
             if (gridFadeIn < 0.01) return;
 
             // 4. Parallax grid (2 layers)
-            ctx.lineWidth = 2;
 
             // Far layer: 80px spacing, 0.05 opacity, 0.3x camera speed
-            // const farSpacing = 40;
-            // const farSpeed = 0.1;
-            // const farOffsetX = (camera.x * farSpeed) % farSpacing;
-            // const farOffsetY = (camera.y * farSpeed) % farSpacing;
-            // ctx.strokeStyle = `rgba(127, 219, 255, ${0.02 * gridFadeIn})`;
-            // ctx.beginPath();
-            // for (let x = -farOffsetX; x <= CANVAS_WIDTH; x += farSpacing) {
-            //     ctx.moveTo(x, 0);
-            //     ctx.lineTo(x, CANVAS_HEIGHT);
-            // }
-            // for (let y = -farOffsetY; y <= CANVAS_HEIGHT; y += farSpacing) {
-            //     ctx.moveTo(0, y);
-            //     ctx.lineTo(CANVAS_WIDTH, y);
-            // }
-            // ctx.stroke();
+            const farSpacing = 40;
+            const farSpeed = 1;
+            const farOpacity = 0.02;
+            const farLineWidth = 2;
+            const farOffsetX = (camera.x * farSpeed) % farSpacing;
+            const farOffsetY = (camera.y * farSpeed) % farSpacing;
+            ctx.strokeStyle = `rgba(127, 219, 255, ${farOpacity * gridFadeIn})`;
+            ctx.beginPath();
+            for (let x = -farOffsetX; x <= CANVAS_WIDTH; x += farSpacing) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CANVAS_HEIGHT);
+            }
+            for (let y = -farOffsetY; y <= CANVAS_HEIGHT; y += farSpacing) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(CANVAS_WIDTH, y);
+            }
+            ctx.lineWidth = farLineWidth;
 
-            ctx.lineWidth = 5;
+            ctx.stroke();
+
 
             // Near layer: 40px spacing, 0.08 opacity, 0.6x camera speed
             const nearSpacing = 400;
             const nearSpeed = 1;
+            const nearOpacity = 0.04;
+            const nearLineWidth = 5;
             const nearOffsetX = (camera.x * nearSpeed) % nearSpacing;
             const nearOffsetY = (camera.y * nearSpeed) % nearSpacing;
-            ctx.strokeStyle = `rgba(127, 219, 255, ${0.04 * gridFadeIn})`;
+            ctx.strokeStyle = `rgba(127, 219, 255, ${nearOpacity * gridFadeIn})`;
             ctx.beginPath();
             for (let x = -nearOffsetX; x <= CANVAS_WIDTH; x += nearSpacing) {
                 ctx.moveTo(x, 0);
@@ -3958,6 +3968,8 @@
                 ctx.moveTo(0, y);
                 ctx.lineTo(CANVAS_WIDTH, y);
             }
+            ctx.lineWidth = nearLineWidth;
+
             ctx.stroke();
 
             // 5. CRT Scanlines (cached pattern)
