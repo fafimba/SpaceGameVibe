@@ -271,13 +271,21 @@
         const DRAG_FACTOR = 0.5;             // Increased drag to reduce inertia
         const BULLET_SPEED = 2000;           // px/sec
         const ORBITAL_RADIUS = 130;          // px - Radio base de los escudos orbitales
-        const ORBITAL_SIZE = 13;             // px - Tamaño base de cada esfera orbital
+        const ORBITAL_SIZE = 26;             // px - Tamaño base de cada esfera orbital
         const ORBITAL_SPEED = 3;           // rad/sec - Velocidad base de rotacion
 
         // Garlic Aura
         const AURA_BASE_RADIUS = 100;      // px
-        const AURA_BASE_DAMAGE = 1;        // damage per tick
+        const AURA_BASE_DAMAGE = 4;        // damage per tick
         const AURA_BASE_TICK_RATE = 0.5;   // seconds between ticks
+
+        // Alien Drone
+        const DRONE_SPEED = 450;           // px/sec
+        const DRONE_BASE_DAMAGE = 1;       // damage on impact
+        const DRONE_EXPLOSION_RADIUS = 80; // px - explosion AoE radius
+        const DRONE_EXPLOSION_DAMAGE = 1;  // damage in explosion area
+        const DRONE_TURN_RATE = 360;       // degrees/sec
+        const DRONE_SIZE = 5;              // px - small drones
 
         // Player
         const PLAYER_SIZE = 48;
@@ -286,17 +294,23 @@
         const PLAYER_MAX_HP = 3;
         const PLAYER_PIVOT_OFFSET = -5;
         const PLAYER_MASS = 2.5;             // Mass factor: higher = more inertia, harder to change direction       // Offset del punto de pivote: positivo = hacia el morro, negativo = hacia la cola
-        
+
+        // Shield System
+        const PLAYER_MAX_SHIELD = 100;           // Escudo máximo
+        const SHIELD_REGEN_RATE = 15;            // Puntos por segundo
+        const SHIELD_REGEN_DELAY = 2.5;          // Segundos sin daño para regenerar
+        const SHIELD_DAMAGE_ABSORPTION = 25;     // Daño por golpe (4 golpes = escudo vacío)
+
         // Weapons
         const AUTO_FIRE_INTERVAL = 0.35;
         const BULLET_LIFETIME = 1.2;
         
         // Enemies
         const ENEMY_TYPES = {
-            SCOUT: { radius: 10, speed: 120, turnRate: 90, hp: 1, points: 10, color: '#FF6B6B', outline: '#C04848' },
-            KAMIKAZE: { radius: 10, speed: 180, turnRate: 60, hp: 1, points: 25, color: '#FF9A6B', outline: '#D86A3A' },
-            SPINNER: { radius: 14, speed: 90, turnRate: 60, hp: 1, points: 40, color: '#3A9AD9', outline: '#1E6F9A', fireRate: 1.2 },
-            TANK: { radius: 22, speed: 70, turnRate: 45, hp: 3, points: 75, color: '#C792FF', outline: '#8A5DBF' }
+            SCOUT: { radius: 10, speed: 120, turnRate: 90, hp: 4, points: 10, color: '#FF6B6B', outline: '#C04848' },
+            KAMIKAZE: { radius: 10, speed: 180, turnRate: 60, hp: 4, points: 25, color: '#FF9A6B', outline: '#D86A3A' },
+            SPINNER: { radius: 14, speed: 90, turnRate: 60, hp: 4, points: 40, color: '#3A9AD9', outline: '#1E6F9A', fireRate: 1.2 },
+            TANK: { radius: 22, speed: 70, turnRate: 45, hp: 12, points: 75, color: '#C792FF', outline: '#8A5DBF' }
         };
         
         const INITIAL_SPAWN_INTERVAL_MIN = 0.15;
@@ -325,6 +339,8 @@
         const COLORS = {
             PLAYER: '#7FDBFF',
             PLAYER_OUTLINE: '#3A9AD9',
+            SHIELD: '#3A9AD9',
+            SHIELD_BG: '#1A4A6A',
             THRUSTER: '#FFDD57',
             BULLET: '#7FDBFF',
             ENEMY_BULLET: '#FF6B6B',
@@ -470,7 +486,7 @@
             },
             'armor_piercing': {
                 name: 'Heavy Payload',
-                description: '+3 missile & explosion damage',
+                description: '+12 missile & +8 explosion damage',
                 prereqs: ['missile_launcher'],
                 cost: 1,
                 color: '#FFD93D',
@@ -507,7 +523,7 @@
             },
             'energy_absorption': {
                 name: 'Energy Absorption',
-                description: 'Orbs deal +2 damage',
+                description: 'Orbs deal +16 damage',
                 prereqs: ['orbital_shield'],
                 cost: 1,
                 color: '#00DFFF',
@@ -572,7 +588,7 @@
             },
             'field_intensity': {
                 name: 'Field Intensity',
-                description: '+2 field damage',
+                description: '+8 field damage',
                 prereqs: ['plasma_field'],
                 cost: 1,
                 color: '#7FDBFF',
@@ -586,6 +602,43 @@
                 cost: 1,
                 color: '#7FDBFF',
                 icon: 'pulse',
+                nodeType: 'circle'
+            },
+            // ALIEN DRONE branch (green/toxic theme)
+            'alien_drone': {
+                name: 'ALIEN DRONE',
+                description: 'Kamikaze drones spawn from killed enemies',
+                prereqs: ['arsenal'],
+                cost: 1,
+                color: '#39FF14',
+                icon: 'drone',
+                nodeType: 'rectangle'
+            },
+            'drone_duo': {
+                name: 'Drone Swarm',
+                description: 'Spawn 2 drones per kill',
+                prereqs: ['alien_drone'],
+                cost: 1,
+                color: '#39FF14',
+                icon: 'swarm',
+                nodeType: 'circle'
+            },
+            'drone_duration': {
+                name: 'Extended Range',
+                description: 'Drones last twice as long',
+                prereqs: ['alien_drone'],
+                cost: 1,
+                color: '#39FF14',
+                icon: 'duration',
+                nodeType: 'circle'
+            },
+            'drone_explosion': {
+                name: 'Volatile Core',
+                description: 'Drones explode on impact (AoE damage)',
+                prereqs: ['alien_drone'],
+                cost: 1,
+                color: '#39FF14',
+                icon: 'explosion',
                 nodeType: 'circle'
             }
         };
@@ -691,6 +744,19 @@
                 showFloatingText(player.x, player.y - 50, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
                 createTextExplosion(player.x, player.y, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
             },
+            'drone': () => {
+                // Unlock alien drone and all drone upgrades
+                if (!unlockedSkills.includes('alien_drone')) {
+                    unlockedSkills.push('alien_drone');
+                }
+                ['drone_duo', 'drone_duration', 'drone_explosion'].forEach(skill => {
+                    if (!unlockedSkills.includes(skill)) {
+                        unlockedSkills.push(skill);
+                    }
+                });
+                showFloatingText(player.x, player.y - 50, 'ALIEN DRONES UNLOCKED', '#39FF14');
+                createTextExplosion(player.x, player.y, 'ALIEN DRONES UNLOCKED', '#39FF14');
+            },
             'full': () => {
                 // Unlock ALL skills
                 Object.keys(SKILL_TREE).forEach(skill => {
@@ -720,6 +786,7 @@
         let pickups = [];
         let orbitals = [];
         let lightningEffects = [];
+        let drones = [];
         let auraState = {
             tickTimer: 0,
             pulseAnimation: 0
@@ -932,6 +999,12 @@
                 () => ({ x: 0, y: 0, type: '', life: 0, bobTimer: 0 }),
                 (obj) => { obj.x = 0; obj.y = 0; obj.type = ''; obj.life = 0; obj.bobTimer = 0; },
                 50
+            ),
+
+            drone: new ObjectPool(
+                () => ({ x: 0, y: 0, vx: 0, vy: 0, angle: 0, life: 0, damage: 1, hasExplosion: false, trail: [] }),
+                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.angle = 0; obj.life = 0; obj.trail = []; },
+                100
             )
         };
 
@@ -942,7 +1015,8 @@
             pickups: 5000,
             floatingTexts: 3000,
             bullets: 5760,
-            enemyBullets: 5760
+            enemyBullets: 5760,
+            drones: 5000
         };
 
         // Fast removal helper: swap-and-pop is O(1) instead of splice's O(n)
@@ -1129,6 +1203,9 @@
                 vy: 0,
                 angle: -90, // Pointing up
                 hp: PLAYER_MAX_HP,
+                shield: PLAYER_MAX_SHIELD,
+                shieldRegenTimer: 0,
+                shieldFlashTimer: 0,
                 fireTimer: 0,
                 invulnerable: 0,
                 thrusterScale: 0,
@@ -1149,6 +1226,7 @@
             pools.enemyBullet.releaseAll(enemyBullets);
             pools.floatingText.releaseAll(floatingTexts);
             pools.pickup.releaseAll(pickups);
+            pools.drone.releaseAll(drones);
 
             bullets = [];
             enemies = [];
@@ -1158,6 +1236,7 @@
             pickups = [];
             orbitals = [];
             lightningEffects = [];
+            drones = [];
             auraState = { tickTimer: 0, pulseAnimation: 0 };
 
             score = 0;
@@ -1569,6 +1648,7 @@
 
             // Update other entities
             updateBullets();
+            updateDrones();
             updateEnemies();
             updateEnemyBullets();
             updateParticles();
@@ -1662,7 +1742,14 @@
 
             // Invulnerability
             player.invulnerable = Math.max(0, player.invulnerable - deltaTime);
-            
+
+            // Shield regeneration
+            player.shieldFlashTimer = Math.max(0, player.shieldFlashTimer - deltaTime);
+            player.shieldRegenTimer += deltaTime;
+            if (player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD) {
+                player.shield = Math.min(PLAYER_MAX_SHIELD, player.shield + SHIELD_REGEN_RATE * deltaTime);
+            }
+
             // Auto-fire laser (only when enemy is in aim cone)
             player.fireTimer -= deltaTime;
             if (player.fireTimer <= 0 && hasEnemyInAimCone()) {
@@ -1712,26 +1799,26 @@
         
         // Helper function to get computed weapon stats from skill tree
         function getWeaponStats() {
-            let damage = 1; // Base damage
+            let damage = 8; // Base damage
             let fireRate = AUTO_FIRE_INTERVAL;
             let pierce = false;
             let spreadCount = 0;
             let hasRockets = false;
             let rocketCount = 1;
-            let rocketDamage = 2;
+            let rocketDamage = 8;
             let hasLaser = false;
 
             // Laser Cannon branch
             if (unlockedSkills.includes('laser_cannon')) {
                 hasLaser = true;
-                damage += 1; // Laser cannon adds +1 damage
+                damage += 4; // Laser cannon adds +4 damage
             }
             if (unlockedSkills.includes('rapid_fire')) {
                 fireRate -= 0.1; // Faster fire rate
             }
             if (unlockedSkills.includes('piercing_lens')) {
                 pierce = true;
-                damage += 1;
+                damage += 4;
             }
             if (unlockedSkills.includes('beam_splitter')) {
                 spreadCount = 3;
@@ -1740,7 +1827,7 @@
 
             // Missile Launcher branch
             let rocketBurstCount = 3; // Misiles por ráfaga (3 normal, 6 con habilidad)
-            let rocketExplosionDamage = 3;
+            let rocketExplosionDamage = 12;
             let rocketExplosionRadius = 80;
             let rocketRicochet = false;
 
@@ -1751,8 +1838,8 @@
                 rocketBurstCount = 6; // Ráfaga doble de misiles
             }
             if (unlockedSkills.includes('armor_piercing')) {
-                rocketDamage += 3;
-                rocketExplosionDamage += 2;
+                rocketDamage += 12;
+                rocketExplosionDamage += 8;
             }
             if (unlockedSkills.includes('cluster_payload')) {
                 rocketRicochet = true; // Spawns mini rockets on impact
@@ -1764,7 +1851,7 @@
             let lightningCadence = 1.2;
             let lightningRange = 225;
             let lightningChainRange = 350;
-            let lightningDamage = 2;
+            let lightningDamage = 8;
 
             if (unlockedSkills.includes('lightning_ray')) {
                 hasLightning = true;
@@ -1793,13 +1880,32 @@
                 auraRadius *= 1.5;
             }
             if (unlockedSkills.includes('field_intensity')) {
-                auraDamage += 2;
+                auraDamage += 8;
             }
             if (unlockedSkills.includes('field_pulse')) {
                 auraTickRate *= 0.67;
             }
 
-            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketBurstCount, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet, hasLightning, lightningBounces, lightningCadence, lightningRange, lightningChainRange, lightningDamage, hasAura, auraRadius, auraDamage, auraTickRate };
+            // Alien Drone branch
+            let hasDrones = false;
+            let droneCount = 1;
+            let droneLifetime = 1.5; // Base lifetime in seconds
+            let droneHasExplosion = false;
+
+            if (unlockedSkills.includes('alien_drone')) {
+                hasDrones = true;
+            }
+            if (unlockedSkills.includes('drone_duo')) {
+                droneCount = 2;
+            }
+            if (unlockedSkills.includes('drone_duration')) {
+                droneLifetime = 3; // Extended lifetime
+            }
+            if (unlockedSkills.includes('drone_explosion')) {
+                droneHasExplosion = true;
+            }
+
+            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketBurstCount, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet, hasLightning, lightningBounces, lightningCadence, lightningRange, lightningChainRange, lightningDamage, hasAura, auraRadius, auraDamage, auraTickRate, hasDrones, droneCount, droneLifetime, droneHasExplosion };
         }
 
         function hasEnemyInAimCone() {
@@ -2155,6 +2261,33 @@
             }
         }
 
+        function spawnAlienDrone(x, y) {
+            const stats = getWeaponStats();
+            if (!stats.hasDrones) return;
+
+            for (let i = 0; i < stats.droneCount; i++) {
+                const drone = pools.drone.acquire();
+
+                // Spawn at enemy death position with slight offset for multiple drones
+                const angleOffset = stats.droneCount > 1 ? (i / stats.droneCount) * Math.PI * 2 : 0;
+                drone.x = x + Math.cos(angleOffset) * 10;
+                drone.y = y + Math.sin(angleOffset) * 10;
+
+                // Initial velocity pointing outward briefly
+                drone.vx = Math.cos(angleOffset) * 100;
+                drone.vy = Math.sin(angleOffset) * 100;
+                drone.angle = angleOffset * 180 / Math.PI;
+
+                drone.life = stats.droneLifetime;
+                drone.damage = DRONE_BASE_DAMAGE;
+                drone.hasExplosion = stats.droneHasExplosion;
+                drone.trail = [];
+                drone.color = COLORS.PLAYER;
+
+                drones.push(drone);
+            }
+        }
+
         function spawnThrusterParticle() {
             const rad = (player.angle + 180) * Math.PI / 180;
             const spread = (Math.random() - 0.5) * 0.5;
@@ -2310,6 +2443,134 @@
         }
 
         // ============================================================
+        // ALIEN DRONES
+        // ============================================================
+
+        function updateDrones() {
+            const droneColor = COLORS.PLAYER;
+
+            for (let i = drones.length - 1; i >= 0; i--) {
+                const d = drones[i];
+
+                // Find nearest enemy
+                let nearestEnemy = null;
+                let nearestDist = Infinity;
+
+                for (const e of enemies) {
+                    const dx = e.x - d.x;
+                    const dy = e.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = e;
+                    }
+                }
+
+                // Homing behavior towards nearest enemy
+                if (nearestEnemy) {
+                    const dx = nearestEnemy.x - d.x;
+                    const dy = nearestEnemy.y - d.y;
+                    const targetAngle = Math.atan2(dy, dx);
+                    const currentAngle = Math.atan2(d.vy, d.vx);
+
+                    let angleDiff = targetAngle - currentAngle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                    const maxTurn = (DRONE_TURN_RATE * Math.PI / 180) * deltaTime;
+                    const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+                    const newAngle = currentAngle + turn;
+
+                    d.vx = Math.cos(newAngle) * DRONE_SPEED;
+                    d.vy = Math.sin(newAngle) * DRONE_SPEED;
+                    d.angle = newAngle * 180 / Math.PI;
+                }
+
+                // Store trail for visual effect
+                d.trail.unshift({ x: d.x, y: d.y });
+                if (d.trail.length > 8) d.trail.pop();
+
+                // Update position
+                d.x += d.vx * deltaTime;
+                d.y += d.vy * deltaTime;
+                d.life -= deltaTime;
+
+                // Check collision with enemies
+                let hitEnemy = null;
+                for (const e of enemies) {
+                    const config = ENEMY_TYPES[e.type];
+                    const dx = e.x - d.x;
+                    const dy = e.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < config.radius + DRONE_SIZE) {
+                        hitEnemy = e;
+                        break;
+                    }
+                }
+
+                if (hitEnemy) {
+                    const config = ENEMY_TYPES[hitEnemy.type];
+
+                    // Apply direct damage
+                    hitEnemy.hp -= d.damage;
+                    spawnFloatingText(hitEnemy.x, hitEnemy.y - config.radius, d.damage.toString(), droneColor);
+                    spawnHitParticles(hitEnemy.x, hitEnemy.y, droneColor);
+
+                    // Check if enemy dies from direct hit
+                    if (hitEnemy.hp <= 0) {
+                        const enemyIndex = enemies.indexOf(hitEnemy);
+                        if (enemyIndex !== -1) killEnemy(hitEnemy, enemyIndex);
+                    }
+
+                    // Explosion AoE damage
+                    if (d.hasExplosion) {
+                        spawnExplosion(d.x, d.y, droneColor, 15);
+
+                        // Find all enemies in explosion radius
+                        for (const e of enemies) {
+                            if (e === hitEnemy) continue; // Already damaged
+                            const edx = e.x - d.x;
+                            const edy = e.y - d.y;
+                            const eDist = Math.sqrt(edx * edx + edy * edy);
+
+                            if (eDist < DRONE_EXPLOSION_RADIUS) {
+                                const eConfig = ENEMY_TYPES[e.type];
+                                e.hp -= DRONE_EXPLOSION_DAMAGE;
+                                spawnFloatingText(e.x, e.y - eConfig.radius, DRONE_EXPLOSION_DAMAGE.toString(), droneColor);
+                                spawnHitParticles(e.x, e.y, droneColor);
+
+                                if (e.hp <= 0) {
+                                    const idx = enemies.indexOf(e);
+                                    if (idx !== -1) killEnemy(e, idx);
+                                }
+                            }
+                        }
+                    } else {
+                        // Small impact effect
+                        spawnExplosion(d.x, d.y, droneColor, 6);
+                    }
+
+                    // Remove drone after impact
+                    pools.drone.release(d);
+                    fastRemove(drones, i);
+                    continue;
+                }
+
+                // Remove expired drones or too far from camera
+                const distFromCamera = Math.sqrt(
+                    Math.pow(d.x - camera.x, 2) +
+                    Math.pow(d.y - camera.y, 2)
+                );
+
+                if (d.life <= 0 || distFromCamera > CULLING_DISTANCES.drones) {
+                    pools.drone.release(d);
+                    fastRemove(drones, i);
+                }
+            }
+        }
+
+        // ============================================================
         // ENEMIES
         // ============================================================
         
@@ -2363,9 +2624,9 @@
             const baseCount = 15 + Math.floor(playerLevel * 4);
             const count = Math.min(baseCount, 60); // Cap at 60 per wave
 
-            // Scale enemy HP based on player level
+            // Scale enemy HP based on player level (+25% per level)
             const config = ENEMY_TYPES['SCOUT'];
-            const hpMultiplier = 1 + (playerLevel - 1) * 0.15;
+            const hpMultiplier = 1 + (playerLevel - 1) * 0.25;
             const scaledHp = Math.ceil(config.hp * hpMultiplier);
 
             const spawnPositions = [];
@@ -2633,8 +2894,8 @@
             const config = ENEMY_TYPES[type];
             const angleToPlayer = Math.atan2(player.y - y, player.x - x);
             
-            // Scale enemy HP based on player level (+30% per level)
-            const hpMultiplier = 1 + (playerLevel - 1) * 0.30;
+            // Scale enemy HP based on player level (+40% per level)
+            const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
             const scaledHp = Math.ceil(config.hp * hpMultiplier);
 
             const enemy = pools.enemy.acquire();
@@ -2839,6 +3100,9 @@
             if (Math.random() < 0.08) {
                 spawnPickup(enemy.x, enemy.y);
             }
+
+            // Spawn alien drones if skill unlocked
+            spawnAlienDrone(enemy.x, enemy.y);
 
             pools.enemy.release(enemy);
             fastRemove(enemies, index);
@@ -3177,6 +3441,89 @@
                 ctx.beginPath();
                 ctx.arc(cx, cy, 2, 0, Math.PI * 2);
                 ctx.fill();
+            } else if (icon === 'aura') {
+                // Aura rings
+                ctx.beginPath();
+                ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (icon === 'expand') {
+                // Expanding arrows
+                ctx.beginPath();
+                ctx.moveTo(cx - 8, cy);
+                ctx.lineTo(cx - 4, cy);
+                ctx.moveTo(cx + 4, cy);
+                ctx.lineTo(cx + 8, cy);
+                ctx.moveTo(cx, cy - 8);
+                ctx.lineTo(cx, cy - 4);
+                ctx.moveTo(cx, cy + 4);
+                ctx.lineTo(cx, cy + 8);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+                ctx.stroke();
+            } else if (icon === 'pulse') {
+                // Pulsing rings
+                ctx.beginPath();
+                ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (icon === 'drone') {
+                // Hexagon drone shape
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+                    const x = cx + Math.cos(angle) * 8;
+                    const y = cy + Math.sin(angle) * 8;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (icon === 'swarm') {
+                // Two small drones
+                [-5, 5].forEach(ox => {
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+                        const x = cx + ox + Math.cos(angle) * 5;
+                        const y = cy + Math.sin(angle) * 5;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                });
+            } else if (icon === 'explosion') {
+                // Explosion burst
+                ctx.beginPath();
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const innerR = 3;
+                    const outerR = 9;
+                    const r = i % 2 === 0 ? outerR : innerR;
+                    const x = cx + Math.cos(angle) * r;
+                    const y = cy + Math.sin(angle) * r;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.stroke();
             }
         }
 
@@ -3359,8 +3706,8 @@
                     const collisionDist = config.radius + ORBITAL_SIZE;
 
                     if (distSq < collisionDist * collisionDist) {
-                        let orbitalDamage = 2; // Base damage
-                        if (unlockedSkills.includes('energy_absorption')) orbitalDamage += 2; // Energy Absorption boost
+                        let orbitalDamage = 16; // Base damage
+                        if (unlockedSkills.includes('energy_absorption')) orbitalDamage += 16; // Energy Absorption boost
                         e.hp -= orbitalDamage;
                         orb.hitEnemies[e.id] = 0.15; // Cooldown per enemy (can hit same enemy again after 0.15s)
 
@@ -3650,14 +3997,34 @@
         }
         
         function damagePlayer() {
-            player.hp--;
-            player.invulnerable = 1.5;
-            
-            triggerShake(SHAKE_INTENSITY_HIT, SHAKE_DURATION_HIT);
-            triggerFlash('#FF6B6B', 0.3, 150);
-            
-            if (player.hp <= 0) {
-                gameOver();
+            // Reset shield regen timer
+            player.shieldRegenTimer = 0;
+
+            if (player.shield > 0) {
+                // Shield absorbs damage
+                player.shield = Math.max(0, player.shield - SHIELD_DAMAGE_ABSORPTION);
+                player.shieldFlashTimer = 0.15;
+
+                // Visual effects for shield hit (less intense)
+                triggerShake(SHAKE_INTENSITY_HIT * 0.5, SHAKE_DURATION_HIT * 0.6);
+                triggerFlash(COLORS.SHIELD, 0.2, 100);
+
+                // Brief invulnerability when shield breaks
+                if (player.shield <= 0) {
+                    player.invulnerable = 0.5;
+                    triggerFlash('#FFDD57', 0.4, 200);
+                }
+            } else {
+                // No shield: direct HP damage
+                player.hp--;
+                player.invulnerable = 1.5;
+
+                triggerShake(SHAKE_INTENSITY_HIT, SHAKE_DURATION_HIT);
+                triggerFlash('#FF6B6B', 0.3, 150);
+
+                if (player.hp <= 0) {
+                    gameOver();
+                }
             }
         }
         
@@ -3994,6 +4361,7 @@
                 renderPickups();
                 renderEnemies();
                 renderBullets();
+                renderDrones();
                 renderEnemyBullets();
                 if (player && gameState !== 'gameOver') {
                     renderAura();
@@ -4273,8 +4641,8 @@
 
                 for (const b of byType.laser) {
                     const angle = Math.atan2(b.vy, b.vx);
-                    ctx.lineWidth = 4 + (b.damage || 1) * 1.5;
-                    const len = 20 + (b.damage || 1) * 4;
+                    ctx.lineWidth = 5;
+                    const len = 24;
                     ctx.beginPath();
                     ctx.moveTo(b.x - Math.cos(angle) * len, b.y - Math.sin(angle) * len);
                     ctx.lineTo(b.x, b.y);
@@ -4290,9 +4658,9 @@
                     const angle = Math.atan2(b.vy, b.vx);
                     ctx.strokeStyle = b.color || COLORS.BULLET;
                     ctx.shadowColor = b.color || COLORS.BULLET;
-                    ctx.lineWidth = 4 + (b.damage || 1) * 1.5;
+                    ctx.lineWidth = 5;
 
-                    const len = 20 + (b.damage || 1) * 4;
+                    const len = 24;
                     ctx.beginPath();
                     ctx.moveTo(b.x - Math.cos(angle) * len, b.y - Math.sin(angle) * len);
                     ctx.lineTo(b.x, b.y);
@@ -4415,7 +4783,64 @@
 
             ctx.shadowBlur = 0;
         }
-        
+
+        function renderDrones() {
+            if (drones.length === 0) return;
+
+            const droneColor = COLORS.PLAYER;
+
+            for (const d of drones) {
+                // Skip rendering if too far from camera
+                if (!shouldRenderEntity(d, CULLING_DISTANCES.drones)) continue;
+
+                // Draw trail
+                if (d.trail.length > 1) {
+                    ctx.strokeStyle = droneColor;
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.4;
+                    ctx.beginPath();
+                    ctx.moveTo(d.trail[0].x, d.trail[0].y);
+                    for (let i = 1; i < d.trail.length; i++) {
+                        ctx.globalAlpha = 0.4 * (1 - i / d.trail.length);
+                        ctx.lineTo(d.trail[i].x, d.trail[i].y);
+                    }
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+
+                // Draw drone body
+                ctx.save();
+                ctx.translate(d.x, d.y);
+                ctx.rotate(d.angle * Math.PI / 180);
+
+                // Drone shape (small hexagon)
+                ctx.strokeStyle = droneColor;
+                ctx.fillStyle = droneColor;
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.4;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+                    const x = Math.cos(angle) * DRONE_SIZE;
+                    const y = Math.sin(angle) * DRONE_SIZE;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+
+                // Inner glow dot
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
         function renderEnemies() {
             // Sort enemies by type for batched rendering
             const byType = { SCOUT: [], KAMIKAZE: [], SPINNER: [], TANK: [] };
@@ -4825,7 +5250,100 @@
                 ctx.bezierCurveTo(x + 10, y, x, y, x, y + 5);
                 ctx.fill();
             }
-            
+
+            // === SHIELD BAR (futuristic style) ===
+            const shieldBarWidth = 100;
+            const shieldBarHeight = 12;
+            const shieldBarX = CANVAS_WIDTH - 20 - shieldBarWidth;
+            const shieldBarY = 52;
+            const shieldPercent = player.shield / PLAYER_MAX_SHIELD;
+            const isRegenerating = player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD;
+
+            ctx.save();
+
+            // Outer frame
+            ctx.beginPath();
+            ctx.roundRect(shieldBarX - 2, shieldBarY - 2, shieldBarWidth + 4, shieldBarHeight + 4, 3);
+            ctx.strokeStyle = 'rgba(58, 154, 217, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Background with gradient
+            const bgGrad = ctx.createLinearGradient(shieldBarX, 0, shieldBarX + shieldBarWidth, 0);
+            bgGrad.addColorStop(0, '#0a1628');
+            bgGrad.addColorStop(1, '#0d2035');
+            ctx.fillStyle = bgGrad;
+            ctx.beginPath();
+            ctx.roundRect(shieldBarX, shieldBarY, shieldBarWidth, shieldBarHeight, 2);
+            ctx.fill();
+
+            // Shield fill with gradient
+            if (shieldPercent > 0) {
+                const fillGrad = ctx.createLinearGradient(shieldBarX, 0, shieldBarX + shieldBarWidth * shieldPercent, 0);
+
+                if (player.shieldFlashTimer > 0) {
+                    fillGrad.addColorStop(0, '#FFFFFF');
+                    fillGrad.addColorStop(1, '#88DDFF');
+                } else if (isRegenerating) {
+                    const pulse = Math.sin(Date.now() / 80) * 0.3 + 0.7;
+                    ctx.globalAlpha = pulse;
+                    fillGrad.addColorStop(0, '#2A7AB8');
+                    fillGrad.addColorStop(0.5, '#5AC8FA');
+                    fillGrad.addColorStop(1, '#2A7AB8');
+                } else {
+                    fillGrad.addColorStop(0, '#1E5A8A');
+                    fillGrad.addColorStop(0.5, '#3A9AD9');
+                    fillGrad.addColorStop(1, '#1E5A8A');
+                }
+
+                ctx.fillStyle = fillGrad;
+                ctx.beginPath();
+                ctx.roundRect(shieldBarX + 1, shieldBarY + 1, (shieldBarWidth - 2) * shieldPercent, shieldBarHeight - 2, 2);
+                ctx.fill();
+
+                // Glow effect when shield is high
+                if (shieldPercent > 0.5 && ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = '#3A9AD9';
+                    ctx.shadowBlur = 8;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+            ctx.globalAlpha = 1.0;
+
+            // Segment lines (energy cells look)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 4; i++) {
+                const segX = shieldBarX + (shieldBarWidth / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(segX, shieldBarY + 2);
+                ctx.lineTo(segX, shieldBarY + shieldBarHeight - 2);
+                ctx.stroke();
+            }
+
+            // Shield icon (small hexagon)
+            const iconX = shieldBarX - 18;
+            const iconY = shieldBarY + shieldBarHeight / 2;
+            const iconSize = 6;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i - Math.PI / 2;
+                const px = iconX + Math.cos(angle) * iconSize;
+                const py = iconY + Math.sin(angle) * iconSize;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fillStyle = shieldPercent > 0 ? COLORS.SHIELD : '#333';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+            // === END SHIELD BAR ===
+
             // Time (bottom-center)
             ctx.textAlign = 'center';
             ctx.font = '18px "Segoe UI", sans-serif';
