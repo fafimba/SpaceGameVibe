@@ -325,8 +325,6 @@
         const MAX_ENEMIES_LOW_PERF = 200;
         
         // Scoring
-        const CHAIN_WINDOW = 2.2;
-        const CHAIN_MULTIPLIERS = [1, 1.2, 1.5, 2, 2.5, 3];
         const NEAR_MISS_RADIUS = 12;
         const NEAR_MISS_POINTS = 5;
         const MILESTONE_INTERVAL = 5000;
@@ -353,8 +351,8 @@
             XP: '#00FFAA',
             UI_PRIMARY: '#FFFFFF',
             UI_SECONDARY: '#AAAAAA',
-            BG_TOP: '#020617',
-            BG_BOTTOM: '#000000',
+            BG_TOP: '#0a1628',
+            BG_BOTTOM: '#020610',
             // HUD Colors
             HUD_CYAN: '#7FDBFF',
             HUD_CYAN_DIM: '#3A9AD9',
@@ -377,7 +375,7 @@
         };
 
         // Shield Arc Constants (around player)
-        const SHIELD_ARC_RADIUS = 72;
+        const SHIELD_ARC_RADIUS = 42;
         const SHIELD_ARC_STROKE = 3;
         const SHIELD_ARC_TRACK_STROKE = 3;
         const SHIELD_ARC_IDLE_OPACITY = 0;
@@ -675,7 +673,17 @@
                 nodeType: 'circle'
             }
         };
-        
+
+        // Weapon upgrade mapping for HUD display
+        const WEAPON_UPGRADES = {
+            'laser_cannon': ['rapid_fire', 'piercing_lens', 'beam_splitter'],
+            'missile_launcher': ['homing_guidance', 'cluster_payload', 'armor_piercing'],
+            'orbital_shield': ['regen_capacitors', 'shockwave_emitter', 'energy_absorption'],
+            'lightning_ray': ['chain_amplifier', 'rapid_discharge', 'extended_arc'],
+            'plasma_field': ['field_expansion', 'field_intensity', 'field_pulse'],
+            'alien_drone': ['drone_duo', 'drone_duration', 'drone_explosion']
+        };
+
         // ============================================================
         // GAME STATE
         // ============================================================
@@ -863,11 +871,7 @@
         // Wave system
         let waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
         let lastWavePattern = null;
-        
-        // Chain system
-        let chainMultiplier = 0;
-        let lastKillTime = 0;
-        
+
         // Effects
         let shakeIntensity = 0;
         let shakeDuration = 0;
@@ -1178,7 +1182,7 @@
                 centerX, centerY, outerRadius
             );
             cachedVignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-            cachedVignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+            cachedVignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
         }
 
         function init() {
@@ -1290,8 +1294,6 @@
 
             score = 0;
             gameTime = 0;
-            chainMultiplier = 0;
-            lastKillTime = 0;
             totalKills = 0;
 
             // Wave alert reset
@@ -1725,12 +1727,7 @@
             
             // Update effects
             updateEffects();
-            
-            // Update chain multiplier decay
-            if (gameTime - lastKillTime > CHAIN_WINDOW && chainMultiplier > 0) {
-                chainMultiplier = Math.max(0, chainMultiplier - deltaTime * 2);
-            }
-            
+
             // Survival time bonus
             score += deltaTime;
             
@@ -3217,16 +3214,9 @@
             // Increment kill counter
             totalKills++;
 
-            // Add score with chain multiplier
-            const chainIndex = Math.min(Math.floor(chainMultiplier), CHAIN_MULTIPLIERS.length - 1);
-            const mult = CHAIN_MULTIPLIERS[chainIndex];
-            const points = Math.floor(config.points * mult);
-            score += points;
-            
-            // Update chain
-            chainMultiplier = Math.min(chainMultiplier + 0.5, 5);
-            lastKillTime = gameTime;
-            
+            // Add score
+            score += config.points;
+
             // Spawn explosion
             spawnExplosion(enemy.x, enemy.y, config.color, 12);
             
@@ -4196,8 +4186,7 @@
         
         function triggerNearMiss() {
             score += NEAR_MISS_POINTS;
-            chainMultiplier = Math.min(chainMultiplier + 0.02, 5);
-            
+
             spawnFloatingText(player.x + (Math.random() - 0.5) * 30, player.y - 30, '+' + NEAR_MISS_POINTS, COLORS.PLAYER);
             triggerSlowmo(SLOWMO_DURATION);
             triggerFlash(COLORS.PLAYER, 0.22, 180);
@@ -5389,62 +5378,34 @@
             const HUD_PADDING = 16;
 
             // ═══════════════════════════════════════
-            // SCORE PANEL (top-left)
+            // KILLS & SCORE (top-left)
             // ═══════════════════════════════════════
             ctx.textAlign = 'left';
 
-            // "SCORE" label
+            // "KILLS" label
             ctx.font = '10px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('SCORE', HUD_PADDING, 28);
+            ctx.fillText('KILLS', HUD_PADDING, 25);
 
-            // Score value
+            // Kills value (big)
             ctx.font = 'bold 28px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.HUD_TEXT_PRIMARY;
             if (ENABLE_GLOW_EFFECTS) {
                 ctx.shadowColor = COLORS.HUD_CYAN_GLOW;
                 ctx.shadowBlur = 20;
             }
-            ctx.fillText(Math.floor(score).toLocaleString(), HUD_PADDING, 55);
+            ctx.fillText(totalKills.toLocaleString(), HUD_PADDING, 52);
             ctx.shadowBlur = 0;
 
-            // Chain indicator
-            if (chainMultiplier > 0) {
-                const chainIndex = Math.min(Math.floor(chainMultiplier), CHAIN_MULTIPLIERS.length - 1);
-                const mult = CHAIN_MULTIPLIERS[chainIndex];
+            // "SCORE" label
+            ctx.font = '9px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('SCORE', HUD_PADDING, 68);
 
-                // Chain badge
-                ctx.fillStyle = 'rgba(255, 221, 87, 0.06)';
-                ctx.strokeStyle = 'rgba(255, 221, 87, 0.3)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.roundRect(HUD_PADDING, 62, 48, 18, 3);
-                ctx.fill();
-                ctx.stroke();
-
-                ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.HUD_GOLD;
-                if (ENABLE_GLOW_EFFECTS) {
-                    ctx.shadowColor = 'rgba(255, 221, 87, 0.4)';
-                    ctx.shadowBlur = 12;
-                }
-                ctx.fillText('×' + mult.toFixed(1), HUD_PADDING + 6, 76);
-                ctx.shadowBlur = 0;
-
-                // Chain pips
-                const pipStartX = HUD_PADDING + 56;
-                for (let i = 0; i < CHAIN_MULTIPLIERS.length; i++) {
-                    const pipX = pipStartX + i * 7;
-                    ctx.fillStyle = i <= chainIndex ? COLORS.HUD_GOLD : 'rgba(255, 221, 87, 0.2)';
-                    ctx.fillRect(pipX, 66, 4, 12);
-                    if (i <= chainIndex && ENABLE_GLOW_EFFECTS) {
-                        ctx.shadowColor = 'rgba(255, 221, 87, 0.5)';
-                        ctx.shadowBlur = 6;
-                        ctx.fillRect(pipX, 66, 4, 12);
-                        ctx.shadowBlur = 0;
-                    }
-                }
-            }
+            // Score value (smaller)
+            ctx.font = '14px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText(Math.floor(score).toLocaleString(), HUD_PADDING, 82);
 
             // ═══════════════════════════════════════
             // LEVEL & XP PANEL (top-center)
@@ -5543,63 +5504,74 @@
             // ═══════════════════════════════════════
             const vitalsX = CANVAS_WIDTH - HUD_PADDING;
 
-            // HULL label
+            // HULL - mini ships (filled)
             ctx.textAlign = 'right';
-            ctx.font = '9px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('HULL', vitalsX, 25);
+            const shipScale = 0.4;
+            const shipSpacing = 26;
+            const hullStartX = vitalsX - (PLAYER_MAX_HP * shipSpacing) + 10;
 
-            // HP cells
-            const cellWidth = 32;
-            const cellHeight = 10;
-            const cellGap = 5;
             for (let i = 0; i < PLAYER_MAX_HP; i++) {
-                const cellX = vitalsX - (i + 1) * (cellWidth + cellGap) + cellGap;
-                const cellY = 30;
+                const shipX = hullStartX + i * shipSpacing;
+                const shipY = 28;
+                const isActive = i < player.hp;
+
+                ctx.save();
+                ctx.translate(shipX, shipY);
+                ctx.scale(shipScale, shipScale);
+                ctx.rotate(-Math.PI / 2); // Ships pointing up
 
                 ctx.beginPath();
-                ctx.roundRect(cellX, cellY, cellWidth, cellHeight, 2);
+                ctx.moveTo(22, 0);
+                ctx.lineTo(-12, -16);
+                ctx.lineTo(-10, 0);
+                ctx.lineTo(-12, 16);
+                ctx.closePath();
 
-                if (i < player.hp) {
-                    ctx.fillStyle = COLORS.HUD_RED;
+                if (isActive) {
+                    ctx.fillStyle = COLORS.PLAYER;
                     ctx.fill();
-                    ctx.strokeStyle = COLORS.HUD_RED;
                     if (ENABLE_GLOW_EFFECTS) {
-                        ctx.shadowColor = 'rgba(255, 107, 107, 0.25)';
+                        ctx.shadowColor = COLORS.HUD_CYAN_GLOW;
                         ctx.shadowBlur = 8;
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
                     }
                 } else {
-                    ctx.fillStyle = 'rgba(255, 107, 107, 0.1)';
+                    ctx.fillStyle = COLORS.HUD_CYAN_DIM;
+                    ctx.globalAlpha = 0.3;
                     ctx.fill();
-                    ctx.strokeStyle = COLORS.HUD_RED_DIM;
                 }
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                ctx.shadowBlur = 0;
+                ctx.restore();
             }
 
             // SHIELD section
             const shieldPercent = player.shield / PLAYER_MAX_SHIELD;
             const isRegenerating = player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD;
 
-            // Shield label + percentage
-            ctx.font = '9px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('SHIELD', vitalsX - 70, 55);
-
-            ctx.font = '10px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_SHIELD;
-            ctx.fillText(Math.floor(shieldPercent * 100) + '%', vitalsX, 55);
-
             // Shield bar
-            const shieldBarWidth = 106;
-            const shieldBarHeight = 8;
+            const shieldBarWidth = 160;
+            const shieldBarHeight = 10;
             const shieldBarX = vitalsX - shieldBarWidth;
-            const shieldBarY = 60;
+            const shieldBarY = 50;
 
-            // Bar background
-            ctx.fillStyle = 'rgba(68, 200, 255, 0.04)';
-            ctx.strokeStyle = 'rgba(68, 200, 255, 0.18)';
+            // Shield icon (left of bar)
+            const shieldIconX = shieldBarX - 18;
+            const shieldIconY = shieldBarY + shieldBarHeight / 2;
+            ctx.strokeStyle = COLORS.PLAYER;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(shieldIconX, shieldIconY - 2, 8, -Math.PI * 0.8, Math.PI * 0.8);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(shieldIconX - 6, shieldIconY + 5);
+            ctx.lineTo(shieldIconX, shieldIconY + 10);
+            ctx.lineTo(shieldIconX + 6, shieldIconY + 5);
+            ctx.stroke();
+
+            // Bar background (using player color)
+            ctx.fillStyle = 'rgba(127, 219, 255, 0.04)';
+            ctx.strokeStyle = 'rgba(127, 219, 255, 0.18)';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.roundRect(shieldBarX, shieldBarY, shieldBarWidth, shieldBarHeight, 2);
@@ -5608,8 +5580,8 @@
 
             // Bar fill
             if (shieldPercent > 0) {
-                let barColor = COLORS.HUD_SHIELD;
-                let barGlowColor = COLORS.HUD_SHIELD_GLOW;
+                let barColor = COLORS.PLAYER;
+                let barGlowColor = COLORS.HUD_CYAN_GLOW;
 
                 if (player.shieldFlashTimer > 0) {
                     barColor = '#FFFFFF';
@@ -5621,7 +5593,7 @@
                 }
 
                 const fillGrad = ctx.createLinearGradient(shieldBarX, 0, shieldBarX + shieldBarWidth * shieldPercent, 0);
-                fillGrad.addColorStop(0, COLORS.HUD_SHIELD_DIM);
+                fillGrad.addColorStop(0, COLORS.HUD_CYAN_DIM);
                 fillGrad.addColorStop(1, barColor);
                 ctx.fillStyle = fillGrad;
                 ctx.beginPath();
@@ -5639,12 +5611,12 @@
 
             // Regen icon (spinning arc)
             if (isRegenerating) {
-                const iconX = shieldBarX - 12;
-                const iconY = shieldBarY + shieldBarHeight / 2;
+                const regenIconX = shieldBarX - 32;
+                const regenIconY = shieldBarY + shieldBarHeight / 2;
                 const rotation = Date.now() / 200;
 
                 ctx.save();
-                ctx.translate(iconX, iconY);
+                ctx.translate(regenIconX, regenIconY);
                 ctx.rotate(rotation);
                 ctx.strokeStyle = COLORS.HUD_SHIELD_REGEN;
                 ctx.lineWidth = 1.2;
@@ -5696,94 +5668,132 @@
             }
 
             // ═══════════════════════════════════════
-            // WEAPON PANEL (right side)
+            // ACTIVE WEAPONS (top-right, below shield)
             // ═══════════════════════════════════════
-            const weaponPanelX = CANVAS_WIDTH - HUD_PADDING;
-            let weaponY = CANVAS_HEIGHT / 2 - 80;
-
-            const mainWeapons = [
-                { id: 'laser_cannon', name: 'LASER CANNON', stat: 'DMG 3 · PIERCE', color: '#FF6B5B' },
-                { id: 'missile_launcher', name: 'MISSILES', stat: '×6 BURST', color: '#FFD93D' },
-                { id: 'orbital_shield', name: 'ORBITAL SHIELD', stat: '5 ORBS', color: '#00DFFF' },
-                { id: 'lightning_ray', name: 'LIGHTNING', stat: 'CHAIN', color: '#9F7AEA' }
+            const allWeapons = [
+                { id: 'laser_cannon', color: '#FF6B5B', icon: 'laser' },
+                { id: 'missile_launcher', color: '#FFD93D', icon: 'rocket' },
+                { id: 'orbital_shield', color: '#00DFFF', icon: 'orbital' },
+                { id: 'lightning_ray', color: '#9F7AEA', icon: 'lightning' },
+                { id: 'plasma_field', color: '#7FDBFF', icon: 'aura' },
+                { id: 'alien_drone', color: '#39FF14', icon: 'drone' }
             ];
 
-            for (const weapon of mainWeapons) {
-                const isUnlocked = unlockedSkills.includes(weapon.id);
-                ctx.globalAlpha = isUnlocked ? 1.0 : 0.35;
+            // Only show active (unlocked) weapons
+            const activeWeapons = allWeapons.filter(w => unlockedSkills.includes(w.id));
+            const weaponIconSize = 12;
+            const weaponSpacing = 32;
+            const weaponsStartX = vitalsX - (activeWeapons.length * weaponSpacing) + weaponSpacing / 2;
+            const weaponsY = 85;
 
-                // Panel background
-                ctx.fillStyle = COLORS.HUD_PANEL_BG;
-                ctx.strokeStyle = isUnlocked ? weapon.color : COLORS.HUD_PANEL_BORDER;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.roundRect(weaponPanelX - 140, weaponY, 140, 36, 4);
-                ctx.fill();
-                ctx.stroke();
-
-                if (isUnlocked && ENABLE_GLOW_EFFECTS) {
-                    ctx.shadowColor = weapon.color;
-                    ctx.shadowBlur = 12;
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                }
+            for (let i = 0; i < activeWeapons.length; i++) {
+                const weapon = activeWeapons[i];
+                const iconX = weaponsStartX + i * weaponSpacing;
+                const iconY = weaponsY;
 
                 // Weapon icon circle
-                const iconX = weaponPanelX - 20;
-                const iconY = weaponY + 18;
                 ctx.beginPath();
-                ctx.arc(iconX, iconY, 12, 0, Math.PI * 2);
+                ctx.arc(iconX, iconY, weaponIconSize, 0, Math.PI * 2);
                 ctx.strokeStyle = weapon.color;
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
 
-                // Weapon name
-                ctx.textAlign = 'right';
-                ctx.font = '600 12px "Segoe UI", sans-serif';
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = weapon.color;
+                    ctx.shadowBlur = 6;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+
+                // Draw weapon icon inside circle
                 ctx.fillStyle = weapon.color;
-                ctx.fillText(weapon.name, iconX - 18, weaponY + 14);
+                ctx.strokeStyle = weapon.color;
+                ctx.lineWidth = 1.5;
+                ctx.lineCap = 'round';
 
-                // Weapon stat
-                ctx.font = '9px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-                ctx.fillText(isUnlocked ? weapon.stat : 'LOCKED', iconX - 18, weaponY + 28);
+                ctx.save();
+                ctx.translate(iconX, iconY);
+                const s = weaponIconSize * 0.5;
 
-                ctx.globalAlpha = 1;
-                weaponY += 42;
+                switch (weapon.icon) {
+                    case 'laser':
+                        // Horizontal beam
+                        ctx.beginPath();
+                        ctx.moveTo(-s, 0);
+                        ctx.lineTo(s, 0);
+                        ctx.stroke();
+                        break;
+                    case 'rocket':
+                        // Triangle pointing up
+                        ctx.beginPath();
+                        ctx.moveTo(0, -s);
+                        ctx.lineTo(-s * 0.6, s * 0.6);
+                        ctx.lineTo(s * 0.6, s * 0.6);
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                    case 'orbital':
+                        // Small orbit with dot
+                        ctx.beginPath();
+                        ctx.arc(0, 0, s * 0.5, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(s * 0.5, 0, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    case 'lightning':
+                        // Lightning bolt
+                        ctx.beginPath();
+                        ctx.moveTo(s * 0.2, -s);
+                        ctx.lineTo(-s * 0.2, 0);
+                        ctx.lineTo(s * 0.2, 0);
+                        ctx.lineTo(-s * 0.2, s);
+                        ctx.stroke();
+                        break;
+                    case 'aura':
+                        // Concentric arcs
+                        ctx.beginPath();
+                        ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(0, 0, s * 0.7, Math.PI * 0.2, Math.PI * 0.8);
+                        ctx.stroke();
+                        break;
+                    case 'drone':
+                        // Diamond
+                        ctx.beginPath();
+                        ctx.moveTo(0, -s * 0.7);
+                        ctx.lineTo(s * 0.5, 0);
+                        ctx.lineTo(0, s * 0.7);
+                        ctx.lineTo(-s * 0.5, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                }
+                ctx.restore();
+
+                // Upgrade dots below icon
+                const upgrades = WEAPON_UPGRADES[weapon.id] || [];
+                const dotSpacing = 6;
+                const dotY = iconY + weaponIconSize + 7;
+                const dotsStartX = iconX - ((upgrades.length - 1) * dotSpacing) / 2;
+
+                for (let j = 0; j < upgrades.length; j++) {
+                    const dotX = dotsStartX + j * dotSpacing;
+                    const isUpgraded = unlockedSkills.includes(upgrades[j]);
+
+                    ctx.beginPath();
+                    ctx.arc(dotX, dotY, 2.5, 0, Math.PI * 2);
+
+                    if (isUpgraded) {
+                        ctx.fillStyle = weapon.color;
+                        ctx.fill();
+                    } else {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                        ctx.fill();
+                    }
+                }
             }
-
-            // ═══════════════════════════════════════
-            // TIMER (bottom center)
-            // ═══════════════════════════════════════
-            ctx.textAlign = 'center';
-            ctx.font = '8px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('SURVIVAL TIME', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 35);
-
-            ctx.font = '18px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_TEXT_PRIMARY;
-            ctx.globalAlpha = 0.6;
-            const minutes = Math.floor(gameTime / 60);
-            const seconds = Math.floor(gameTime % 60);
-            ctx.fillText(minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0'), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 18);
-            ctx.globalAlpha = 1;
-
-            // ═══════════════════════════════════════
-            // KILLS COUNTER (bottom right)
-            // ═══════════════════════════════════════
-            ctx.textAlign = 'right';
-            ctx.font = '9px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('KILLS', CANVAS_WIDTH - HUD_PADDING, CANVAS_HEIGHT - 35);
-
-            ctx.font = 'bold 22px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_RED;
-            if (ENABLE_GLOW_EFFECTS) {
-                ctx.shadowColor = 'rgba(255, 107, 107, 0.3)';
-                ctx.shadowBlur = 10;
-            }
-            ctx.fillText(totalKills.toString(), CANVAS_WIDTH - HUD_PADDING, CANVAS_HEIGHT - 15);
-            ctx.shadowBlur = 0;
 
             // ═══════════════════════════════════════
             // SKILL POINTS INDICATOR
