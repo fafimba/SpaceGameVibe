@@ -542,7 +542,7 @@
             },
             'chain_amplifier': {
                 name: 'Chain Amplifier',
-                description: '+3 chain bounces (6 total)',
+                description: '+6 chain bounces (12 total)',
                 prereqs: ['lightning_ray'],
                 cost: 1,
                 color: '#9F7AEA',
@@ -1847,7 +1847,7 @@
 
             // Lightning Ray branch
             let hasLightning = false;
-            let lightningBounces = 3;
+            let lightningBounces = 6;
             let lightningCadence = 1.2;
             let lightningRange = 225;
             let lightningChainRange = 350;
@@ -1857,7 +1857,7 @@
                 hasLightning = true;
             }
             if (unlockedSkills.includes('chain_amplifier')) {
-                lightningBounces = 6;
+                lightningBounces = 12;
             }
             if (unlockedSkills.includes('rapid_discharge')) {
                 lightningCadence = 0.8;
@@ -4563,11 +4563,9 @@
             let orbitalSize = ORBITAL_SIZE; // Base size
             if (unlockedSkills.includes('shockwave_emitter')) orbitalSize *= 1.5; // +50% size boost
 
-            // Outline style for orbitals
+            // Outline style for orbitals (no glow for performance)
             ctx.strokeStyle = COLORS.PLAYER;
             ctx.lineWidth = 2.5;
-            ctx.shadowColor = COLORS.PLAYER;
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
 
             for (const orb of orbitals) {
                 const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
@@ -4577,8 +4575,6 @@
                 ctx.arc(orbX, orbY, orbitalSize, 0, Math.PI * 2);
                 ctx.stroke();
             }
-
-            ctx.shadowBlur = 0;
         }
 
         function renderLightning() {
@@ -4851,13 +4847,11 @@
                 }
             }
 
-            // Batch render scouts
+            // Batch render scouts (no shadowBlur for performance)
             if (byType.SCOUT.length > 0) {
                 const config = ENEMY_TYPES['SCOUT'];
                 ctx.strokeStyle = config.color;
                 ctx.lineWidth = 3;
-                ctx.shadowColor = config.color;
-                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
 
                 for (const e of byType.SCOUT) {
                     ctx.save();
@@ -4879,13 +4873,11 @@
                 }
             }
 
-            // Batch render kamikazes
+            // Batch render kamikazes (no shadowBlur for performance)
             if (byType.KAMIKAZE.length > 0) {
                 const config = ENEMY_TYPES['KAMIKAZE'];
                 ctx.strokeStyle = config.color;
                 ctx.lineWidth = 3;
-                ctx.shadowColor = config.color;
-                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
 
                 for (const e of byType.KAMIKAZE) {
                     ctx.save();
@@ -4904,12 +4896,10 @@
                 }
             }
 
-            // Batch render spinners
+            // Batch render spinners (no shadowBlur for performance)
             if (byType.SPINNER.length > 0) {
                 const config = ENEMY_TYPES['SPINNER'];
                 ctx.strokeStyle = config.color;
-                ctx.shadowColor = config.color;
-                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
 
                 for (const e of byType.SPINNER) {
                     ctx.save();
@@ -4939,12 +4929,11 @@
             }
 
             // Batch render tanks (special case - has HP bar)
+            // Batch render tanks (no shadowBlur for performance)
             if (byType.TANK.length > 0) {
                 const config = ENEMY_TYPES['TANK'];
                 ctx.strokeStyle = config.color;
                 ctx.lineWidth = 3;
-                ctx.shadowColor = config.color;
-                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 12 : 0;
 
                 for (const e of byType.TANK) {
                     ctx.save();
