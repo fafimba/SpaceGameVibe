@@ -295,9 +295,12 @@
         const PLAYER_PIVOT_OFFSET = -5;
         const PLAYER_MASS = 2.5;             // Mass factor: higher = more inertia, harder to change direction       // Offset del punto de pivote: positivo = hacia el morro, negativo = hacia la cola
 
+        // Pickups
+        const PICKUP_MAGNET_RADIUS = 150;    // Radio de atracción de pickups hacia el jugador
+
         // Shield System
-        const PLAYER_MAX_SHIELD = 100;           // Escudo máximo
-        const SHIELD_REGEN_RATE = 15;            // Puntos por segundo
+        const PLAYER_MAX_SHIELD = 400;           // Escudo máximo (16 golpes para vaciarlo)
+        const SHIELD_REGEN_RATE = 50;            // Puntos por segundo
         const SHIELD_REGEN_DELAY = 2.5;          // Segundos sin daño para regenerar
         const SHIELD_DAMAGE_ABSORPTION = 25;     // Daño por golpe (4 golpes = escudo vacío)
 
@@ -351,9 +354,39 @@
             UI_PRIMARY: '#FFFFFF',
             UI_SECONDARY: '#AAAAAA',
             BG_TOP: '#020617',
-            BG_BOTTOM: '#000000'
+            BG_BOTTOM: '#000000',
+            // HUD Colors
+            HUD_CYAN: '#7FDBFF',
+            HUD_CYAN_DIM: '#3A9AD9',
+            HUD_CYAN_GLOW: 'rgba(127, 219, 255, 0.4)',
+            HUD_RED: '#FF6B6B',
+            HUD_RED_DIM: '#C04848',
+            HUD_GOLD: '#FFDD57',
+            HUD_GREEN: '#00FFAA',
+            HUD_GREEN_DIM: '#00AA66',
+            HUD_PURPLE: '#9F7AEA',
+            HUD_SHIELD: '#44C8FF',
+            HUD_SHIELD_DIM: '#1A6B99',
+            HUD_SHIELD_GLOW: 'rgba(68, 200, 255, 0.35)',
+            HUD_SHIELD_REGEN: '#66EEFF',
+            HUD_WARNING: '#FF8844',
+            HUD_TEXT_PRIMARY: '#E8F0FF',
+            HUD_TEXT_SECONDARY: 'rgba(200, 215, 240, 0.55)',
+            HUD_PANEL_BG: 'rgba(5, 12, 30, 0.85)',
+            HUD_PANEL_BORDER: 'rgba(127, 219, 255, 0.15)'
         };
-        
+
+        // Shield Arc Constants (around player)
+        const SHIELD_ARC_RADIUS = 72;
+        const SHIELD_ARC_STROKE = 3;
+        const SHIELD_ARC_TRACK_STROKE = 3;
+        const SHIELD_ARC_IDLE_OPACITY = 0;
+        const SHIELD_ARC_HIT_OPACITY = 1.0;
+        const SHIELD_ARC_REGEN_OPACITY = 0.6;
+        const SHIELD_ARC_LOW_THRESHOLD = 0.25;
+        const SHIELD_ARC_FADE_DELAY = 2.0;
+        const SHIELD_ARC_FLASH_DURATION = 0.12;
+
         // XP & Level System
         const XP_PER_LEVEL_BASE = 25;
         const XP_PER_LEVEL_GROWTH = 1.4;
@@ -659,6 +692,14 @@
         let score = 0;
         let highScore = 0;
         let isNewHighScore = false;
+        let totalKills = 0;
+
+        // Wave Alert System
+        let waveAlertActive = false;
+        let waveAlertTimer = 0;
+        let waveAlertNumber = 0;
+        let waveAlertSubtitle = '';
+        const WAVE_ALERT_DURATION = 2.5;
 
         // Safe localStorage access
         try {
@@ -1210,7 +1251,15 @@
                 invulnerable: 0,
                 thrusterScale: 0,
                 bobOffset: 0,
-                bobTimer: 0
+                bobTimer: 0,
+                // Shield Arc State
+                shieldArcOpacity: SHIELD_ARC_IDLE_OPACITY,
+                shieldArcTargetOpacity: SHIELD_ARC_IDLE_OPACITY,
+                shieldArcIdleTimer: 0,
+                shieldArcFlashTimer: 0,
+                shieldArcFlashColor: null,
+                shieldArcPulsePhase: 0,
+                shieldArcLastValue: PLAYER_MAX_SHIELD
             };
 
             // Initialize camera at player position
@@ -1243,6 +1292,13 @@
             gameTime = 0;
             chainMultiplier = 0;
             lastKillTime = 0;
+            totalKills = 0;
+
+            // Wave alert reset
+            waveAlertActive = false;
+            waveAlertTimer = 0;
+            waveAlertNumber = 0;
+            waveAlertSubtitle = '';
             
             // XP & Level reset
             playerXP = 0;
@@ -1624,6 +1680,14 @@
             gameTime += deltaTime;
             idleTimer += deltaTime;
 
+            // Update wave alert timer
+            if (waveAlertActive) {
+                waveAlertTimer += deltaTime;
+                if (waveAlertTimer >= WAVE_ALERT_DURATION) {
+                    waveAlertActive = false;
+                }
+            }
+
             // Rebuild spatial grid for collision detection optimization
             spatialGrid.clear();
             for (const e of enemies) {
@@ -1681,9 +1745,75 @@
         }
 
         // ============================================================
+        // SHIELD ARC STATE MACHINE
+        // ============================================================
+
+        function updateShieldArcState(deltaTime) {
+            if (!player) return;
+
+            const shieldPercent = player.shield / PLAYER_MAX_SHIELD;
+            const isRegenerating = player.shieldRegenTimer >= SHIELD_REGEN_DELAY &&
+                                   player.shield < PLAYER_MAX_SHIELD;
+            const isLow = shieldPercent <= SHIELD_ARC_LOW_THRESHOLD && shieldPercent > 0;
+
+            // Detect shield damage (shield decreased)
+            if (player.shield < player.shieldArcLastValue) {
+                // Instant visibility on damage
+                player.shieldArcTargetOpacity = SHIELD_ARC_HIT_OPACITY;
+                player.shieldArcOpacity = SHIELD_ARC_HIT_OPACITY;
+                player.shieldArcFlashTimer = SHIELD_ARC_FLASH_DURATION;
+                player.shieldArcFlashColor = '#FFFFFF';
+                player.shieldArcIdleTimer = 0;
+            }
+            player.shieldArcLastValue = player.shield;
+
+            // Update flash timer
+            if (player.shieldArcFlashTimer > 0) {
+                player.shieldArcFlashTimer -= deltaTime;
+                if (player.shieldArcFlashTimer <= 0) {
+                    player.shieldArcFlashColor = null;
+                }
+            }
+
+            // Determine target opacity based on state (priority order)
+            if (isLow) {
+                // LOW: Always visible with warning
+                player.shieldArcTargetOpacity = SHIELD_ARC_HIT_OPACITY;
+                player.shieldArcIdleTimer = 0;
+            } else if (player.shieldArcFlashTimer > 0) {
+                // HIT: Keep visible during flash
+                player.shieldArcTargetOpacity = SHIELD_ARC_HIT_OPACITY;
+            } else if (isRegenerating) {
+                // REGEN: Semi-visible
+                player.shieldArcTargetOpacity = SHIELD_ARC_REGEN_OPACITY;
+                player.shieldArcIdleTimer = 0;
+            } else if (shieldPercent >= 1.0) {
+                // FULL: Fade to idle after delay
+                player.shieldArcIdleTimer += deltaTime;
+                if (player.shieldArcIdleTimer >= SHIELD_ARC_FADE_DELAY) {
+                    player.shieldArcTargetOpacity = SHIELD_ARC_IDLE_OPACITY;
+                }
+            } else {
+                // IDLE: Fade after inactivity
+                player.shieldArcIdleTimer += deltaTime;
+                if (player.shieldArcIdleTimer >= SHIELD_ARC_FADE_DELAY) {
+                    player.shieldArcTargetOpacity = SHIELD_ARC_IDLE_OPACITY;
+                }
+            }
+
+            // Animate opacity with lerp (fast on hit, slow otherwise)
+            const opacitySpeed = player.shieldArcFlashTimer > 0 ? 20 : 3;
+            player.shieldArcOpacity += (player.shieldArcTargetOpacity - player.shieldArcOpacity) *
+                                       opacitySpeed * deltaTime;
+
+            // Update pulse phase for regen/low animation
+            player.shieldArcPulsePhase += deltaTime * 5;
+        }
+
+        // ============================================================
         // PLAYER
         // ============================================================
-        
+
         function updatePlayer() {
             if (!player) return;
             
@@ -1749,6 +1879,9 @@
             if (player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD) {
                 player.shield = Math.min(PLAYER_MAX_SHIELD, player.shield + SHIELD_REGEN_RATE * deltaTime);
             }
+
+            // Update shield arc visibility state
+            updateShieldArcState(deltaTime);
 
             // Auto-fire laser (only when enemy is in aim cone)
             player.fireTimer -= deltaTime;
@@ -2610,6 +2743,23 @@
             }
         }
 
+        function getWaveSubtitle(pattern) {
+            const subtitles = {
+                'arc': 'ARC FORMATION',
+                'side': 'FLANK ATTACK',
+                'pincer': 'PINCER INCOMING',
+                'circle': 'SURROUNDED',
+                'line': 'LINE ASSAULT',
+                'cluster': 'CLUSTER SWARM',
+                'spiral': 'SPIRAL CONVERGENCE',
+                'corners': 'CORNER AMBUSH',
+                'rush': 'ENEMY RUSH',
+                'scatter': 'SCATTER ASSAULT',
+                'v_formation': 'V-FORMATION'
+            };
+            return subtitles[pattern] || 'HOSTILES INCOMING';
+        }
+
         function spawnWave() {
             if (!player) return;
 
@@ -2619,6 +2769,12 @@
                 pattern = WAVE_PATTERNS[Math.floor(Math.random() * WAVE_PATTERNS.length)];
             } while (pattern === lastWavePattern && WAVE_PATTERNS.length > 1);
             lastWavePattern = pattern;
+
+            // Trigger wave alert
+            waveAlertActive = true;
+            waveAlertTimer = 0;
+            waveAlertNumber = waveNumber;
+            waveAlertSubtitle = getWaveSubtitle(pattern);
 
             // Scale wave size with level (more enemies at higher levels)
             const baseCount = 15 + Math.floor(playerLevel * 4);
@@ -3057,7 +3213,10 @@
         
         function killEnemy(enemy, index) {
             const config = ENEMY_TYPES[enemy.type];
-            
+
+            // Increment kill counter
+            totalKills++;
+
             // Add score with chain multiplier
             const chainIndex = Math.min(Math.floor(chainMultiplier), CHAIN_MULTIPLIERS.length - 1);
             const mult = CHAIN_MULTIPLIERS[chainIndex];
@@ -3097,7 +3256,7 @@
             }
             
             // Maybe spawn pickup
-            if (Math.random() < 0.08) {
+            if (Math.random() < 0.01) {
                 spawnPickup(enemy.x, enemy.y);
             }
 
@@ -3169,12 +3328,21 @@
                 const dx = player.x - p.x;
                 const dy = player.y - p.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Magnet effect - attract pickups within range with acceleration
+                if (dist < PICKUP_MAGNET_RADIUS && dist > 0) {
+                    // Lerp factor increases as pickup gets closer (faster pull when near)
+                    const pullStrength = 1 - (dist / PICKUP_MAGNET_RADIUS);
+                    const lerpFactor = 8 * pullStrength * pullStrength * deltaTime;
+                    p.x += dx * lerpFactor;
+                    p.y += dy * lerpFactor;
+                }
                 
                 if (dist < PLAYER_COLLISION_RADIUS + 15) {
                     if (p.type === 'health') {
                         if (player.hp < PLAYER_MAX_HP) {
                             player.hp++;
-                            spawnFloatingText(p.x, p.y, '+HP', COLORS.POWERUP);
+                            spawnFloatingText(p.x, p.y, '+1 Hull', COLORS.POWERUP);
                         } else {
                             score += 50;
                             spawnFloatingText(p.x, p.y, '+50', COLORS.GOLD);
@@ -4000,29 +4168,27 @@
             // Reset shield regen timer
             player.shieldRegenTimer = 0;
 
-            if (player.shield > 0) {
-                // Shield absorbs damage
-                player.shield = Math.max(0, player.shield - SHIELD_DAMAGE_ABSORPTION);
-                player.shieldFlashTimer = 0.15;
+            // Small hit cooldown (no visual effect, just prevents frame-stacking)
+            player.invulnerable = 0.05;
 
-                // Visual effects for shield hit (less intense)
-                triggerShake(SHAKE_INTENSITY_HIT * 0.5, SHAKE_DURATION_HIT * 0.6);
-                triggerFlash(COLORS.SHIELD, 0.2, 100);
+            // Shield absorbs damage
+            player.shield = Math.max(0, player.shield - SHIELD_DAMAGE_ABSORPTION);
+            player.shieldFlashTimer = 0.15;
 
-                // Brief invulnerability when shield breaks
-                if (player.shield <= 0) {
-                    player.invulnerable = 0.5;
-                    triggerFlash('#FFDD57', 0.4, 200);
-                }
-            } else {
-                // No shield: direct HP damage
+            // Visual effects for shield hit
+            triggerShake(SHAKE_INTENSITY_HIT * 0.5, SHAKE_DURATION_HIT * 0.6);
+            triggerFlash(COLORS.SHIELD, 0.2, 100);
+
+            // Shield depleted - consume hull and restore shield
+            if (player.shield <= 0) {
                 player.hp--;
-                player.invulnerable = 1.5;
+                player.shield = PLAYER_MAX_SHIELD;
 
                 triggerShake(SHAKE_INTENSITY_HIT, SHAKE_DURATION_HIT);
-                triggerFlash('#FF6B6B', 0.3, 150);
+                triggerFlash('#FF6B6B', 0.4, 200);
 
                 if (player.hp <= 0) {
+                    player.shield = 0; // Stay at 0 for death
                     gameOver();
                 }
             }
@@ -4366,6 +4532,7 @@
                 if (player && gameState !== 'gameOver') {
                     renderAura();
                     renderPlayer();
+                    renderShieldArc();
                     renderOrbitals();
                     renderLightning();
                 }
@@ -4464,6 +4631,84 @@
             ctx.globalAlpha = 1;
         }
 
+        // ============================================================
+        // SHIELD ARC (around player in world space)
+        // ============================================================
+
+        function renderShieldArc() {
+            if (!player || player.shield <= 0) return;
+
+            const shieldPercent = player.shield / PLAYER_MAX_SHIELD;
+            const isLow = shieldPercent <= SHIELD_ARC_LOW_THRESHOLD && shieldPercent > 0;
+            const isRegenerating = player.shieldRegenTimer >= SHIELD_REGEN_DELAY &&
+                                   player.shield < PLAYER_MAX_SHIELD;
+
+            const startAngle = -Math.PI / 2; // Start from top
+            const endAngle = startAngle + (Math.PI * 2 * shieldPercent);
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.globalAlpha = player.shieldArcOpacity;
+
+            // Determine arc color based on state
+            let arcColor = COLORS.HUD_SHIELD;
+            let glowIntensity = 0;
+
+            if (player.shieldArcFlashColor) {
+                // Flash white on hit
+                arcColor = player.shieldArcFlashColor;
+                glowIntensity = 20;
+            } else if (isLow) {
+                // Warning orange with pulse
+                const pulse = Math.sin(player.shieldArcPulsePhase * 2) * 0.3 + 0.7;
+                ctx.globalAlpha = player.shieldArcOpacity * pulse;
+                arcColor = COLORS.HUD_WARNING;
+                glowIntensity = 12;
+            } else if (isRegenerating) {
+                // Regen blue with subtle pulse
+                const pulse = Math.sin(player.shieldArcPulsePhase) * 0.2 + 0.8;
+                ctx.globalAlpha = player.shieldArcOpacity * pulse;
+                arcColor = COLORS.HUD_SHIELD_REGEN;
+                glowIntensity = 8;
+            }
+
+            // Draw track (faint background circle)
+            ctx.strokeStyle = 'rgba(68, 200, 255, 0.06)';
+            ctx.lineWidth = SHIELD_ARC_TRACK_STROKE;
+            ctx.beginPath();
+            ctx.arc(0, 0, SHIELD_ARC_RADIUS, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Draw tick marks around the arc (every 45°)
+            ctx.strokeStyle = 'rgba(68, 200, 255, 0.12)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI / 4) * i;
+                const innerR = SHIELD_ARC_RADIUS - 6;
+                const outerR = SHIELD_ARC_RADIUS - 2;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
+                ctx.lineTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR);
+                ctx.stroke();
+            }
+
+            // Draw fill arc (actual shield)
+            if (ENABLE_GLOW_EFFECTS && glowIntensity > 0) {
+                ctx.shadowColor = arcColor;
+                ctx.shadowBlur = glowIntensity;
+            }
+            ctx.strokeStyle = arcColor;
+            ctx.lineWidth = SHIELD_ARC_STROKE;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(0, 0, SHIELD_ARC_RADIUS, startAngle, endAngle);
+            ctx.stroke();
+
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
 
         function renderPlayer() {
             const p = player;
@@ -4472,21 +4717,6 @@
             ctx.rotate(p.angle * Math.PI / 180);
             ctx.translate(-PLAYER_PIVOT_OFFSET, 0);  // Aplica el offset del pivote
 
-            // Invulnerability flash
-            if (p.invulnerable > 0 && Math.floor(p.invulnerable * 10) % 2 === 0) {
-                ctx.globalAlpha = 0.5;
-            }
-            
-            // Shield ring when invulnerable
-            if (p.invulnerable > 0) {
-                ctx.strokeStyle = COLORS.PLAYER;
-                ctx.lineWidth = 2;
-                ctx.globalAlpha = 0.4;
-                ctx.beginPath();
-                ctx.arc(0, 0, PLAYER_VISUAL_RADIUS + 5, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.globalAlpha = 1;
-            }
             
             // Thruster flame
             if (p.thrusterScale > 0) {
@@ -5078,11 +5308,6 @@
                 renderHUD();
                 renderGameOver();
             }
-            
-            // Milestone banner
-            if (milestoneActive) {
-                renderMilestoneBanner();
-            }
         }
         
         function renderMenu() {
@@ -5159,201 +5384,415 @@
         }
         
         function renderHUD() {
-            if (!player) return; // Safety check
+            if (!player) return;
 
-            // Score (top-left)
+            const HUD_PADDING = 16;
+
+            // ═══════════════════════════════════════
+            // SCORE PANEL (top-left)
+            // ═══════════════════════════════════════
             ctx.textAlign = 'left';
-            ctx.font = 'bold 24px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('SCORE: ' + Math.floor(score), 20, 35);
 
-            // Chain multiplier
+            // "SCORE" label
+            ctx.font = '10px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('SCORE', HUD_PADDING, 28);
+
+            // Score value
+            ctx.font = 'bold 28px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_PRIMARY;
+            if (ENABLE_GLOW_EFFECTS) {
+                ctx.shadowColor = COLORS.HUD_CYAN_GLOW;
+                ctx.shadowBlur = 20;
+            }
+            ctx.fillText(Math.floor(score).toLocaleString(), HUD_PADDING, 55);
+            ctx.shadowBlur = 0;
+
+            // Chain indicator
             if (chainMultiplier > 0) {
                 const chainIndex = Math.min(Math.floor(chainMultiplier), CHAIN_MULTIPLIERS.length - 1);
                 const mult = CHAIN_MULTIPLIERS[chainIndex];
-                ctx.font = 'bold 18px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.GOLD;
-                ctx.fillText('CHAIN: x' + mult.toFixed(1), 20, 60);
-            }
 
-            // XP Bar (top-center)
-            const xpBarWidth = 300;
-            const xpBarHeight = 12;
-            const xpBarX = (CANVAS_WIDTH - xpBarWidth) / 2;
-            const xpBarY = 75;
-            const xpProgress = playerXP / xpToNextLevel;
-            
-            // Background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(xpBarX - 2, xpBarY - 2, xpBarWidth + 4, xpBarHeight + 4);
-            
-            // Empty bar
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(xpBarX, xpBarY, xpBarWidth, xpBarHeight);
-            
-            // Filled bar
-            ctx.fillStyle = COLORS.XP;
-            ctx.shadowColor = COLORS.XP;
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 8 : 0;
-            ctx.fillRect(xpBarX, xpBarY, xpBarWidth * xpProgress, xpBarHeight);
-            ctx.shadowBlur = 0;
-            
-            // Level indicator
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 14px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('LV ' + playerLevel, CANVAS_WIDTH / 2, xpBarY - 5);
-
-            // HP (top-right)
-            ctx.textAlign = 'right';
-            const heartSize = 20;
-            for (let i = 0; i < PLAYER_MAX_HP; i++) {
-                const x = CANVAS_WIDTH - 25 - i * 28;
-                const y = 25;
-
-                if (i < player.hp) {
-                    ctx.fillStyle = '#FF6B6B';
-                } else {
-                    ctx.fillStyle = '#444444';
-                }
-                
-                // Heart shape
+                // Chain badge
+                ctx.fillStyle = 'rgba(255, 221, 87, 0.06)';
+                ctx.strokeStyle = 'rgba(255, 221, 87, 0.3)';
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(x, y + 5);
-                ctx.bezierCurveTo(x, y, x - 10, y, x - 10, y + 7);
-                ctx.bezierCurveTo(x - 10, y + 13, x, y + 18, x, y + 20);
-                ctx.bezierCurveTo(x, y + 18, x + 10, y + 13, x + 10, y + 7);
-                ctx.bezierCurveTo(x + 10, y, x, y, x, y + 5);
+                ctx.roundRect(HUD_PADDING, 62, 48, 18, 3);
                 ctx.fill();
-            }
-
-            // === SHIELD BAR (futuristic style) ===
-            const shieldBarWidth = 100;
-            const shieldBarHeight = 12;
-            const shieldBarX = CANVAS_WIDTH - 20 - shieldBarWidth;
-            const shieldBarY = 52;
-            const shieldPercent = player.shield / PLAYER_MAX_SHIELD;
-            const isRegenerating = player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD;
-
-            ctx.save();
-
-            // Outer frame
-            ctx.beginPath();
-            ctx.roundRect(shieldBarX - 2, shieldBarY - 2, shieldBarWidth + 4, shieldBarHeight + 4, 3);
-            ctx.strokeStyle = 'rgba(58, 154, 217, 0.5)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            // Background with gradient
-            const bgGrad = ctx.createLinearGradient(shieldBarX, 0, shieldBarX + shieldBarWidth, 0);
-            bgGrad.addColorStop(0, '#0a1628');
-            bgGrad.addColorStop(1, '#0d2035');
-            ctx.fillStyle = bgGrad;
-            ctx.beginPath();
-            ctx.roundRect(shieldBarX, shieldBarY, shieldBarWidth, shieldBarHeight, 2);
-            ctx.fill();
-
-            // Shield fill with gradient
-            if (shieldPercent > 0) {
-                const fillGrad = ctx.createLinearGradient(shieldBarX, 0, shieldBarX + shieldBarWidth * shieldPercent, 0);
-
-                if (player.shieldFlashTimer > 0) {
-                    fillGrad.addColorStop(0, '#FFFFFF');
-                    fillGrad.addColorStop(1, '#88DDFF');
-                } else if (isRegenerating) {
-                    const pulse = Math.sin(Date.now() / 80) * 0.3 + 0.7;
-                    ctx.globalAlpha = pulse;
-                    fillGrad.addColorStop(0, '#2A7AB8');
-                    fillGrad.addColorStop(0.5, '#5AC8FA');
-                    fillGrad.addColorStop(1, '#2A7AB8');
-                } else {
-                    fillGrad.addColorStop(0, '#1E5A8A');
-                    fillGrad.addColorStop(0.5, '#3A9AD9');
-                    fillGrad.addColorStop(1, '#1E5A8A');
-                }
-
-                ctx.fillStyle = fillGrad;
-                ctx.beginPath();
-                ctx.roundRect(shieldBarX + 1, shieldBarY + 1, (shieldBarWidth - 2) * shieldPercent, shieldBarHeight - 2, 2);
-                ctx.fill();
-
-                // Glow effect when shield is high
-                if (shieldPercent > 0.5 && ENABLE_GLOW_EFFECTS) {
-                    ctx.shadowColor = '#3A9AD9';
-                    ctx.shadowBlur = 8;
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                }
-            }
-            ctx.globalAlpha = 1.0;
-
-            // Segment lines (energy cells look)
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
-            for (let i = 1; i < 4; i++) {
-                const segX = shieldBarX + (shieldBarWidth / 4) * i;
-                ctx.beginPath();
-                ctx.moveTo(segX, shieldBarY + 2);
-                ctx.lineTo(segX, shieldBarY + shieldBarHeight - 2);
                 ctx.stroke();
+
+                ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_GOLD;
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = 'rgba(255, 221, 87, 0.4)';
+                    ctx.shadowBlur = 12;
+                }
+                ctx.fillText('×' + mult.toFixed(1), HUD_PADDING + 6, 76);
+                ctx.shadowBlur = 0;
+
+                // Chain pips
+                const pipStartX = HUD_PADDING + 56;
+                for (let i = 0; i < CHAIN_MULTIPLIERS.length; i++) {
+                    const pipX = pipStartX + i * 7;
+                    ctx.fillStyle = i <= chainIndex ? COLORS.HUD_GOLD : 'rgba(255, 221, 87, 0.2)';
+                    ctx.fillRect(pipX, 66, 4, 12);
+                    if (i <= chainIndex && ENABLE_GLOW_EFFECTS) {
+                        ctx.shadowColor = 'rgba(255, 221, 87, 0.5)';
+                        ctx.shadowBlur = 6;
+                        ctx.fillRect(pipX, 66, 4, 12);
+                        ctx.shadowBlur = 0;
+                    }
+                }
             }
 
-            // Shield icon (small hexagon)
-            const iconX = shieldBarX - 18;
-            const iconY = shieldBarY + shieldBarHeight / 2;
-            const iconSize = 6;
+            // ═══════════════════════════════════════
+            // LEVEL & XP PANEL (top-center)
+            // ═══════════════════════════════════════
+            const levelPanelWidth = 260;
+            const levelPanelX = (CANVAS_WIDTH - levelPanelWidth) / 2;
+
+            // "LEVEL" label + hexagon badge
+            ctx.textAlign = 'center';
+            ctx.font = '10px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('LEVEL', CANVAS_WIDTH / 2 - 30, 25);
+
+            // Hexagon badge
+            const hexX = CANVAS_WIDTH / 2 + 10;
+            const hexY = 30;
+            const hexSize = 18;
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
                 const angle = (Math.PI / 3) * i - Math.PI / 2;
-                const px = iconX + Math.cos(angle) * iconSize;
-                const py = iconY + Math.sin(angle) * iconSize;
+                const px = hexX + Math.cos(angle) * hexSize;
+                const py = hexY + Math.sin(angle) * hexSize;
                 if (i === 0) ctx.moveTo(px, py);
                 else ctx.lineTo(px, py);
             }
             ctx.closePath();
-            ctx.fillStyle = shieldPercent > 0 ? COLORS.SHIELD : '#333';
+            ctx.fillStyle = 'rgba(0, 255, 170, 0.04)';
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
             ctx.lineWidth = 1;
             ctx.stroke();
 
-            ctx.restore();
-            // === END SHIELD BAR ===
+            // Level number inside hexagon
+            ctx.font = 'bold 14px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_GREEN;
+            if (ENABLE_GLOW_EFFECTS) {
+                ctx.shadowColor = 'rgba(0, 255, 170, 0.5)';
+                ctx.shadowBlur = 10;
+            }
+            ctx.fillText(playerLevel.toString(), hexX, hexY + 5);
+            ctx.shadowBlur = 0;
 
-            // Time (bottom-center)
+            // XP bar
+            const xpBarX = levelPanelX;
+            const xpBarY = 52;
+            const xpBarWidth = levelPanelWidth;
+            const xpBarHeight = 6;
+            const xpProgress = playerXP / xpToNextLevel;
+
+            // Bar track
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+            ctx.strokeStyle = 'rgba(0, 255, 170, 0.12)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(xpBarX, xpBarY, xpBarWidth, xpBarHeight, 1);
+            ctx.fill();
+            ctx.stroke();
+
+            // Bar fill
+            if (xpProgress > 0) {
+                const fillGrad = ctx.createLinearGradient(xpBarX, 0, xpBarX + xpBarWidth * xpProgress, 0);
+                fillGrad.addColorStop(0, COLORS.HUD_GREEN_DIM);
+                fillGrad.addColorStop(1, COLORS.HUD_GREEN);
+                ctx.fillStyle = fillGrad;
+                ctx.beginPath();
+                ctx.roundRect(xpBarX, xpBarY, xpBarWidth * xpProgress, xpBarHeight, 1);
+                ctx.fill();
+
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = 'rgba(0, 255, 170, 0.4)';
+                    ctx.shadowBlur = 12;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            // Tick marks
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 10; i++) {
+                const tickX = xpBarX + (xpBarWidth / 10) * i;
+                ctx.beginPath();
+                ctx.moveTo(tickX, xpBarY);
+                ctx.lineTo(tickX, xpBarY + xpBarHeight);
+                ctx.stroke();
+            }
+
+            // XP text
+            ctx.textAlign = 'right';
+            ctx.font = '9px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText(playerXP + ' / ' + xpToNextLevel + ' XP', xpBarX + xpBarWidth, xpBarY + xpBarHeight + 12);
+
+            // ═══════════════════════════════════════
+            // VITALS PANEL (top-right)
+            // ═══════════════════════════════════════
+            const vitalsX = CANVAS_WIDTH - HUD_PADDING;
+
+            // HULL label
+            ctx.textAlign = 'right';
+            ctx.font = '9px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('HULL', vitalsX, 25);
+
+            // HP cells
+            const cellWidth = 32;
+            const cellHeight = 10;
+            const cellGap = 5;
+            for (let i = 0; i < PLAYER_MAX_HP; i++) {
+                const cellX = vitalsX - (i + 1) * (cellWidth + cellGap) + cellGap;
+                const cellY = 30;
+
+                ctx.beginPath();
+                ctx.roundRect(cellX, cellY, cellWidth, cellHeight, 2);
+
+                if (i < player.hp) {
+                    ctx.fillStyle = COLORS.HUD_RED;
+                    ctx.fill();
+                    ctx.strokeStyle = COLORS.HUD_RED;
+                    if (ENABLE_GLOW_EFFECTS) {
+                        ctx.shadowColor = 'rgba(255, 107, 107, 0.25)';
+                        ctx.shadowBlur = 8;
+                    }
+                } else {
+                    ctx.fillStyle = 'rgba(255, 107, 107, 0.1)';
+                    ctx.fill();
+                    ctx.strokeStyle = COLORS.HUD_RED_DIM;
+                }
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // SHIELD section
+            const shieldPercent = player.shield / PLAYER_MAX_SHIELD;
+            const isRegenerating = player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD;
+
+            // Shield label + percentage
+            ctx.font = '9px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('SHIELD', vitalsX - 70, 55);
+
+            ctx.font = '10px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_SHIELD;
+            ctx.fillText(Math.floor(shieldPercent * 100) + '%', vitalsX, 55);
+
+            // Shield bar
+            const shieldBarWidth = 106;
+            const shieldBarHeight = 8;
+            const shieldBarX = vitalsX - shieldBarWidth;
+            const shieldBarY = 60;
+
+            // Bar background
+            ctx.fillStyle = 'rgba(68, 200, 255, 0.04)';
+            ctx.strokeStyle = 'rgba(68, 200, 255, 0.18)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(shieldBarX, shieldBarY, shieldBarWidth, shieldBarHeight, 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Bar fill
+            if (shieldPercent > 0) {
+                let barColor = COLORS.HUD_SHIELD;
+                let barGlowColor = COLORS.HUD_SHIELD_GLOW;
+
+                if (player.shieldFlashTimer > 0) {
+                    barColor = '#FFFFFF';
+                    barGlowColor = 'rgba(255, 255, 255, 0.5)';
+                } else if (isRegenerating) {
+                    const pulse = Math.sin(Date.now() / 80) * 0.2 + 0.8;
+                    ctx.globalAlpha = pulse;
+                    barColor = COLORS.HUD_SHIELD_REGEN;
+                }
+
+                const fillGrad = ctx.createLinearGradient(shieldBarX, 0, shieldBarX + shieldBarWidth * shieldPercent, 0);
+                fillGrad.addColorStop(0, COLORS.HUD_SHIELD_DIM);
+                fillGrad.addColorStop(1, barColor);
+                ctx.fillStyle = fillGrad;
+                ctx.beginPath();
+                ctx.roundRect(shieldBarX, shieldBarY, shieldBarWidth * shieldPercent, shieldBarHeight, 2);
+                ctx.fill();
+
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = barGlowColor;
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            // Regen icon (spinning arc)
+            if (isRegenerating) {
+                const iconX = shieldBarX - 12;
+                const iconY = shieldBarY + shieldBarHeight / 2;
+                const rotation = Date.now() / 200;
+
+                ctx.save();
+                ctx.translate(iconX, iconY);
+                ctx.rotate(rotation);
+                ctx.strokeStyle = COLORS.HUD_SHIELD_REGEN;
+                ctx.lineWidth = 1.2;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, Math.PI * 1.5);
+                ctx.stroke();
+                // Arrow
+                ctx.fillStyle = COLORS.HUD_SHIELD_REGEN;
+                ctx.beginPath();
+                ctx.moveTo(-2, -3.5);
+                ctx.lineTo(-2, -6.5);
+                ctx.lineTo(1, -5);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // ═══════════════════════════════════════
+            // WAVE ALERT (below level panel, conditional)
+            // ═══════════════════════════════════════
+            if (waveAlertActive && waveAlertTimer < WAVE_ALERT_DURATION) {
+                const alertProgress = waveAlertTimer / WAVE_ALERT_DURATION;
+                const fadeIn = Math.min(1, alertProgress * 4);
+                const fadeOut = alertProgress > 0.7 ? 1 - ((alertProgress - 0.7) / 0.3) : 1;
+                const alpha = fadeIn * fadeOut;
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.textAlign = 'center';
+
+                // "WAVE X" text
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_RED;
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = 'rgba(255, 107, 107, 0.5)';
+                    ctx.shadowBlur = 20;
+                }
+                ctx.fillText('WAVE ' + waveAlertNumber, CANVAS_WIDTH / 2, 100);
+                ctx.shadowBlur = 0;
+
+                // Subtitle
+                if (waveAlertSubtitle) {
+                    ctx.font = '9px "Segoe UI", sans-serif';
+                    ctx.fillStyle = 'rgba(255, 107, 107, 0.5)';
+                    ctx.fillText(waveAlertSubtitle.toUpperCase(), CANVAS_WIDTH / 2, 115);
+                }
+
+                ctx.restore();
+            }
+
+            // ═══════════════════════════════════════
+            // WEAPON PANEL (right side)
+            // ═══════════════════════════════════════
+            const weaponPanelX = CANVAS_WIDTH - HUD_PADDING;
+            let weaponY = CANVAS_HEIGHT / 2 - 80;
+
+            const mainWeapons = [
+                { id: 'laser_cannon', name: 'LASER CANNON', stat: 'DMG 3 · PIERCE', color: '#FF6B5B' },
+                { id: 'missile_launcher', name: 'MISSILES', stat: '×6 BURST', color: '#FFD93D' },
+                { id: 'orbital_shield', name: 'ORBITAL SHIELD', stat: '5 ORBS', color: '#00DFFF' },
+                { id: 'lightning_ray', name: 'LIGHTNING', stat: 'CHAIN', color: '#9F7AEA' }
+            ];
+
+            for (const weapon of mainWeapons) {
+                const isUnlocked = unlockedSkills.includes(weapon.id);
+                ctx.globalAlpha = isUnlocked ? 1.0 : 0.35;
+
+                // Panel background
+                ctx.fillStyle = COLORS.HUD_PANEL_BG;
+                ctx.strokeStyle = isUnlocked ? weapon.color : COLORS.HUD_PANEL_BORDER;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.roundRect(weaponPanelX - 140, weaponY, 140, 36, 4);
+                ctx.fill();
+                ctx.stroke();
+
+                if (isUnlocked && ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = weapon.color;
+                    ctx.shadowBlur = 12;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+
+                // Weapon icon circle
+                const iconX = weaponPanelX - 20;
+                const iconY = weaponY + 18;
+                ctx.beginPath();
+                ctx.arc(iconX, iconY, 12, 0, Math.PI * 2);
+                ctx.strokeStyle = weapon.color;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Weapon name
+                ctx.textAlign = 'right';
+                ctx.font = '600 12px "Segoe UI", sans-serif';
+                ctx.fillStyle = weapon.color;
+                ctx.fillText(weapon.name, iconX - 18, weaponY + 14);
+
+                // Weapon stat
+                ctx.font = '9px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                ctx.fillText(isUnlocked ? weapon.stat : 'LOCKED', iconX - 18, weaponY + 28);
+
+                ctx.globalAlpha = 1;
+                weaponY += 42;
+            }
+
+            // ═══════════════════════════════════════
+            // TIMER (bottom center)
+            // ═══════════════════════════════════════
             ctx.textAlign = 'center';
+            ctx.font = '8px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('SURVIVAL TIME', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 35);
+
             ctx.font = '18px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.fillStyle = COLORS.HUD_TEXT_PRIMARY;
+            ctx.globalAlpha = 0.6;
             const minutes = Math.floor(gameTime / 60);
             const seconds = Math.floor(gameTime % 60);
-            ctx.fillText('TIME: ' + minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0'), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 20);
-            
-            // Controls hint (bottom-left)
-            ctx.textAlign = 'left';
-            ctx.font = '11px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('CONTROLS:', 15, CANVAS_HEIGHT - 65);
-            ctx.fillText('W/↑ THRUST', 15, CANVAS_HEIGHT - 50);
-            ctx.fillText('A/← ROTATE L', 15, CANVAS_HEIGHT - 35);
-            ctx.fillText('D/→ ROTATE R', 15, CANVAS_HEIGHT - 20);
+            ctx.fillText(minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0'), CANVAS_WIDTH / 2, CANVAS_HEIGHT - 18);
+            ctx.globalAlpha = 1;
 
-            // Unlocked skills indicators (right side)
+            // ═══════════════════════════════════════
+            // KILLS COUNTER (bottom right)
+            // ═══════════════════════════════════════
             ctx.textAlign = 'right';
-            ctx.font = '12px "Segoe UI", sans-serif';
-            let skillY = 75;
-            for (const skillId of unlockedSkills) {
-                if (skillId === 'arsenal') continue; // Don't show base skill
-                const skill = SKILL_TREE[skillId];
-                ctx.fillStyle = skill.color;
-                ctx.fillText(skill.name, CANVAS_WIDTH - 20, skillY);
-                skillY += 18;
+            ctx.font = '9px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('KILLS', CANVAS_WIDTH - HUD_PADDING, CANVAS_HEIGHT - 35);
+
+            ctx.font = 'bold 22px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_RED;
+            if (ENABLE_GLOW_EFFECTS) {
+                ctx.shadowColor = 'rgba(255, 107, 107, 0.3)';
+                ctx.shadowBlur = 10;
             }
-            
-            // Skill points indicator if any available
+            ctx.fillText(totalKills.toString(), CANVAS_WIDTH - HUD_PADDING, CANVAS_HEIGHT - 15);
+            ctx.shadowBlur = 0;
+
+            // ═══════════════════════════════════════
+            // SKILL POINTS INDICATOR
+            // ═══════════════════════════════════════
             if (skillPoints > 0) {
-                ctx.fillStyle = COLORS.GOLD;
+                ctx.textAlign = 'center';
+                ctx.fillStyle = COLORS.HUD_GOLD;
                 ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                ctx.fillText('SKILL POINTS: ' + skillPoints, CANVAS_WIDTH - 20, skillY + 10);
+                ctx.fillText('SKILL POINTS: ' + skillPoints + ' (Press TAB)', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 55);
             }
         }
         function renderPauseOverlay() {
@@ -5419,22 +5858,6 @@
             ctx.globalAlpha = 1;
         }
         
-        function renderMilestoneBanner() {
-            const progress = milestoneTimer / 1200;
-            const slideY = progress > 0.8 ? (1 - progress) / 0.2 * 60 : (progress < 0.2 ? (0.2 - progress) / 0.2 * 60 : 0);
-            
-            ctx.fillStyle = 'rgba(255, 221, 87, 0.2)';
-            ctx.fillRect(0, 60 - slideY, CANVAS_WIDTH, 50);
-            
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 24px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.GOLD;
-            ctx.shadowColor = COLORS.GOLD;
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 10 : 0;
-            ctx.fillText(lastMilestone + ' POINTS!', CANVAS_WIDTH / 2, 92 - slideY);
-            ctx.shadowBlur = 0;
-        }
-
         // ============================================================
         // UTILITIES
         // ============================================================
