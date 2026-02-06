@@ -1851,7 +1851,7 @@
             let lightningCadence = 1.2;
             let lightningRange = 225;
             let lightningChainRange = 350;
-            let lightningDamage = 8;
+            let lightningDamage = 16;
 
             if (unlockedSkills.includes('lightning_ray')) {
                 hasLightning = true;
@@ -4950,19 +4950,6 @@
                     ctx.arc(0, 0, config.radius * 0.6, 0, Math.PI * 2);
                     ctx.stroke();
                     ctx.globalAlpha = 1;
-
-                    // HP indicator
-                    if (e.hp < e.maxHp) {
-                        ctx.strokeStyle = '#FFFFFF';
-                        ctx.lineWidth = 2;
-                        ctx.globalAlpha = 0.6;
-                        const hpWidth = (e.hp / e.maxHp) * config.radius * 2;
-                        ctx.beginPath();
-                        ctx.moveTo(-config.radius, config.radius + 6);
-                        ctx.lineTo(-config.radius + hpWidth, config.radius + 6);
-                        ctx.stroke();
-                        ctx.globalAlpha = 1;
-                    }
 
                     ctx.restore();
                 }
