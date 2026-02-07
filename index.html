@@ -881,6 +881,14 @@
                 });
                 showFloatingText(player.x, player.y - 50, 'ALL ABILITIES UNLOCKED', '#FFD700');
                 createTextExplosion(player.x, player.y, 'FULL ARSENAL', '#FFD700');
+            },
+            'arena': () => {
+                // Toggle arena for testing
+                if (arenaActive) {
+                    deactivateArena();
+                } else {
+                    activateArena(player.x, player.y);
+                }
             }
         };
         
@@ -947,6 +955,15 @@
         let flashDuration = 0;
         let slowmoTimer = 0;
         let slowmoDuration = 0;
+
+        // Arena system (boss fights)
+        let arenaActive = false;
+        let arenaCenter = { x: 0, y: 0 };
+        const ARENA_RADIUS = 1200;
+        const ARENA_START_RADIUS = 5000;
+        const ARENA_CLOSE_SPEED = 900;
+        let arenaCurrentRadius = ARENA_RADIUS;
+        let arenaSpawnPaused = false;
         
         // Milestones
         let lastMilestone = 0;
@@ -1307,6 +1324,11 @@
         }
         
         function resetGame() {
+            // Reset arena state
+            arenaActive = false;
+            arenaCurrentRadius = ARENA_RADIUS;
+            arenaSpawnPaused = false;
+
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
                 y: WORLD_HEIGHT / 2,  // Center of world (3240)
@@ -1788,8 +1810,21 @@
             // Check sector boundaries AFTER both are updated
             checkSectorBoundary();
 
-            // Update spawn system
-            updateSpawnSystem();
+            // Arena closing animation + boundary enforcement
+            if (arenaActive) {
+                if (arenaCurrentRadius > ARENA_RADIUS) {
+                    arenaCurrentRadius -= ARENA_CLOSE_SPEED * deltaTime;
+                    if (arenaCurrentRadius < ARENA_RADIUS) {
+                        arenaCurrentRadius = ARENA_RADIUS;
+                    }
+                }
+                enforceArenaBoundary();
+            }
+
+            // Update spawn system (paused during arena)
+            if (!arenaSpawnPaused) {
+                updateSpawnSystem();
+            }
 
             // Update other entities
             updateBullets();
@@ -2788,7 +2823,68 @@
         // ============================================================
         // ENEMIES
         // ============================================================
-        
+        // ARENA SYSTEM (Boss Fights)
+        // ============================================================
+
+        function activateArena(centerX, centerY) {
+            arenaActive = true;
+            arenaCenter = { x: centerX, y: centerY };
+            arenaCurrentRadius = ARENA_START_RADIUS;
+            arenaSpawnPaused = true;
+
+            // Clear all enemies WITHOUT giving XP/score (but show death explosion)
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                const config = ENEMY_TYPES[e.type];
+                spawnRing(e.x, e.y, config.color, 40);
+                pools.enemy.release(e);
+            }
+            enemies.length = 0;
+
+            // Clear enemy bullets
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                pools.enemyBullet.release(enemyBullets[i]);
+            }
+            enemyBullets.length = 0;
+
+            showFloatingText(player.x, player.y - 50, 'ARENA ACTIVATED', '#00CCFF');
+            createTextExplosion(player.x, player.y, 'BOSS FIGHT', '#00CCFF');
+        }
+
+        function deactivateArena() {
+            arenaActive = false;
+            arenaSpawnPaused = false;
+            showFloatingText(player.x, player.y - 50, 'ARENA CLEARED', '#39FF14');
+        }
+
+        function enforceArenaBoundary() {
+            if (!player || !arenaActive) return;
+
+            const dx = player.x - arenaCenter.x;
+            const dy = player.y - arenaCenter.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = arenaCurrentRadius - 30;
+
+            if (dist > maxDist) {
+                // Push player back to boundary
+                const nx = dx / dist;
+                const ny = dy / dist;
+                player.x = arenaCenter.x + nx * maxDist;
+                player.y = arenaCenter.y + ny * maxDist;
+
+                // Bounce velocity inward
+                player.vx *= -0.3;
+                player.vy *= -0.3;
+
+                // Deal damage to player
+                if (player.invulnerable <= 0) {
+                    damagePlayer();
+                }
+            }
+        }
+
+        // ============================================================
+
         function updateSpawnSystem() {
             // Decay spawn interval over time
             if (gameTime - lastSpawnDecayTime > SPAWN_DECAY_INTERVAL) {
@@ -4507,9 +4603,83 @@
         }
 
         // ============================================================
+        // ARENA RENDERING
+        // ============================================================
+
+        function renderArena() {
+            if (!arenaActive) return;
+
+            const r = arenaCurrentRadius;
+            const pulse = 0.6 + 0.4 * Math.sin(gameTime * 3);
+            const cx = arenaCenter.x;
+            const cy = arenaCenter.y;
+
+            ctx.save();
+
+            // Dark overlay OUTSIDE the arena ring
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(cx - 6000, cy - 6000, 12000, 12000);
+            ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fill();
+            ctx.restore();
+
+            // Radial energy lines every 15 degrees
+            ctx.save();
+            ctx.globalAlpha = pulse * 0.4;
+            ctx.strokeStyle = '#0088CC';
+            ctx.lineWidth = 1;
+            for (let angle = 0; angle < 360; angle += 15) {
+                const rad = angle * Math.PI / 180 + gameTime * 0.2;
+                const innerR = r - 25;
+                const outerR = r + 5;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(rad) * innerR, cy + Math.sin(rad) * innerR);
+                ctx.lineTo(cx + Math.cos(rad) * outerR, cy + Math.sin(rad) * outerR);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Main arena ring with glow
+            ctx.save();
+            ctx.globalAlpha = pulse;
+
+            ctx.shadowColor = '#00CCFF';
+            ctx.shadowBlur = 20;
+
+            const gradient = ctx.createLinearGradient(
+                cx - r, cy,
+                cx + r, cy
+            );
+            gradient.addColorStop(0, '#00CCFF');
+            gradient.addColorStop(0.5, '#0066FF');
+            gradient.addColorStop(1, '#00CCFF');
+
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner subtle ring
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = pulse * 0.3;
+            ctx.strokeStyle = '#00CCFF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r - 15, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+            ctx.restore();
+        }
+
+        // ============================================================
         // RENDERING
         // ============================================================
-        
+
         function render() {
             // Apply shake
             ctx.save();
@@ -4532,6 +4702,10 @@
 
             // Game entities (all rendered in world coordinates)
             if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver') {
+                // Arena overlay (rendered first so entities appear on top)
+                if (arenaActive) {
+                    renderArena();
+                }
                 renderPickups();
                 renderEnemies();
                 renderBullets();
