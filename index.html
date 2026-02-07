@@ -725,6 +725,63 @@
             console.warn('localStorage not available:', e);
             highScore = 0;
         }
+
+        // ============================================================
+        // META-PROGRESSION SYSTEM
+        // ============================================================
+        const PROGRESSION_SAVE_KEY = 'StellarSwarm_progression_v1';
+        const WEAPON_IDS = ['laser_cannon', 'orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone'];
+
+        function createDefaultProgression() {
+            const unlockedWeapons = {};
+            for (const wid of WEAPON_IDS) {
+                unlockedWeapons[wid] = (wid === 'laser_cannon');
+            }
+            return {
+                unlockedWeapons,
+                bossDefeats: {},
+                stats: { totalBossDefeats: 0, totalRuns: 0 }
+            };
+        }
+
+        function loadProgression() {
+            try {
+                const raw = localStorage.getItem(PROGRESSION_SAVE_KEY);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    // Ensure all weapon keys exist (forward-compat)
+                    const defaults = createDefaultProgression();
+                    for (const wid of WEAPON_IDS) {
+                        if (data.unlockedWeapons[wid] === undefined) {
+                            data.unlockedWeapons[wid] = defaults.unlockedWeapons[wid];
+                        }
+                    }
+                    if (!data.bossDefeats) data.bossDefeats = {};
+                    if (!data.stats) data.stats = defaults.stats;
+                    if (data.stats.totalBossDefeats === undefined) data.stats.totalBossDefeats = 0;
+                    if (data.stats.totalRuns === undefined) data.stats.totalRuns = 0;
+                    return data;
+                }
+            } catch (e) {
+                console.warn('Could not load progression:', e);
+            }
+            return createDefaultProgression();
+        }
+
+        function saveProgression(data) {
+            try {
+                localStorage.setItem(PROGRESSION_SAVE_KEY, JSON.stringify(data));
+            } catch (e) {
+                console.warn('Could not save progression:', e);
+            }
+        }
+
+        function getUnlockedWeaponsForRun() {
+            const prog = loadProgression();
+            return WEAPON_IDS.filter(wid => prog.unlockedWeapons[wid]);
+        }
+
+        let currentRunUnlockedWeapons = ['laser_cannon'];
         
         // Performance monitoring
         let frameTimeAccum = 0;
@@ -1317,11 +1374,17 @@
             playerLevel = 1;
             xpToNextLevel = XP_PER_LEVEL_BASE;
             
-            // Skill Tree reset
+            // Skill Tree reset - load persistent progression
             skillPoints = 0;
+            currentRunUnlockedWeapons = getUnlockedWeaponsForRun();
             unlockedSkills = ['arsenal', 'laser_cannon'];
             upgradeOptions = [];
             upgradeSelectionActive = false;
+
+            // Increment totalRuns
+            const prog = loadProgression();
+            prog.stats.totalRuns++;
+            saveProgression(prog);
             document.getElementById('upgradePanel').classList.remove('active');
             
             spawnTimer = 0;
@@ -3429,7 +3492,14 @@
         function canUnlockSkill(skillId) {
             if (unlockedSkills.includes(skillId)) return false;
             if (skillPoints < SKILL_TREE[skillId].cost) return false;
-            
+
+            // Block weapons not permanently unlocked
+            if (WEAPON_IDS.includes(skillId) && !currentRunUnlockedWeapons.includes(skillId)) return false;
+            // Block upgrades whose parent weapon is not permanently unlocked
+            for (const wid of WEAPON_IDS) {
+                if (WEAPON_UPGRADES[wid] && WEAPON_UPGRADES[wid].includes(skillId) && !currentRunUnlockedWeapons.includes(wid)) return false;
+            }
+
             const skill = SKILL_TREE[skillId];
             for (const prereq of skill.prereqs) {
                 if (!unlockedSkills.includes(prereq)) return false;
