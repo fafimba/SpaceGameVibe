@@ -5375,8 +5375,136 @@
             
             // Controls
             renderControlsHelp(340);
+
+            // Arsenal gallery
+            renderArsenalGallery();
         }
-        
+
+        function renderArsenalGallery() {
+            const prog = loadProgression();
+            const mobile = isMobile();
+
+            const ARSENAL_WEAPONS = [
+                { id: 'laser_cannon', name: 'LASER CANNON', icon: 'laser', color: '#FF6B5B', bossLvl: 0 },
+                { id: 'orbital_shield', name: 'ORBITAL SHIELD', icon: 'orbital', color: '#00DFFF', bossLvl: 8 },
+                { id: 'missile_launcher', name: 'MISSILE LAUNCHER', icon: 'rocket', color: '#FFD93D', bossLvl: 14 },
+                { id: 'lightning_ray', name: 'LIGHTNING RAY', icon: 'lightning', color: '#9F7AEA', bossLvl: 20 },
+                { id: 'plasma_field', name: 'PLASMA FIELD', icon: 'aura', color: '#7FDBFF', bossLvl: 27 },
+                { id: 'alien_drone', name: 'ALIEN DRONE', icon: 'drone', color: '#39FF14', bossLvl: 35 }
+            ];
+
+            const cols = mobile ? 2 : 3;
+            const rows = mobile ? 3 : 2;
+            const cardW = mobile ? 140 : 200;
+            const cardH = mobile ? 100 : 120;
+            const gap = mobile ? 12 : 16;
+
+            const gridW = cols * cardW + (cols - 1) * gap;
+            const gridX = (CANVAS_WIDTH - gridW) / 2;
+            const titleY = mobile ? 680 : 560;
+            const gridStartY = titleY + 30;
+
+            // Title
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 18px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_CYAN;
+            ctx.fillText('ARSENAL', CANVAS_WIDTH / 2, titleY);
+
+            // Underline
+            const lineW = 60;
+            ctx.strokeStyle = 'rgba(127, 219, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(CANVAS_WIDTH / 2 - lineW, titleY + 8);
+            ctx.lineTo(CANVAS_WIDTH / 2 + lineW, titleY + 8);
+            ctx.stroke();
+
+            const now = Date.now();
+
+            for (let i = 0; i < ARSENAL_WEAPONS.length; i++) {
+                const weapon = ARSENAL_WEAPONS[i];
+                const col = i % cols;
+                const row = Math.floor(i / cols);
+                const cx = gridX + col * (cardW + gap);
+                const cy = gridStartY + row * (cardH + gap);
+                const unlocked = prog.unlockedWeapons[weapon.id];
+
+                // Card background
+                ctx.fillStyle = unlocked ? 'rgba(10, 20, 40, 0.7)' : 'rgba(10, 10, 15, 0.6)';
+                ctx.beginPath();
+                ctx.roundRect(cx, cy, cardW, cardH, 6);
+                ctx.fill();
+
+                // Card border
+                if (unlocked) {
+                    const pulse = Math.sin(now / 800 + i * 1.2) * 0.25 + 0.75;
+                    ctx.strokeStyle = weapon.color;
+                    ctx.globalAlpha = pulse;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(cx, cy, cardW, cardH, 6);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                } else {
+                    ctx.strokeStyle = 'rgba(100, 100, 120, 0.35)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(cx, cy, cardW, cardH, 6);
+                    ctx.stroke();
+                }
+
+                // Icon area
+                const iconX = cx + cardW / 2;
+                const iconY = cy + (mobile ? 30 : 36);
+
+                if (unlocked) {
+                    // Draw weapon icon scaled up
+                    ctx.save();
+                    ctx.translate(iconX, iconY);
+                    ctx.scale(1.8, 1.8);
+                    drawSkillIcon(ctx, weapon.icon, 0, 0, weapon.color);
+                    ctx.restore();
+
+                    // Checkmark
+                    ctx.strokeStyle = '#39FF14';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(cx + cardW - 18, cy + 10);
+                    ctx.lineTo(cx + cardW - 14, cy + 15);
+                    ctx.lineTo(cx + cardW - 8, cy + 7);
+                    ctx.stroke();
+                } else {
+                    // Locked icon (padlock)
+                    ctx.strokeStyle = 'rgba(100, 100, 120, 0.5)';
+                    ctx.fillStyle = 'rgba(100, 100, 120, 0.5)';
+                    ctx.lineWidth = 1.5;
+                    // Lock body
+                    ctx.fillRect(iconX - 6, iconY - 2, 12, 10);
+                    // Lock shackle
+                    ctx.beginPath();
+                    ctx.arc(iconX, iconY - 4, 5, Math.PI, 0);
+                    ctx.stroke();
+                }
+
+                // Weapon name
+                ctx.textAlign = 'center';
+                const nameY = cy + (mobile ? 62 : 76);
+                ctx.font = `bold ${mobile ? 9 : 11}px "Segoe UI", sans-serif`;
+                ctx.fillStyle = unlocked ? weapon.color : 'rgba(130, 130, 150, 0.6)';
+                ctx.fillText(weapon.name, cx + cardW / 2, nameY);
+
+                // Boss level requirement (locked only)
+                if (!unlocked) {
+                    ctx.font = `${mobile ? 8 : 9}px "Segoe UI", sans-serif`;
+                    ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
+                    ctx.fillText('BOSS LVL ' + weapon.bossLvl, cx + cardW / 2, nameY + (mobile ? 13 : 15));
+                }
+            }
+
+            ctx.restore();
+        }
+
         function renderControlsHelp(startY) {
             ctx.textAlign = 'left';
             ctx.font = '14px "Segoe UI", sans-serif';
