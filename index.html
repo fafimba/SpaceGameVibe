@@ -892,6 +892,9 @@
             },
             'boss': () => {
                 spawnBoss(0);
+            },
+            'titan': () => {
+                spawnBoss(1);
             }
         };
         
@@ -975,8 +978,15 @@
         const BOSS_TYPES = ['orbitalGuardian', 'missileTitan', 'lightningNexus', 'plasmaOverlord', 'swarmMother'];
         const BOSS_NAMES = ['ORBITAL GUARDIAN', 'MISSILE TITAN', 'LIGHTNING NEXUS', 'PLASMA OVERLORD', 'SWARM MOTHER'];
         const BOSS_COLORS = ['#00DFFF', '#FFD93D', '#9F7AEA', '#FF6600', '#39FF14'];
-        const BOSS_BASE_HP = [200, 300, 450, 600, 800];
+        const BOSS_BASE_HP = [2000, 6000, 9000, 12000, 16000];
         const BOSS_WEAPON_UNLOCK = ['orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone'];
+
+        // Boss projectile constants
+        const BOSS_PROJ_SPEED = 350;
+        const BOSS_PROJ_DAMAGE = 1;
+        const BOSS_PROJ_HP = 3;
+        const BOSS_PROJ_RADIUS = 8;
+        const BOSS_PROJ_LIFETIME = 12;
 
         let currentBoss = null;
         let bossProjectiles = [];
@@ -986,6 +996,13 @@
         let bossesDefeatedThisRun = [];
         let bossHealthBarDisplayHP = 0;
         let bossIncoming = null; // { bossIndex, timer } — pending boss during arena close
+
+        // Orbital Guardian sphere system
+        let bossSpheres = [];
+
+        // Missile Titan homing missiles
+        let bossHomingMissiles = [];
+        let bossMTCannonTimer = 0; // tracks cannon reload visual
 
         // Milestones
         let lastMilestone = 0;
@@ -1360,6 +1377,11 @@
             bossDefeated = false;
             bossesDefeatedThisRun = [];
             bossHealthBarDisplayHP = 0;
+            bossPatternIndex = 0;
+            bossPatternCooldown = 2.5;
+            bossPatternActive = false;
+            bossPatternState = null;
+            bossSpheres = [];
 
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
@@ -2048,7 +2070,32 @@
             const stats = getWeaponStats();
             if (stats.hasRockets && player.rocketTimer <= 0) {
                 const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, 600);
-                if (nearbyEnemies.length > 0) {
+                // Include boss as target for rockets
+                if (currentBoss) {
+                    const bdx = currentBoss.x - player.x;
+                    const bdy = currentBoss.y - player.y;
+                    if (bdx * bdx + bdy * bdy < 600 * 600) {
+                        nearbyEnemies.push(currentBoss);
+                    }
+                }
+                // Check if boss projectiles or homing missiles are in range
+                let hasBossTargets = false;
+                if (currentBoss) {
+                    for (const bp of bossProjectiles) {
+                        const dx = bp.x - player.x;
+                        const dy = bp.y - player.y;
+                        if (dx * dx + dy * dy < 600 * 600) { hasBossTargets = true; break; }
+                    }
+                    if (!hasBossTargets) {
+                        for (const hm of bossHomingMissiles) {
+                            if (hm.hp <= 0) continue;
+                            const dx = hm.x - player.x;
+                            const dy = hm.y - player.y;
+                            if (dx * dx + dy * dy < 600 * 600) { hasBossTargets = true; break; }
+                        }
+                    }
+                }
+                if (nearbyEnemies.length > 0 || hasBossTargets) {
                     fireRocket(nearbyEnemies, stats);
                     // Cooldown fijo de 1.0s (la habilidad ahora aumenta la ráfaga, no la cadencia)
                     player.rocketTimer = 1.0;
@@ -2060,6 +2107,14 @@
             player.lightningTimer -= deltaTime;
             if (stats.hasLightning && player.lightningTimer <= 0) {
                 const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, stats.lightningRange);
+                // Include boss as target for lightning
+                if (currentBoss) {
+                    const bdx = currentBoss.x - player.x;
+                    const bdy = currentBoss.y - player.y;
+                    if (bdx * bdx + bdy * bdy < stats.lightningRange * stats.lightningRange) {
+                        nearbyEnemies.push(currentBoss);
+                    }
+                }
                 if (nearbyEnemies.length > 0) {
                     fireLightning(nearbyEnemies, stats);
                     player.lightningTimer = stats.lightningCadence;
@@ -2215,6 +2270,39 @@
                     return true;
                 }
             }
+
+            // Also check boss
+            if (currentBoss) {
+                const dx = currentBoss.x - player.x;
+                const dy = currentBoss.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist <= AUTO_AIM_MAX_DISTANCE) {
+                    const angleToEnemy = Math.atan2(dy, dx);
+                    const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                    if (angleDiff <= aimCone) return true;
+                }
+            }
+            // Also check boss projectiles
+            for (const bp of bossProjectiles) {
+                const dx = bp.x - player.x;
+                const dy = bp.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > AUTO_AIM_MAX_DISTANCE) continue;
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone) return true;
+            }
+            // Also check homing missiles
+            for (const hm of bossHomingMissiles) {
+                if (hm.hp <= 0) continue;
+                const dx = hm.x - player.x;
+                const dy = hm.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > AUTO_AIM_MAX_DISTANCE) continue;
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone) return true;
+            }
             return false;
         }
 
@@ -2245,6 +2333,52 @@
                     closestDist = dist;
                     closestEnemy = enemy;
                 }
+            }
+
+            // Also consider boss as auto-aim target
+            if (currentBoss) {
+                const dx = currentBoss.x - player.x;
+                const dy = currentBoss.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone && dist < closestDist && dist <= AUTO_AIM_MAX_DISTANCE) {
+                    closestDist = dist;
+                    closestEnemy = currentBoss;
+                }
+            }
+
+            // Also consider boss projectiles as auto-aim targets
+            for (const bp of bossProjectiles) {
+                const dx = bp.x - player.x;
+                const dy = bp.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone && dist < closestDist && dist <= AUTO_AIM_MAX_DISTANCE) {
+                    closestDist = dist;
+                    closestEnemy = bp;
+                }
+            }
+            // Homing missiles get targeting priority (immediate threat)
+            // Use separate search — closest missile in cone overrides other targets
+            let closestMissileDist = Infinity;
+            let closestMissile = null;
+            for (const hm of bossHomingMissiles) {
+                if (hm.hp <= 0) continue;
+                const dx = hm.x - player.x;
+                const dy = hm.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone && dist < closestMissileDist && dist <= AUTO_AIM_MAX_DISTANCE) {
+                    closestMissileDist = dist;
+                    closestMissile = hm;
+                }
+            }
+            if (closestMissile) {
+                closestEnemy = closestMissile;
+                closestDist = closestMissileDist;
             }
 
             // Calculate intercept point (lead the target)
@@ -2346,6 +2480,33 @@
                     closestEnemy = e;
                 }
             }
+            // Also consider boss projectiles for rocket targeting
+            for (const bp of bossProjectiles) {
+                const dx = bp.x - player.x;
+                const dy = bp.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist && dist <= 600) {
+                    closestDist = dist;
+                    closestEnemy = bp;
+                }
+            }
+            // Homing missiles get targeting priority for rockets
+            let closestRocketMissileDist = Infinity;
+            let closestRocketMissile = null;
+            for (const hm of bossHomingMissiles) {
+                if (hm.hp <= 0) continue;
+                const dx = hm.x - player.x;
+                const dy = hm.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestRocketMissileDist && dist <= 600) {
+                    closestRocketMissileDist = dist;
+                    closestRocketMissile = hm;
+                }
+            }
+            if (closestRocketMissile) {
+                closestEnemy = closestRocketMissile;
+                closestDist = closestRocketMissileDist;
+            }
 
             if (!closestEnemy) return;
 
@@ -2437,6 +2598,26 @@
                     closestEnemy = e;
                 }
             }
+            // Also consider boss projectiles for lightning targeting
+            for (const bp of bossProjectiles) {
+                const dx = bp.x - player.x;
+                const dy = bp.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist && dist <= stats.lightningRange) {
+                    closestDist = dist;
+                    closestEnemy = bp;
+                }
+            }
+            // Also consider homing missiles for lightning initial target
+            for (const hm of bossHomingMissiles) {
+                const dx = hm.x - player.x;
+                const dy = hm.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist && dist <= stats.lightningRange) {
+                    closestDist = dist;
+                    closestEnemy = hm;
+                }
+            }
 
             if (!closestEnemy) return;
 
@@ -2475,22 +2656,75 @@
                     }
                 }
 
+                // Also consider boss as chain target
+                if (currentBoss && !hitEnemies.has(currentBoss) && currentBoss.hp > 0) {
+                    const dx = currentBoss.x - lastHitX;
+                    const dy = currentBoss.y - lastHitY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= stats.lightningChainRange && dist < nextDist) {
+                        nextDist = dist;
+                        nextTarget = currentBoss;
+                    }
+                }
+                // Also consider boss projectiles as chain targets
+                for (const bp of bossProjectiles) {
+                    if (hitEnemies.has(bp)) continue;
+                    if (bp.hp <= 0) continue;
+                    const dx = bp.x - lastHitX;
+                    const dy = bp.y - lastHitY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= stats.lightningChainRange && dist < nextDist) {
+                        nextDist = dist;
+                        nextTarget = bp;
+                    }
+                }
+                // Also consider homing missiles as chain targets
+                for (const hm of bossHomingMissiles) {
+                    if (hitEnemies.has(hm)) continue;
+                    if (hm.hp <= 0) continue;
+                    const dx = hm.x - lastHitX;
+                    const dy = hm.y - lastHitY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= stats.lightningChainRange && dist < nextDist) {
+                        nextDist = dist;
+                        nextTarget = hm;
+                    }
+                }
+
                 currentTarget = nextTarget;
             }
 
             // Phase 2: Apply damage to all targets and kill dead enemies
             const enemiesToKill = [];
             for (const target of chainTargets) {
-                const config = ENEMY_TYPES[target.type];
-                target.hp -= stats.lightningDamage;
+                if (target === currentBoss) {
+                    // Boss target — use damageBoss
+                    damageBoss(stats.lightningDamage);
+                    spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                } else if (bossProjectiles.includes(target)) {
+                    // Boss projectile target
+                    target.hp -= stats.lightningDamage;
+                    spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                    if (target.hp <= 0) {
+                        const idx = bossProjectiles.indexOf(target);
+                        if (idx !== -1) bossProjectiles.splice(idx, 1);
+                    }
+                } else if (bossHomingMissiles.includes(target)) {
+                    // Homing missile target
+                    target.hp -= stats.lightningDamage;
+                    spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                } else {
+                    const config = ENEMY_TYPES[target.type];
+                    target.hp -= stats.lightningDamage;
 
-                // Visual feedback
-                spawnFloatingText(target.x, target.y - config.radius,
-                    stats.lightningDamage.toString(), SKILL_TREE['lightning_ray'].color);
-                spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                    // Visual feedback
+                    spawnFloatingText(target.x, target.y - config.radius,
+                        stats.lightningDamage.toString(), SKILL_TREE['lightning_ray'].color);
+                    spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
 
-                if (target.hp <= 0) {
-                    enemiesToKill.push(target);
+                    if (target.hp <= 0) {
+                        enemiesToKill.push(target);
+                    }
                 }
             }
 
@@ -2499,6 +2733,41 @@
                 const enemyIndex = enemies.indexOf(target);
                 if (enemyIndex !== -1) {
                     killEnemy(target, enemyIndex);
+                }
+            }
+
+            // Lightning also damages boss projectiles near chain points
+            if (currentBoss && bossProjectiles.length > 0) {
+                for (let cp = 1; cp < chainPoints.length; cp++) {
+                    const pt = chainPoints[cp];
+                    for (let bi = bossProjectiles.length - 1; bi >= 0; bi--) {
+                        const bp = bossProjectiles[bi];
+                        const dx = bp.x - pt.x;
+                        const dy = bp.y - pt.y;
+                        if (dx * dx + dy * dy < 60 * 60) {
+                            bp.hp -= stats.lightningDamage;
+                            spawnRing(bp.x, bp.y, SKILL_TREE['lightning_ray'].color, 15);
+                            if (bp.hp <= 0) {
+                                bossProjectiles.splice(bi, 1);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Lightning also damages homing missiles near chain points
+            if (currentBoss && bossHomingMissiles.length > 0) {
+                for (let cp = 1; cp < chainPoints.length; cp++) {
+                    const pt = chainPoints[cp];
+                    for (let mi = bossHomingMissiles.length - 1; mi >= 0; mi--) {
+                        const m = bossHomingMissiles[mi];
+                        const dx = m.x - pt.x;
+                        const dy = m.y - pt.y;
+                        if (dx * dx + dy * dy < 60 * 60) {
+                            m.hp -= stats.lightningDamage;
+                            spawnRing(m.x, m.y, SKILL_TREE['lightning_ray'].color, 15);
+                        }
+                    }
                 }
             }
 
@@ -2621,7 +2890,44 @@
                             nearestEnemy = e;
                         }
                     }
-                    
+                    // Also consider boss for rocket homing
+                    if (currentBoss) {
+                        const dx = currentBoss.x - b.x;
+                        const dy = currentBoss.y - b.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < nearestDist && dist < 600) {
+                            nearestDist = dist;
+                            nearestEnemy = currentBoss;
+                        }
+                    }
+                    // Also consider boss projectiles for rocket homing
+                    for (const bp of bossProjectiles) {
+                        const dx = bp.x - b.x;
+                        const dy = bp.y - b.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < nearestDist && dist < 600) {
+                            nearestDist = dist;
+                            nearestEnemy = bp;
+                        }
+                    }
+                    // Homing missiles get targeting priority for rockets
+                    let closestHomingMissile = null;
+                    let closestHomingDist = Infinity;
+                    for (const hm of bossHomingMissiles) {
+                        if (hm.hp <= 0) continue;
+                        const dx = hm.x - b.x;
+                        const dy = hm.y - b.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < closestHomingDist && dist < 600) {
+                            closestHomingDist = dist;
+                            closestHomingMissile = hm;
+                        }
+                    }
+                    if (closestHomingMissile) {
+                        nearestDist = closestHomingDist;
+                        nearestEnemy = closestHomingMissile;
+                    }
+
                     if (nearestEnemy) {
                         // Predict enemy position based on velocity
                         const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
@@ -2728,6 +3034,7 @@
                 const maxDistance = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) * 3; // 5760px
 
                 if (b.life <= 0 || distFromCamera > maxDistance) {
+                    if (b.life <= 0) explodePlayerRocket(b);
                     pools.bullet.release(b);
                     fastRemove(bullets, i);
                 }
@@ -2755,6 +3062,36 @@
                     if (dist < nearestDist) {
                         nearestDist = dist;
                         nearestEnemy = e;
+                    }
+                }
+                // Also consider boss for drone targeting
+                if (currentBoss) {
+                    const dx = currentBoss.x - d.x;
+                    const dy = currentBoss.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = currentBoss;
+                    }
+                }
+                // Also consider boss projectiles for drone targeting
+                for (const bp of bossProjectiles) {
+                    const dx = bp.x - d.x;
+                    const dy = bp.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = bp;
+                    }
+                }
+                // Also consider homing missiles for drone targeting
+                for (const hm of bossHomingMissiles) {
+                    const dx = hm.x - d.x;
+                    const dy = hm.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = hm;
                     }
                 }
 
@@ -2789,6 +3126,7 @@
 
                 // Check collision with enemies
                 let hitEnemy = null;
+                let hitBoss = false;
                 for (const e of enemies) {
                     const config = ENEMY_TYPES[e.type];
                     const dx = e.x - d.x;
@@ -2800,19 +3138,33 @@
                         break;
                     }
                 }
+                // Check boss collision for drones
+                if (!hitEnemy && currentBoss) {
+                    const dx = currentBoss.x - d.x;
+                    const dy = currentBoss.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < currentBoss.size * 0.85 + DRONE_SIZE) {
+                        hitBoss = true;
+                    }
+                }
 
-                if (hitEnemy) {
-                    const config = ENEMY_TYPES[hitEnemy.type];
+                if (hitEnemy || hitBoss) {
+                    if (hitBoss) {
+                        damageBoss(d.damage);
+                        spawnRing(currentBoss.x, currentBoss.y, droneColor);
+                    } else {
+                        const config = ENEMY_TYPES[hitEnemy.type];
 
-                    // Apply direct damage
-                    hitEnemy.hp -= d.damage;
-                    spawnFloatingText(hitEnemy.x, hitEnemy.y - config.radius, d.damage.toString(), droneColor);
-                    spawnRing(hitEnemy.x, hitEnemy.y, droneColor);
+                        // Apply direct damage
+                        hitEnemy.hp -= d.damage;
+                        spawnFloatingText(hitEnemy.x, hitEnemy.y - config.radius, d.damage.toString(), droneColor);
+                        spawnRing(hitEnemy.x, hitEnemy.y, droneColor);
 
-                    // Check if enemy dies from direct hit
-                    if (hitEnemy.hp <= 0) {
-                        const enemyIndex = enemies.indexOf(hitEnemy);
-                        if (enemyIndex !== -1) killEnemy(hitEnemy, enemyIndex);
+                        // Check if enemy dies from direct hit
+                        if (hitEnemy.hp <= 0) {
+                            const enemyIndex = enemies.indexOf(hitEnemy);
+                            if (enemyIndex !== -1) killEnemy(hitEnemy, enemyIndex);
+                        }
                     }
 
                     // Explosion AoE damage
@@ -2835,6 +3187,14 @@
                                     const idx = enemies.indexOf(e);
                                     if (idx !== -1) killEnemy(e, idx);
                                 }
+                            }
+                        }
+                        // Boss AoE damage from drone explosion
+                        if (currentBoss && !hitBoss) {
+                            const bdx = currentBoss.x - d.x;
+                            const bdy = currentBoss.y - d.y;
+                            if (bdx * bdx + bdy * bdy < DRONE_EXPLOSION_RADIUS * DRONE_EXPLOSION_RADIUS) {
+                                damageBoss(DRONE_EXPLOSION_DAMAGE);
                             }
                         }
                     } else {
@@ -2930,11 +3290,11 @@
 
         function calculateBossHP(bossIndex) {
             const baseHP = BOSS_BASE_HP[bossIndex];
-            const levelMultiplier = 1 + (playerLevel - BOSS_SPAWN_LEVELS[bossIndex]) * 0.15;
+            const levelMultiplier = Math.max(0.5, 1 + (playerLevel - BOSS_SPAWN_LEVELS[bossIndex]) * 0.15);
             const prog = loadProgression();
             const numWeapons = WEAPON_IDS.filter(wid => prog.unlockedWeapons[wid]).length;
             const weaponMultiplier = 1 + (numWeapons * 0.20);
-            return Math.floor(baseHP * levelMultiplier * weaponMultiplier);
+            return Math.max(baseHP, Math.floor(baseHP * levelMultiplier * weaponMultiplier));
         }
 
         function spawnBoss(bossIndex) {
@@ -2984,6 +3344,28 @@
             triggerSlowmo(400);
             spawnFloatingText(arenaCenter.x, arenaCenter.y - 80, currentBoss.name, currentBoss.color);
 
+            // Reset pattern state
+            bossPatternIndex = 0;
+            bossPatternCooldown = 2.5;
+            bossPatternActive = false;
+            bossPatternState = null;
+
+            // Initialize Orbital Guardian spheres
+            if (currentBoss.type === 'orbitalGuardian') {
+                initBossSpheres();
+            }
+
+            // Initialize Missile Titan state — starts with missiles immediately
+            if (currentBoss.type === 'missileTitan') {
+                bossHomingMissiles = [];
+                bossMTCannonTimer = 0;
+                currentBoss.cannonCount = 8;
+                currentBoss.missileChargeTimer = 0;
+                // Override: first pattern is homing missile, fires at 0.5s
+                bossPatternCooldown = 0.5;
+                bossPatternIndex = 1; // will pick index 1 (homingMissile) from sequence
+            }
+
             // Spawn ring burst at boss position
             for (let i = 0; i < 12; i++) {
                 spawnRing(arenaCenter.x + (Math.random() - 0.5) * 60, arenaCenter.y + (Math.random() - 0.5) * 60, currentBoss.color, 50);
@@ -3005,23 +3387,42 @@
 
             const boss = currentBoss;
 
-            // Oscillation movement (smooth ±50px)
-            boss.oscillationTimer += dt;
-            const oscX = Math.sin(boss.oscillationTimer * 1.5) * 50;
-            const oscY = Math.cos(boss.oscillationTimer * 1.1) * 50;
-            boss.x = arenaCenter.x + oscX;
-            boss.y = arenaCenter.y + oscY;
+            // Boss stays fixed at arena center
+            boss.x = arenaCenter.x;
+            boss.y = arenaCenter.y;
 
             // Rotation (degrees)
-            boss.rotation += 60 * dt;
+            if (boss.phaseSpinRemaining && boss.phaseSpinRemaining > 0) {
+                const spinSpeed = 720; // degrees per second (720° in 1s)
+                const spinThisFrame = spinSpeed * dt;
+                boss.rotation += spinThisFrame;
+                boss.phaseSpinRemaining -= spinThisFrame;
+                if (boss.phaseSpinRemaining <= 0) boss.phaseSpinRemaining = 0;
+            } else {
+                boss.rotation += 60 * dt;
+            }
 
             // Flash timer decay
             if (boss.flashTimer > 0) {
                 boss.flashTimer -= dt;
             }
 
-            // Pattern timer
-            boss.patternTimer += dt;
+            // Orbital Guardian spheres
+            updateBossSpheres(dt);
+
+            // Missile Titan homing missiles
+            updateHomingMissiles(dt);
+
+            // Missile charge visual timer
+            if (boss.missileChargeTimer !== undefined && boss.missileChargeTimer > 0) {
+                boss.missileChargeTimer -= dt;
+            }
+
+            // Boss attack patterns
+            updateBossPatterns(dt);
+
+            // Update boss projectiles
+            updateBossProjectiles(dt);
 
             // Phase transition check
             if (boss.hp <= boss.maxHp * 0.5 && boss.phase === 1) {
@@ -3038,11 +3439,79 @@
             if (!currentBoss) return;
             currentBoss.phase = 2;
             bossPhase = 2;
-            triggerFlash(currentBoss.color, 0.4, 400);
-            triggerSlowmo(300);
-            triggerShake(8, 500);
-            spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', currentBoss.color);
-            spawnFloatingText(currentBoss.x, currentBoss.y, 'ENRAGED', currentBoss.color);
+
+            if (currentBoss.type === 'orbitalGuardian') {
+                // White flash (0.3s)
+                triggerFlash('#FFFFFF', 0.7, 300);
+                triggerSlowmo(500);
+                triggerShake(12, 800);
+
+                // 720° spin over 1s (stored as target, applied in updateBoss)
+                currentBoss.phaseSpinRemaining = 720;
+
+                // Rage RingWave - burst of projectiles
+                const count = 32;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, BOSS_PROJ_SPEED * 0.8, {
+                        color: '#FFFFFF',
+                        radius: 6
+                    });
+                }
+
+                // Reset pattern to start phase 2 sequence fresh
+                bossPatternIndex = 0;
+                bossPatternActive = false;
+                bossPatternCooldown = 1.5;
+                bossPatternState = null;
+
+                spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
+                spawnFloatingText(currentBoss.x, currentBoss.y, 'ENRAGED', '#FF4444');
+
+                // Ring burst
+                for (let i = 0; i < 8; i++) {
+                    spawnRing(currentBoss.x + (Math.random() - 0.5) * 40, currentBoss.y + (Math.random() - 0.5) * 40, '#FFFFFF', 80);
+                }
+            } else if (currentBoss.type === 'missileTitan') {
+                // Strong screen shake + shockwave
+                triggerFlash('#FFD93D', 0.8, 500);
+                triggerSlowmo(600);
+                triggerShake(20, 1200);
+
+                // 720° rage spin
+                currentBoss.phaseSpinRemaining = 720;
+
+                // Shockwave: expanding ring of projectiles
+                const count = 28;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, BOSS_PROJ_SPEED * 1.2, {
+                        color: '#FFD93D',
+                        radius: 10,
+                        hp: 2
+                    });
+                }
+
+                // Ring burst visuals
+                for (let i = 0; i < 12; i++) {
+                    spawnRing(currentBoss.x + (Math.random() - 0.5) * 60, currentBoss.y + (Math.random() - 0.5) * 60, '#FFD93D', 100);
+                }
+
+                // Reset pattern sequence
+                bossPatternIndex = 0;
+                bossPatternActive = false;
+                bossPatternCooldown = 1.0;
+                bossPatternState = null;
+
+                spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
+                spawnFloatingText(currentBoss.x, currentBoss.y, 'FULL ARSENAL', '#FFD93D');
+            } else {
+                triggerFlash(currentBoss.color, 0.4, 400);
+                triggerSlowmo(300);
+                triggerShake(8, 500);
+                spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', currentBoss.color);
+                spawnFloatingText(currentBoss.x, currentBoss.y, 'ENRAGED', currentBoss.color);
+            }
         }
 
         function damageBoss(amount) {
@@ -3088,8 +3557,12 @@
             const xpReward = xpToNextLevel * 2;
             collectXP(xpReward);
 
-            // Clear boss projectiles
+            // Clear boss projectiles, pattern state, spheres, and homing missiles
             bossProjectiles.length = 0;
+            bossPatternActive = false;
+            bossPatternState = null;
+            bossSpheres = [];
+            bossHomingMissiles = [];
 
             // Deactivate arena
             deactivateArena();
@@ -3100,6 +3573,11 @@
             if (!currentBoss) return;
 
             const boss = currentBoss;
+
+            if (boss.type === 'missileTitan') {
+                renderMissileTitan();
+                return;
+            }
 
             ctx.save();
             ctx.translate(boss.x, boss.y);
@@ -3201,6 +3679,165 @@
             ctx.restore();
         }
 
+        function renderMissileTitan() {
+            const boss = currentBoss;
+            const sides = boss.sides; // 6 (hexagon)
+            const size = boss.size;
+
+            ctx.save();
+            ctx.translate(boss.x, boss.y);
+            ctx.rotate(boss.rotation * Math.PI / 180);
+
+            // Outer glow ring — gold
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * (size + 14);
+                const py = Math.sin(angle) * (size + 14);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = '#FFD93D';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.3 + Math.sin(gameTime * 3) * 0.15;
+            setGlow(ctx, '#FFD93D', 20);
+            ctx.stroke();
+            clearGlow(ctx);
+            ctx.globalAlpha = 1;
+
+            // Main body — metallic grey hexagon
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * size;
+                const py = Math.sin(angle) * size;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+
+            // Metallic gradient: grey center, darker edges
+            const bodyGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+            bodyGrad.addColorStop(0, '#A0A0A0');
+            bodyGrad.addColorStop(0.4, '#808080');
+            bodyGrad.addColorStop(0.8, '#505050');
+            bodyGrad.addColorStop(1, '#303030');
+            ctx.fillStyle = bodyGrad;
+            ctx.globalAlpha = boss.phase === 2 ? 0.85 : 0.7;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Gold border
+            ctx.strokeStyle = '#FFD93D';
+            ctx.lineWidth = boss.phase === 2 ? 3.5 : 2.5;
+            ctx.stroke();
+
+            // Gold accent lines (inner hexagonal pattern)
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * (size * 0.6);
+                const py = Math.sin(angle) * (size * 0.6);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = '#FFD93D';
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.35;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // 8 vertex accent dots on the perimeter
+            const cannonCount = 8;
+            for (let i = 0; i < cannonCount; i++) {
+                const cAngle = (Math.PI * 2 / cannonCount) * i;
+                const cx = Math.cos(cAngle) * size;
+                const cy = Math.sin(cAngle) * size;
+
+                // Small gold dot at each vertex
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#FFD93D';
+                ctx.globalAlpha = 0.6 + Math.sin(gameTime * 4 + i * 0.8) * 0.3;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            // Flash white on damage
+            if (boss.flashTimer > 0) {
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                    const px = Math.cos(angle) * size;
+                    const py = Math.sin(angle) * size;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(boss.flashTimer / 0.1, 0.6) + ')';
+                ctx.fill();
+            }
+
+            // Center core — pulsating gold
+            const coreSize = 14 + Math.sin(gameTime * 5) * 5;
+            ctx.beginPath();
+            ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+            const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize);
+            coreGrad.addColorStop(0, '#FFFFFF');
+            coreGrad.addColorStop(0.5, '#FFD93D');
+            coreGrad.addColorStop(1, '#FF880044');
+            ctx.fillStyle = coreGrad;
+            ctx.globalAlpha = 0.7 + Math.sin(gameTime * 7) * 0.2;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Missile reload lines (flash before missile launch)
+            if (boss.missileChargeTimer > 0) {
+                const chargeAlpha = Math.min(boss.missileChargeTimer / 0.4, 1.0);
+                const pulseRate = 20;
+                const pulse = 0.5 + Math.sin(gameTime * pulseRate) * 0.5;
+
+                for (let i = 0; i < 6; i++) {
+                    const lineAngle = (Math.PI * 2 / 6) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(lineAngle) * (size * 0.3), Math.sin(lineAngle) * (size * 0.3));
+                    ctx.lineTo(Math.cos(lineAngle) * (size * 0.9), Math.sin(lineAngle) * (size * 0.9));
+                    ctx.strokeStyle = '#FF4400';
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = chargeAlpha * pulse;
+                    setGlow(ctx, '#FF4400', 8);
+                    ctx.stroke();
+                    clearGlow(ctx);
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            // Phase 2: inner hexagon spinning opposite + extra glow
+            if (boss.phase === 2) {
+                ctx.save();
+                ctx.rotate(-boss.rotation * 2 * Math.PI / 180);
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i;
+                    const px = Math.cos(angle) * (size * 0.45);
+                    const py = Math.sin(angle) * (size * 0.45);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = '#FFD93D';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
         function renderBossHealthBar() {
             if (!currentBoss) return;
 
@@ -3276,6 +3913,809 @@
             ctx.globalAlpha = 1;
 
             ctx.restore();
+        }
+
+        // --- Boss Projectile System ---
+
+        function spawnBossProjectile(x, y, angle, speed, options) {
+            options = options || {};
+            const s = speed || BOSS_PROJ_SPEED;
+            bossProjectiles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * s,
+                vy: Math.sin(angle) * s,
+                hp: options.hp || BOSS_PROJ_HP,
+                damage: options.damage || BOSS_PROJ_DAMAGE,
+                radius: options.radius || BOSS_PROJ_RADIUS,
+                life: options.life || BOSS_PROJ_LIFETIME,
+                color: options.color || (currentBoss ? currentBoss.color : '#FF0000'),
+                type: options.type || 'normal',
+                trail: []
+            });
+        }
+
+        function updateBossProjectiles(dt) {
+            for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+                const bp = bossProjectiles[i];
+
+                // Store trail position
+                bp.trail.push({ x: bp.x, y: bp.y });
+                if (bp.trail.length > 4) bp.trail.shift();
+
+                bp.x += bp.vx * dt;
+                bp.y += bp.vy * dt;
+                bp.life -= dt;
+
+                // Remove if expired, destroyed, or outside arena
+                let remove = bp.life <= 0 || bp.hp <= 0;
+                if (!remove && arenaActive) {
+                    const dx = bp.x - arenaCenter.x;
+                    const dy = bp.y - arenaCenter.y;
+                    if (dx * dx + dy * dy > (ARENA_RADIUS + 100) * (ARENA_RADIUS + 100)) {
+                        remove = true;
+                    }
+                }
+                if (remove) {
+                    bossProjectiles.splice(i, 1);
+                }
+            }
+        }
+
+        function renderBossProjectiles() {
+            for (let i = 0; i < bossProjectiles.length; i++) {
+                const bp = bossProjectiles[i];
+
+                // Trail
+                for (let t = 0; t < bp.trail.length; t++) {
+                    const alpha = (t + 1) / (bp.trail.length + 1) * 0.4;
+                    const trailRadius = bp.radius * (t + 1) / (bp.trail.length + 1);
+                    ctx.beginPath();
+                    ctx.arc(bp.trail[t].x, bp.trail[t].y, trailRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = bp.color;
+                    ctx.globalAlpha = alpha;
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+
+                // Glow
+                setGlow(ctx, bp.color, 12);
+
+                if (bp.type === 'diamond') {
+                    // Diamond shape
+                    ctx.save();
+                    ctx.translate(bp.x, bp.y);
+                    ctx.rotate(Math.atan2(bp.vy, bp.vx));
+                    ctx.beginPath();
+                    ctx.moveTo(bp.radius * 1.4, 0);
+                    ctx.lineTo(0, bp.radius * 0.7);
+                    ctx.lineTo(-bp.radius * 0.8, 0);
+                    ctx.lineTo(0, -bp.radius * 0.7);
+                    ctx.closePath();
+                    ctx.fillStyle = bp.color;
+                    ctx.globalAlpha = 0.9;
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(bp.radius * 0.6, 0);
+                    ctx.lineTo(0, bp.radius * 0.3);
+                    ctx.lineTo(-bp.radius * 0.3, 0);
+                    ctx.lineTo(0, -bp.radius * 0.3);
+                    ctx.closePath();
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.globalAlpha = 0.7;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                } else {
+                    // Main circle
+                    ctx.beginPath();
+                    ctx.arc(bp.x, bp.y, bp.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = bp.color;
+                    ctx.globalAlpha = 0.9;
+                    ctx.fill();
+
+                    // Bright center
+                    ctx.beginPath();
+                    ctx.arc(bp.x, bp.y, bp.radius * 0.4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.globalAlpha = 0.8;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+
+                clearGlow(ctx);
+            }
+        }
+
+        // --- Boss Attack Patterns ---
+
+        let bossPatternState = null;
+
+        function bossPattern_SpiralOutward(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const fireInterval = 0.15;
+            if (state.fireTimer >= fireInterval) {
+                state.fireTimer -= fireInterval;
+                const speed = currentBoss.phase === 2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED;
+                spawnBossProjectile(currentBoss.x, currentBoss.y, state.angle, speed);
+                state.angle += 20 * Math.PI / 180;
+            }
+
+            return state.elapsed >= 3;
+        }
+
+        function bossPattern_CornerBarrage(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const maxBursts = state.maxBursts || 8;
+            const isDouble = state.double || false;
+            const fireInterval = isDouble ? 0.35 : 0.5;
+            if (state.fireTimer >= fireInterval && state.bursts < maxBursts) {
+                state.fireTimer -= fireInterval;
+                state.bursts++;
+                const boss = currentBoss;
+                const sides = boss.sides;
+                const speed = boss.phase === 2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED;
+                for (let i = 0; i < sides; i++) {
+                    const vertexAngle = (Math.PI * 2 / sides) * i + boss.rotation * Math.PI / 180;
+                    const spawnX = boss.x + Math.cos(vertexAngle) * boss.size;
+                    const spawnY = boss.y + Math.sin(vertexAngle) * boss.size;
+                    spawnBossProjectile(spawnX, spawnY, vertexAngle, speed);
+                    if (isDouble) {
+                        // Second projectile slightly offset angle
+                        spawnBossProjectile(spawnX, spawnY, vertexAngle + 10 * Math.PI / 180, speed * 0.85);
+                    }
+                }
+            }
+
+            return state.bursts >= maxBursts;
+        }
+
+        function bossPattern_RingWave(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            if (!state.fired) {
+                state.fired = true;
+                const count = 24;
+                const speed = currentBoss.phase === 2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, speed);
+                }
+            }
+            state.elapsed += dt;
+            return state.elapsed >= 0.5;
+        }
+
+        function bossPattern_TargetedBurst(dt) {
+            if (!currentBoss || !player) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const fireInterval = 0.8;
+            if (state.fireTimer >= fireInterval && state.bursts < 3) {
+                state.fireTimer -= fireInterval;
+                state.bursts++;
+                const boss = currentBoss;
+                const dx = player.x - boss.x;
+                const dy = player.y - boss.y;
+                const baseAngle = Math.atan2(dy, dx);
+                const spreadAngle = 15 * Math.PI / 180;
+                const speed = boss.phase === 2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED;
+                for (let j = -2; j <= 2; j++) {
+                    spawnBossProjectile(boss.x, boss.y, baseAngle + spreadAngle * j, speed);
+                }
+            }
+
+            return state.bursts >= 3;
+        }
+
+        // Pattern selection and scheduling
+        const BOSS_PATTERNS = [bossPattern_SpiralOutward, bossPattern_CornerBarrage, bossPattern_RingWave, bossPattern_TargetedBurst];
+        let bossPatternIndex = 0;
+        let bossPatternCooldown = 2.5;
+        let bossPatternActive = false;
+
+        function updateBossPatterns(dt) {
+            if (!currentBoss) return;
+
+            if (bossPatternActive) {
+                const done = currentBoss.currentPattern(dt);
+                if (done) {
+                    bossPatternActive = false;
+                    // Set cooldown based on boss type and phase
+                    if (currentBoss.type === 'orbitalGuardian') {
+                        const seq = currentBoss.phase === 2 ? OG_PHASE2_SEQUENCE : OG_PHASE1_SEQUENCE;
+                        const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
+                        bossPatternCooldown = seq[prevIndex].pause;
+                    } else if (currentBoss.type === 'missileTitan') {
+                        const seq = currentBoss.phase === 2 ? MT_PHASE2_SEQUENCE : MT_PHASE1_SEQUENCE;
+                        const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
+                        bossPatternCooldown = seq[prevIndex].pause;
+                    } else {
+                        bossPatternCooldown = currentBoss.phase === 2 ? 1.5 : 2.5;
+                    }
+                    bossPatternState = null;
+                }
+            } else {
+                bossPatternCooldown -= dt;
+                if (bossPatternCooldown <= 0) {
+                    bossPatternActive = true;
+                    if (currentBoss.type === 'orbitalGuardian') {
+                        const seq = currentBoss.phase === 2 ? OG_PHASE2_SEQUENCE : OG_PHASE1_SEQUENCE;
+                        const entry = seq[bossPatternIndex % seq.length];
+                        currentBoss.currentPattern = getOGPattern(entry.pattern);
+                        // For cornerBarrageDouble, use modified init state
+                        if (entry.pattern === 'cornerBarrageDouble') {
+                            bossPatternState = { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false, maxBursts: 8, double: true };
+                        } else {
+                            bossPatternState = { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false };
+                        }
+                    } else if (currentBoss.type === 'missileTitan') {
+                        const seq = currentBoss.phase === 2 ? MT_PHASE2_SEQUENCE : MT_PHASE1_SEQUENCE;
+                        const entry = seq[bossPatternIndex % seq.length];
+                        currentBoss.currentPattern = getMTPattern(entry.pattern);
+                        bossPatternState = getMTPatternState(entry.pattern);
+                    } else {
+                        currentBoss.currentPattern = BOSS_PATTERNS[bossPatternIndex % BOSS_PATTERNS.length];
+                        bossPatternState = { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false };
+                    }
+                    bossPatternIndex++;
+                }
+            }
+        }
+
+        // --- Orbital Guardian: Sphere System ---
+
+        function initBossSpheres() {
+            bossSpheres = [];
+            const sphereColor = '#00DFFF';
+            const R = 166;
+            // Inner ring: 3 spheres, orbit 280px, clockwise
+            for (let i = 0; i < 3; i++) {
+                bossSpheres.push({
+                    ring: 0,
+                    angle: (Math.PI * 2 / 3) * i,
+                    orbitRadius: 280,
+                    speed: 0.4,
+                    radius: R,
+                    color: sphereColor,
+                    x: 0, y: 0
+                });
+            }
+            // Middle ring: 3 spheres, orbit 660px, counter-clockwise
+            for (let i = 0; i < 3; i++) {
+                bossSpheres.push({
+                    ring: 1,
+                    angle: (Math.PI * 2 / 3) * i + Math.PI / 3,
+                    orbitRadius: 660,
+                    speed: -0.25,
+                    radius: R,
+                    color: sphereColor,
+                    x: 0, y: 0
+                });
+            }
+            // Outer ring: 3 spheres, orbit 1020px, clockwise
+            for (let i = 0; i < 3; i++) {
+                bossSpheres.push({
+                    ring: 2,
+                    angle: (Math.PI * 2 / 3) * i,
+                    orbitRadius: 1020,
+                    speed: 0.175,
+                    radius: R,
+                    color: sphereColor,
+                    x: 0, y: 0
+                });
+            }
+        }
+
+        function updateBossSpheres(dt) {
+            if (!currentBoss || currentBoss.type !== 'orbitalGuardian') return;
+
+            const speedMult = currentBoss.phase === 2 ? 1.5 : 1;
+
+            for (let i = 0; i < bossSpheres.length; i++) {
+                const s = bossSpheres[i];
+                s.angle += s.speed * speedMult * dt;
+                s.x = currentBoss.x + Math.cos(s.angle) * s.orbitRadius;
+                s.y = currentBoss.y + Math.sin(s.angle) * s.orbitRadius;
+            }
+        }
+
+        function renderBossSpheres() {
+            if (!currentBoss || currentBoss.type !== 'orbitalGuardian') return;
+
+            const boss = currentBoss;
+
+            // Orbit path rings (smooth visible circles)
+            for (const ringRadius of [280, 660, 1020]) {
+                ctx.beginPath();
+                ctx.arc(boss.x, boss.y, ringRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = boss.color;
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.15;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
+            // Energy lines connecting spheres to boss
+            for (let i = 0; i < bossSpheres.length; i++) {
+                const s = bossSpheres[i];
+                ctx.beginPath();
+                ctx.moveTo(boss.x, boss.y);
+                ctx.lineTo(s.x, s.y);
+                ctx.strokeStyle = s.color;
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.15 + Math.sin(gameTime * 6 + i) * 0.08;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
+            // Spheres — outline with inner radial fade
+            for (let i = 0; i < bossSpheres.length; i++) {
+                const s = bossSpheres[i];
+
+                // Inner radial fade fill
+                const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.radius);
+                grad.addColorStop(0, 'rgba(0, 223, 255, 0.12)');
+                grad.addColorStop(0.6, 'rgba(0, 223, 255, 0.05)');
+                grad.addColorStop(1, 'rgba(0, 223, 255, 0)');
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                // Outline ring
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = s.color;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        // --- Orbital Guardian: Shield Projection Barrage ---
+
+        function bossPattern_ShieldProjectionBarrage(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const totalWaves = currentBoss.phase === 2 ? 4 : 3;
+            const fireInterval = 0.6;
+
+            if (state.fireTimer >= fireInterval && state.bursts < totalWaves) {
+                state.fireTimer -= fireInterval;
+                const waveIndex = state.bursts;
+                state.bursts++;
+
+                const count = 16;
+                const rotationOffset = waveIndex * 22.5 * Math.PI / 180;
+                const speed = 280;
+
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i + rotationOffset;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, speed, {
+                        hp: 5,
+                        radius: 10,
+                        type: 'diamond',
+                        color: currentBoss.color
+                    });
+                }
+            }
+
+            return state.bursts >= totalWaves && state.elapsed >= totalWaves * fireInterval + 0.3;
+        }
+
+        // --- Orbital Guardian: Attack Sequences ---
+
+        const OG_PHASE1_SEQUENCE = [
+            { pattern: 'spiralOutward', pause: 3 },
+            { pattern: 'shieldBarrage', pause: 3 },
+            { pattern: 'cornerBarrage', pause: 3 }
+        ];
+        const OG_PHASE2_SEQUENCE = [
+            { pattern: 'cornerBarrageDouble', pause: 1.5 },
+            { pattern: 'shieldBarrage', pause: 1.5 },
+            { pattern: 'ringWave', pause: 1.5 }
+        ];
+
+        function getOGPattern(name) {
+            switch (name) {
+                case 'spiralOutward': return bossPattern_SpiralOutward;
+                case 'shieldBarrage': return bossPattern_ShieldProjectionBarrage;
+                case 'cornerBarrage': return bossPattern_CornerBarrage;
+                case 'cornerBarrageDouble': return bossPattern_CornerBarrage;
+                case 'ringWave': return bossPattern_RingWave;
+                default: return bossPattern_SpiralOutward;
+            }
+        }
+
+        // --- Missile Titan: Homing Missile System ---
+
+        function spawnHomingMissile(x, y) {
+            if (!currentBoss || !player) return;
+            // Spawn facing AWAY from player in a random 180° arc
+            const toPlayerAngle = Math.atan2(player.y - y, player.x - x);
+            const awayAngle = toPlayerAngle + Math.PI; // opposite direction
+            const angle = awayAngle + (Math.random() - 0.5) * Math.PI; // ±90° spread
+            bossHomingMissiles.push({
+                x: x,
+                y: y,
+                angle: angle,
+                speed: 900,
+                radius: 20,
+                hp: 500,
+                maxHp: 500,
+                damage: 18,
+                life: 10,
+                trail: [],
+                trailTimer: 0,
+                straightTimer: 0.5
+            });
+            // Missile charge visual
+            if (currentBoss) currentBoss.missileChargeTimer = 0;
+            // Thruster burst at launch
+            for (let i = 0; i < 6; i++) {
+                const a = angle + Math.PI + (Math.random() - 0.5) * 1.2;
+                const sp = 150 + Math.random() * 100;
+                const colors = ['#FF4400', '#FF6600', '#FFD93D'];
+                const p = pools.particle.acquire();
+                p.x = x; p.y = y;
+                p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp;
+                p.life = 0.2 + Math.random() * 0.2; p.maxLife = 0.5;
+                p.size = 10 + Math.random() * 8;
+                p.color = colors[Math.floor(Math.random() * colors.length)];
+                p.type = 'thruster';
+                p.rotation = Math.random() * Math.PI * 2;
+                p.rotationSpeed = (Math.random() - 0.5) * 2;
+                particles.push(p);
+            }
+        }
+
+        function explodeHomingMissile(m) {
+            // 12 projectiles in a circle
+            for (let j = 0; j < 12; j++) {
+                const expAngle = (Math.PI * 2 / 12) * j;
+                spawnBossProjectile(m.x, m.y, expAngle, BOSS_PROJ_SPEED * 0.9, {
+                    color: '#FF6600',
+                    radius: 6,
+                    hp: 2,
+                    life: 4
+                });
+            }
+            // Single expanding ring (like enemy death / player missile impact)
+            spawnRing(m.x, m.y, '#FF6600', 60);
+            triggerShake(6, 200);
+        }
+
+        function updateHomingMissiles(dt) {
+            if (!currentBoss || currentBoss.type !== 'missileTitan') return;
+
+            const maxTurnRateSlow = 120 * Math.PI / 180; // 120 deg/s at min speed
+            const maxTurnRateFast = 25 * Math.PI / 180;  // 25 deg/s at max speed
+            const minSpeed = 250;
+            const maxSpeed = 900;
+            const accel = 400;  // speed gained per second when straight
+            const decel = 1200; // speed lost per second when turning hard
+
+            for (let i = bossHomingMissiles.length - 1; i >= 0; i--) {
+                const m = bossHomingMissiles[i];
+
+                // Turn rate scales down with speed: slow = agile, fast = stiff
+                const speedFactor = (m.speed - minSpeed) / (maxSpeed - minSpeed);
+                const currentTurnRate = maxTurnRateSlow + (maxTurnRateFast - maxTurnRateSlow) * speedFactor;
+
+                // Fly straight for initial period, then steer toward player
+                let turnFactor = 0; // 0 = straight, 1 = max turn
+                if (m.straightTimer > 0) {
+                    m.straightTimer -= dt;
+                } else if (player) {
+                    const dx = player.x - m.x;
+                    const dy = player.y - m.y;
+                    const desiredAngle = Math.atan2(dy, dx);
+                    let angleDiff = desiredAngle - m.angle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    // How hard are we turning (0-1)
+                    turnFactor = Math.min(1, Math.abs(angleDiff) / (Math.PI * 0.5));
+                    // Clamp turn rate (reduced at high speed)
+                    const maxTurn = currentTurnRate * dt;
+                    if (angleDiff > maxTurn) angleDiff = maxTurn;
+                    else if (angleDiff < -maxTurn) angleDiff = -maxTurn;
+                    m.angle += angleDiff;
+                }
+
+                // Speed: decelerate when turning, accelerate when straight
+                const targetSpeed = maxSpeed - (maxSpeed - minSpeed) * turnFactor;
+                if (m.speed < targetSpeed) {
+                    m.speed = Math.min(targetSpeed, m.speed + accel * dt);
+                } else {
+                    m.speed = Math.max(targetSpeed, m.speed - decel * dt);
+                }
+
+                // Move in direction of rotation
+                m.x += Math.cos(m.angle) * m.speed * dt;
+                m.y += Math.sin(m.angle) * m.speed * dt;
+                m.life -= dt;
+
+                // Thruster triangle trail particles (like player thruster)
+                m.trailTimer += dt;
+                if (m.trailTimer >= 0.04) {
+                    m.trailTimer -= 0.04;
+                    const trailAngle = m.angle + Math.PI + (Math.random() - 0.5) * 0.3;
+                    const trailSpeed = 200 + Math.random() * 80;
+                    const colors = ['#FF4400', '#FF6600', '#FF8800', '#FFD93D'];
+                    const p = pools.particle.acquire();
+                    p.x = m.x - Math.cos(m.angle) * 15;
+                    p.y = m.y - Math.sin(m.angle) * 15;
+                    p.vx = Math.cos(trailAngle) * trailSpeed;
+                    p.vy = Math.sin(trailAngle) * trailSpeed;
+                    p.life = 0.15 + Math.random() * 0.15;
+                    p.maxLife = 0.5;
+                    p.size = 8 + Math.random() * 10;
+                    p.color = colors[Math.floor(Math.random() * colors.length)];
+                    p.type = 'thruster';
+                    p.rotation = Math.random() * Math.PI * 2;
+                    p.rotationSpeed = (Math.random() - 0.5) * 2;
+                    particles.push(p);
+                }
+
+                // Trail positions for rendering (fading line like player rockets)
+                m.trail.push({ x: m.x, y: m.y });
+                if (m.trail.length > 16) m.trail.shift();
+
+                // Remove if expired or outside arena
+                let remove = m.life <= 0 || m.hp <= 0;
+                if (!remove && arenaActive) {
+                    const adx = m.x - arenaCenter.x;
+                    const ady = m.y - arenaCenter.y;
+                    if (adx * adx + ady * ady > (ARENA_RADIUS + 200) * (ARENA_RADIUS + 200)) {
+                        remove = true;
+                    }
+                }
+
+                if (remove) {
+                    explodeHomingMissile(m);
+                    bossHomingMissiles.splice(i, 1);
+                }
+            }
+        }
+
+        function renderHomingMissiles() {
+            if (!currentBoss || currentBoss.type !== 'missileTitan') return;
+
+            for (let i = 0; i < bossHomingMissiles.length; i++) {
+                const m = bossHomingMissiles[i];
+
+                // Fading line trail (like player rockets)
+                if (m.trail.length > 1) {
+                    for (let t = 0; t < m.trail.length - 1; t++) {
+                        const alpha = 1 - (t / m.trail.length);
+                        const width = 3 * (1 - t / m.trail.length);
+                        ctx.strokeStyle = 'rgba(255, 102, 0, ' + (alpha * 0.6) + ')';
+                        ctx.lineWidth = width;
+                        ctx.beginPath();
+                        ctx.moveTo(m.trail[t].x, m.trail[t].y);
+                        ctx.lineTo(m.trail[t + 1].x, m.trail[t + 1].y);
+                        ctx.stroke();
+                    }
+                }
+
+                // Missile body
+                ctx.save();
+                ctx.translate(m.x, m.y);
+                ctx.rotate(m.angle);
+
+                // Main body (compact shape, same nose)
+                setGlow(ctx, '#FF4400', 15);
+                ctx.beginPath();
+                ctx.moveTo(m.radius * 1.5, 0);            // nose (unchanged)
+                ctx.lineTo(m.radius * 0.4, -m.radius * 0.45); // top wing
+                ctx.lineTo(-m.radius * 0.25, -m.radius * 0.3); // top back
+                ctx.lineTo(-m.radius * 0.15, 0);           // tail center
+                ctx.lineTo(-m.radius * 0.25, m.radius * 0.3);  // bottom back
+                ctx.lineTo(m.radius * 0.4, m.radius * 0.45);  // bottom wing
+                ctx.closePath();
+
+                // Solid fill with subtle metallic tone
+                ctx.fillStyle = '#808080';
+                ctx.fill();
+
+                // Outline
+                ctx.strokeStyle = '#FFD93D';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                clearGlow(ctx);
+
+                ctx.restore();
+            }
+        }
+
+        // --- Missile Titan: Attack Patterns ---
+
+        function bossPattern_HomingMissileBarrage(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const missileCount = currentBoss.phase === 2 ? 3 : 1;
+            const burstInterval = 0.25;
+
+            if (!state.fired) {
+                state.fired = true;
+                state.missilesLaunched = 0;
+                // Charge-up visual
+                if (currentBoss) currentBoss.missileChargeTimer = 0.5;
+            }
+
+            // Fire missiles one by one in burst after 0.5s charge
+            if (state.elapsed >= 0.5 && state.missilesLaunched < missileCount) {
+                if (state.fireTimer >= burstInterval) {
+                    state.fireTimer -= burstInterval;
+                    state.missilesLaunched++;
+                    const boss = currentBoss;
+                    // Spawn from a random point on boss perimeter
+                    const spawnAngle = Math.random() * Math.PI * 2;
+                    const sx = boss.x + Math.cos(spawnAngle) * (boss.size + 30);
+                    const sy = boss.y + Math.sin(spawnAngle) * (boss.size + 30);
+                    spawnHomingMissile(sx, sy);
+                    triggerShake(4, 150);
+                    // Small thruster burst per missile
+                    for (let i = 0; i < 4; i++) {
+                        const a = Math.random() * Math.PI * 2;
+                        const sp = 80 + Math.random() * 60;
+                        const colors = ['#FF4400', '#FF6600', '#FFD93D'];
+                        const p = pools.particle.acquire();
+                        p.x = sx; p.y = sy;
+                        p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp;
+                        p.life = 0.2; p.maxLife = 0.4;
+                        p.size = 8 + Math.random() * 6;
+                        p.color = colors[Math.floor(Math.random() * colors.length)];
+                        p.type = 'thruster';
+                        p.rotation = Math.random() * Math.PI * 2;
+                        p.rotationSpeed = (Math.random() - 0.5) * 2;
+                        particles.push(p);
+                    }
+                }
+            }
+
+            const totalDuration = 0.5 + missileCount * burstInterval + 0.3;
+            return state.elapsed >= totalDuration;
+        }
+
+        function bossPattern_BarrageCannon(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const boss = currentBoss;
+            const cannonCount = boss.phase === 2 ? 8 : 4;
+            const burstCount = 3;
+            const burstInterval = 0.2;
+            const duration = boss.phase === 2 ? 3.5 : 2.5;
+            const totalBursts = Math.floor(duration / burstInterval);
+
+            if (state.fireTimer >= burstInterval && state.bursts < totalBursts) {
+                state.fireTimer -= burstInterval;
+                state.bursts++;
+
+                const speed = boss.phase === 2 ? BOSS_PROJ_SPEED * 1.3 : BOSS_PROJ_SPEED;
+
+                for (let c = 0; c < cannonCount; c++) {
+                    const cannonAngle = (Math.PI * 2 / cannonCount) * c + boss.rotation * Math.PI / 180;
+                    const sx = boss.x + Math.cos(cannonAngle) * boss.size;
+                    const sy = boss.y + Math.sin(cannonAngle) * boss.size;
+
+                    // Aim generally toward player with some spread from cannon position
+                    const toPlayerAngle = Math.atan2(player.y - sy, player.x - sx);
+                    const spread = 8 * Math.PI / 180;
+
+                    for (let b = 0; b < burstCount; b++) {
+                        const bulletAngle = toPlayerAngle + (b - 1) * spread;
+                        spawnBossProjectile(sx, sy, bulletAngle, speed, {
+                            radius: 6,
+                            hp: 2,
+                            color: '#FFD93D'
+                        });
+                    }
+                }
+            }
+
+            return state.elapsed >= duration + 0.3;
+        }
+
+        // --- Missile Titan: Attack Sequences ---
+
+        const MT_PHASE1_SEQUENCE = [
+            { pattern: 'cornerBarrage4', pause: 2 },
+            { pattern: 'homingMissile', pause: 1.5 },
+            { pattern: 'barrageCannon', pause: 2 },
+            { pattern: 'homingMissile', pause: 1.5 },
+            { pattern: 'ringWave', pause: 2 }
+        ];
+        const MT_PHASE2_SEQUENCE = [
+            { pattern: 'cornerBarrage8Fast', pause: 1 },
+            { pattern: 'homingMissile', pause: 1 },
+            { pattern: 'barrageCannon', pause: 1 },
+            { pattern: 'homingMissile', pause: 1 },
+            { pattern: 'ringWaveCornerCombo', pause: 1.5 }
+        ];
+
+        function getMTPattern(name) {
+            switch (name) {
+                case 'cornerBarrage4': return bossPattern_CornerBarrage;
+                case 'cornerBarrage8Fast': return bossPattern_CornerBarrage;
+                case 'homingMissile': return bossPattern_HomingMissileBarrage;
+                case 'barrageCannon': return bossPattern_BarrageCannon;
+                case 'ringWave': return bossPattern_RingWave;
+                case 'ringWaveCornerCombo': return bossPattern_RingWaveCornerCombo;
+                default: return bossPattern_SpiralOutward;
+            }
+        }
+
+        function getMTPatternState(name) {
+            const base = { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false, launched: false };
+            switch (name) {
+                case 'cornerBarrage4':
+                    return { ...base, maxBursts: 4, double: false };
+                case 'cornerBarrage8Fast':
+                    return { ...base, maxBursts: 8, double: true };
+                case 'ringWaveCornerCombo':
+                    return { ...base, comboPhase: 0 };
+                default:
+                    return base;
+            }
+        }
+
+        // Combined RingWave + CornerBarrage for phase 2 combo
+        function bossPattern_RingWaveCornerCombo(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+
+            // Fire ring wave immediately
+            if (!state.ringFired) {
+                state.ringFired = true;
+                const count = 24;
+                const speed = BOSS_PROJ_SPEED * 1.4;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, speed);
+                }
+            }
+
+            // Fire corner barrage 0.3s later
+            if (state.elapsed >= 0.3) {
+                state.fireTimer += dt;
+                const fireInterval = 0.35;
+                if (state.fireTimer >= fireInterval && state.bursts < 6) {
+                    state.fireTimer -= fireInterval;
+                    state.bursts++;
+                    const boss = currentBoss;
+                    const sides = boss.sides;
+                    const speed = BOSS_PROJ_SPEED * 1.4;
+                    for (let i = 0; i < sides; i++) {
+                        const vertexAngle = (Math.PI * 2 / sides) * i + boss.rotation * Math.PI / 180;
+                        const spawnX = boss.x + Math.cos(vertexAngle) * boss.size;
+                        const spawnY = boss.y + Math.sin(vertexAngle) * boss.size;
+                        spawnBossProjectile(spawnX, spawnY, vertexAngle, speed);
+                    }
+                }
+            }
+
+            return state.elapsed >= 2.5;
         }
 
         // ============================================================
@@ -4465,6 +5905,26 @@
                         // No break - can hit multiple enemies per frame
                     }
                 }
+
+                // Orbital vs Boss
+                if (currentBoss) {
+                    if (!orb.hitEnemies['boss']) orb.hitEnemies['boss'] = 0;
+                    if (orb.hitEnemies['boss'] > 0) {
+                        orb.hitEnemies['boss'] -= deltaTime;
+                    } else {
+                        const dx = orbX - currentBoss.x;
+                        const dy = orbY - currentBoss.y;
+                        const distSq = dx * dx + dy * dy;
+                        const collisionDist = currentBoss.size * 0.85 + ORBITAL_SIZE;
+                        if (distSq < collisionDist * collisionDist) {
+                            let orbitalDamage = 16;
+                            if (unlockedSkills.includes('energy_absorption')) orbitalDamage += 16;
+                            damageBoss(orbitalDamage);
+                            orb.hitEnemies['boss'] = 0.15;
+                            spawnRing(orbX, orbY, currentBoss.color);
+                        }
+                    }
+                }
             }
         }
 
@@ -4505,6 +5965,123 @@
                         const enemyIndex = enemies.indexOf(e);
                         if (enemyIndex !== -1) killEnemy(e, enemyIndex);
                     }
+                }
+            }
+
+            // Aura also damages boss
+            if (currentBoss) {
+                const dx = currentBoss.x - player.x;
+                const dy = currentBoss.y - player.y;
+                const distSq = dx * dx + dy * dy;
+                const effectiveRadius = stats.auraRadius + currentBoss.size * 0.85;
+                if (distSq < effectiveRadius * effectiveRadius) {
+                    damageBoss(stats.auraDamage);
+                    spawnRing(currentBoss.x, currentBoss.y, SKILL_TREE['plasma_field'].color);
+                }
+            }
+        }
+
+        // ============================================================
+        // ROCKET EXPLOSION (unified for all rocket death scenarios)
+        // ============================================================
+
+        function explodePlayerRocket(b) {
+            if (b.type !== 'rocket' && b.type !== 'mini_rocket') return;
+            const explosionX = b.x;
+            const explosionY = b.y;
+            const explosionRadius = b.explosionRadius || 0;
+            const explosionDamage = b.explosionDamage || 0;
+
+            // Visual explosion effect
+            spawnRing(explosionX, explosionY, COLORS.PLAYER, Math.max(explosionRadius * 2.5, 40));
+
+            if (explosionRadius > 0 && explosionDamage > 0) {
+                // Damage enemies in blast radius
+                const enemiesInBlast = spatialGrid.queryRadius(explosionX, explosionY, explosionRadius);
+                for (const blastEnemy of enemiesInBlast) {
+                    const dx = blastEnemy.x - explosionX;
+                    const dy = blastEnemy.y - explosionY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= explosionRadius) {
+                        const falloff = 1 - (dist / explosionRadius) * 0.5;
+                        const dmg = Math.ceil(explosionDamage * falloff);
+                        blastEnemy.hp -= dmg;
+                        const config = ENEMY_TYPES[blastEnemy.type];
+                        spawnFloatingText(blastEnemy.x, blastEnemy.y - config.radius, dmg.toString(), COLORS.PLAYER);
+                        spawnRing(blastEnemy.x, blastEnemy.y, COLORS.PLAYER);
+                        if (blastEnemy.hp <= 0) {
+                            const idx = enemies.indexOf(blastEnemy);
+                            if (idx !== -1) killEnemy(blastEnemy, idx);
+                        }
+                    }
+                }
+
+                // Damage boss in blast radius
+                if (currentBoss) {
+                    const dx = currentBoss.x - explosionX;
+                    const dy = currentBoss.y - explosionY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= explosionRadius + currentBoss.size) {
+                        const falloff = 1 - (dist / (explosionRadius + currentBoss.size)) * 0.5;
+                        const dmg = Math.ceil(explosionDamage * falloff);
+                        damageBoss(dmg);
+                    }
+                }
+
+                // Damage boss projectiles in blast radius (only reduce hp, cleanup happens in collision loops)
+                for (const bp of bossProjectiles) {
+                    const dx = bp.x - explosionX;
+                    const dy = bp.y - explosionY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= explosionRadius) {
+                        bp.hp -= explosionDamage;
+                        if (bp.hp <= 0) {
+                            spawnRing(bp.x, bp.y, bp.color, 15);
+                        }
+                    }
+                }
+
+                // Damage homing missiles in blast radius (only reduce hp, cleanup happens in collision loops)
+                for (const m of bossHomingMissiles) {
+                    if (m.hp <= 0) continue;
+                    const dx = m.x - explosionX;
+                    const dy = m.y - explosionY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= explosionRadius) {
+                        m.hp -= explosionDamage;
+                    }
+                }
+            }
+
+            // Ricochet: spawn mini rockets
+            if (b.hasRicochet && b.type === 'rocket') {
+                const ricochetTargets = spatialGrid.queryRadius(explosionX, explosionY, 400);
+                let targetsFound = 0;
+                for (const target of ricochetTargets) {
+                    if (targetsFound >= 2) break;
+                    if (target.hp <= 0) continue;
+
+                    const angle = Math.atan2(target.y - explosionY, target.x - explosionX);
+                    const spread = (Math.random() - 0.5) * 0.3;
+
+                    const miniRocket = pools.bullet.acquire();
+                    miniRocket.x = explosionX;
+                    miniRocket.y = explosionY;
+                    miniRocket.vx = Math.cos(angle + spread) * 550;
+                    miniRocket.vy = Math.sin(angle + spread) * 550;
+                    miniRocket.life = 1.5;
+                    miniRocket.damage = Math.ceil(b.damage * 0.5);
+                    miniRocket.explosionDamage = 0;
+                    miniRocket.explosionRadius = 0;
+                    miniRocket.hasRicochet = false;
+                    miniRocket.type = 'mini_rocket';
+                    miniRocket.color = COLORS.PLAYER;
+                    miniRocket.piercing = false;
+                    miniRocket.turnRate = 250;
+                    miniRocket.size = 0.6;
+                    miniRocket.trail = [];
+                    bullets.push(miniRocket);
+                    targetsFound++;
                 }
             }
         }
@@ -4608,70 +6185,7 @@
                 }
 
                 if (bulletDestroyed) {
-                    // Rocket explosion damage in area
-                    if (b.type === 'rocket' && b.explosionRadius > 0) {
-                        const explosionX = b.x;
-                        const explosionY = b.y;
-                        const explosionRadius = b.explosionRadius;
-                        const explosionDamage = b.explosionDamage;
-
-                        // Visual explosion effect - more impactful
-                        spawnRing(explosionX, explosionY, COLORS.PLAYER, explosionRadius * 2.5);
-
-                        // Damage all enemies in explosion radius
-                        const enemiesInBlast = spatialGrid.queryRadius(explosionX, explosionY, explosionRadius);
-                        for (const blastEnemy of enemiesInBlast) {
-                            const dx = blastEnemy.x - explosionX;
-                            const dy = blastEnemy.y - explosionY;
-                            const dist = Math.sqrt(dx * dx + dy * dy);
-                            if (dist <= explosionRadius) {
-                                // Damage falls off with distance
-                                const falloff = 1 - (dist / explosionRadius) * 0.5;
-                                const dmg = Math.ceil(explosionDamage * falloff);
-                                blastEnemy.hp -= dmg;
-                                const config = ENEMY_TYPES[blastEnemy.type];
-                                spawnFloatingText(blastEnemy.x, blastEnemy.y - config.radius, dmg.toString(), COLORS.PLAYER);
-                                spawnRing(blastEnemy.x, blastEnemy.y, COLORS.PLAYER);
-                                if (blastEnemy.hp <= 0) {
-                                    const idx = enemies.indexOf(blastEnemy);
-                                    if (idx !== -1) killEnemy(blastEnemy, idx);
-                                }
-                            }
-                        }
-
-                        // Ricochet: spawn 2 smaller homing missiles
-                        if (b.hasRicochet) {
-                            const ricochetTargets = spatialGrid.queryRadius(explosionX, explosionY, 400);
-                            let targetsFound = 0;
-                            for (const target of ricochetTargets) {
-                                if (targetsFound >= 2) break;
-                                if (target.hp <= 0) continue;
-
-                                const angle = Math.atan2(target.y - explosionY, target.x - explosionX);
-                                const spread = (Math.random() - 0.5) * 0.3;
-
-                                const miniRocket = pools.bullet.acquire();
-                                miniRocket.x = explosionX;
-                                miniRocket.y = explosionY;
-                                miniRocket.vx = Math.cos(angle + spread) * 550;
-                                miniRocket.vy = Math.sin(angle + spread) * 550;
-                                miniRocket.life = 1.5;
-                                miniRocket.damage = Math.ceil(b.damage * 0.5);
-                                miniRocket.explosionDamage = 0;
-                                miniRocket.explosionRadius = 0;
-                                miniRocket.hasRicochet = false;
-                                miniRocket.type = 'mini_rocket';
-                                miniRocket.color = COLORS.PLAYER;
-                                miniRocket.piercing = false;
-                                miniRocket.turnRate = 250;
-                                miniRocket.size = 0.6;
-                                miniRocket.trail = [];
-                                bullets.push(miniRocket);
-                                targetsFound++;
-                            }
-                        }
-                    }
-
+                    explodePlayerRocket(b);
                     pools.bullet.release(b);
                     fastRemove(bullets, i);
                 }
@@ -4686,16 +6200,20 @@
                     const distSq = dx * dx + dy * dy;
                     const hitDist = currentBoss.size * 0.85;
                     if (distSq < hitDist * hitDist) {
+                        // Skip if piercing bullet already hit this boss
+                        if (b.piercing && b.hitEnemies && b.hitEnemies.has(currentBoss)) {
+                            continue;
+                        }
+
                         const damage = b.damage || 1;
                         damageBoss(damage);
                         spawnRing(b.x, b.y, currentBoss.color);
 
-                        if (b.type === 'rocket' && b.explosionRadius > 0) {
-                            spawnRing(b.x, b.y, COLORS.PLAYER, b.explosionRadius * 2.5);
-                            damageBoss(b.explosionDamage || 0);
-                        }
-
-                        if (!b.piercing) {
+                        if (b.piercing) {
+                            if (!b.hitEnemies) b.hitEnemies = new Set();
+                            b.hitEnemies.add(currentBoss);
+                        } else {
+                            explodePlayerRocket(b);
                             pools.bullet.release(b);
                             fastRemove(bullets, i);
                         }
@@ -4770,11 +6288,210 @@
                 const dx = player.x - bp.x;
                 const dy = player.y - bp.y;
                 const distSq = dx * dx + dy * dy;
-                const collisionDistSq = PLAYER_COLLISION_RADIUS * PLAYER_COLLISION_RADIUS;
+                const collisionDist = PLAYER_COLLISION_RADIUS + bp.radius;
 
-                if (distSq < collisionDistSq && player.invulnerable <= 0) {
+                if (distSq < collisionDist * collisionDist && player.invulnerable <= 0) {
                     damagePlayer();
+                    spawnRing(bp.x, bp.y, bp.color, 30);
+                    triggerShake(4, 150);
                     bossProjectiles.splice(i, 1);
+                }
+            }
+
+            // Homing missiles vs Player
+            for (let i = bossHomingMissiles.length - 1; i >= 0; i--) {
+                const m = bossHomingMissiles[i];
+                const dx = player.x - m.x;
+                const dy = player.y - m.y;
+                const distSq = dx * dx + dy * dy;
+                const collisionDist = PLAYER_COLLISION_RADIUS + m.radius;
+
+                if (distSq < collisionDist * collisionDist && player.invulnerable <= 0) {
+                    for (let d = 0; d < m.damage; d++) {
+                        damagePlayer();
+                    }
+                    triggerFlash('#FF4400', 0.4, 200);
+                    explodeHomingMissile(m);
+                    bossHomingMissiles.splice(i, 1);
+                }
+            }
+
+            // Player bullets vs Homing missiles (destructible)
+            if (currentBoss && currentBoss.type === 'missileTitan') {
+                for (let i = bossHomingMissiles.length - 1; i >= 0; i--) {
+                    const m = bossHomingMissiles[i];
+                    for (let j = bullets.length - 1; j >= 0; j--) {
+                        const b = bullets[j];
+                        const dx = m.x - b.x;
+                        const dy = m.y - b.y;
+                        const distSq = dx * dx + dy * dy;
+                        const hitDist = m.radius + 6;
+                        if (distSq < hitDist * hitDist) {
+                            m.hp -= (b.damage || 1);
+                            if (!b.piercing) {
+                                explodePlayerRocket(b);
+                                pools.bullet.release(b);
+                                fastRemove(bullets, j);
+                            }
+                            if (m.hp <= 0) break;
+                        }
+                    }
+                }
+
+                // Orbitals vs Homing missiles
+                if (orbitals.length > 0) {
+                    const orbitalRadius = ORBITAL_RADIUS;
+                    for (let i = bossHomingMissiles.length - 1; i >= 0; i--) {
+                        const m = bossHomingMissiles[i];
+                        for (let k = 0; k < orbitals.length; k++) {
+                            const orb = orbitals[k];
+                            const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
+                            const orbY = player.y + Math.sin(orb.angle) * orbitalRadius;
+                            const dx = m.x - orbX;
+                            const dy = m.y - orbY;
+                            const distSq = dx * dx + dy * dy;
+                            const hitDist = m.radius + ORBITAL_SIZE;
+                            if (distSq < hitDist * hitDist) {
+                                m.hp -= 20; // Orbitals deal significant damage to missiles
+                                spawnRing(m.x, m.y, '#FFD93D', 20);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Boss spheres vs Player (gentle contact damage)
+            if (currentBoss && currentBoss.type === 'orbitalGuardian' && bossSpheres.length > 0) {
+                if (!player._sphereDmgCooldown) player._sphereDmgCooldown = 0;
+                player._sphereDmgCooldown = Math.max(0, player._sphereDmgCooldown - deltaTime);
+                if (player._sphereDmgCooldown <= 0 && player.invulnerable <= 0) {
+                    for (let i = 0; i < bossSpheres.length; i++) {
+                        const s = bossSpheres[i];
+                        const dx = player.x - s.x;
+                        const dy = player.y - s.y;
+                        const distSq = dx * dx + dy * dy;
+                        const collisionDist = PLAYER_COLLISION_RADIUS + s.radius;
+                        if (distSq < collisionDist * collisionDist) {
+                            // Contact tick damage: 10 shield per 0.15s
+                            player._sphereDmgCooldown = 0.15;
+                            player.shieldRegenTimer = 0;
+                            player.shield = Math.max(0, player.shield - 10);
+                            player.shieldFlashTimer = 0.15;
+                            triggerShake(3, 120);
+                            triggerFlash('#00DFFF', 0.15, 80);
+                            spawnRing(s.x, s.y, s.color, 20);
+                            if (player.shield <= 0) {
+                                player.hp--;
+                                player.shield = PLAYER_MAX_SHIELD;
+                                triggerFlash('#FF6B6B', 0.3, 150);
+                                if (player.hp <= 0) {
+                                    player.shield = 0;
+                                    gameOver();
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Boss body vs Player (contact damage for standing on boss)
+            if (currentBoss && player.invulnerable <= 0) {
+                if (!player._bossDmgCooldown) player._bossDmgCooldown = 0;
+                player._bossDmgCooldown = Math.max(0, player._bossDmgCooldown - deltaTime);
+                if (player._bossDmgCooldown <= 0) {
+                    const dx = player.x - currentBoss.x;
+                    const dy = player.y - currentBoss.y;
+                    const distSq = dx * dx + dy * dy;
+                    const collisionDist = PLAYER_COLLISION_RADIUS + currentBoss.size * 0.8;
+                    if (distSq < collisionDist * collisionDist) {
+                        player._bossDmgCooldown = 0.12;
+                        damagePlayer();
+                        triggerShake(5, 150);
+                        spawnRing(player.x, player.y, currentBoss.color, 30);
+                    }
+                }
+            }
+
+            // Player bullets vs Boss projectiles (destructible)
+            if (currentBoss) {
+                for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+                    const bp = bossProjectiles[i];
+                    for (let j = bullets.length - 1; j >= 0; j--) {
+                        const b = bullets[j];
+                        const dx = bp.x - b.x;
+                        const dy = bp.y - b.y;
+                        const distSq = dx * dx + dy * dy;
+                        const hitDist = bp.radius + 6;
+                        if (distSq < hitDist * hitDist) {
+                            bp.hp -= (b.damage || 1);
+                            if (!b.piercing) {
+                                explodePlayerRocket(b);
+                                pools.bullet.release(b);
+                                fastRemove(bullets, j);
+                            }
+                            if (bp.hp <= 0) {
+                                // Destroy boss projectile with particles
+                                for (let p = 0; p < 4; p++) {
+                                    spawnRing(bp.x, bp.y, bp.color, 15);
+                                }
+                                bossProjectiles.splice(i, 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Orbitals vs Boss projectiles
+                if (orbitals.length > 0) {
+                    const orbitalRadius = ORBITAL_RADIUS;
+                    for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+                        const bp = bossProjectiles[i];
+                        for (let k = 0; k < orbitals.length; k++) {
+                            const orb = orbitals[k];
+                            const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
+                            const orbY = player.y + Math.sin(orb.angle) * orbitalRadius;
+                            const dx = bp.x - orbX;
+                            const dy = bp.y - orbY;
+                            const distSq = dx * dx + dy * dy;
+                            const hitDist = bp.radius + ORBITAL_SIZE;
+                            if (distSq < hitDist * hitDist) {
+                                spawnRing(bp.x, bp.y, bp.color, 20);
+                                bossProjectiles.splice(i, 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Plasma aura vs Boss projectiles
+                const stats = getWeaponStats();
+                if (stats.hasAura) {
+                    for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+                        const bp = bossProjectiles[i];
+                        const dx = bp.x - player.x;
+                        const dy = bp.y - player.y;
+                        const distSq = dx * dx + dy * dy;
+                        const auraRange = stats.auraRadius + bp.radius;
+                        if (distSq < auraRange * auraRange) {
+                            spawnRing(bp.x, bp.y, SKILL_TREE['plasma_field'].color, 15);
+                            bossProjectiles.splice(i, 1);
+                        }
+                    }
+
+                    // Plasma aura vs Homing missiles (deals damage, doesn't instant-kill)
+                    for (let i = bossHomingMissiles.length - 1; i >= 0; i--) {
+                        const m = bossHomingMissiles[i];
+                        const dx = m.x - player.x;
+                        const dy = m.y - player.y;
+                        const distSq = dx * dx + dy * dy;
+                        const auraRange = stats.auraRadius + m.radius;
+                        if (distSq < auraRange * auraRange) {
+                            m.hp -= stats.auraDamage || 5;
+                            spawnRing(m.x, m.y, SKILL_TREE['plasma_field'].color, 20);
+                        }
+                    }
                 }
             }
         }
@@ -5217,9 +6934,13 @@
                 renderDrones();
                 renderEnemyBullets();
                 renderBoss();
+                renderBossSpheres();
+                renderBossProjectiles();
+                renderHomingMissiles();
                 if (player && gameState !== 'gameOver') {
                     renderAura();
                     renderPlayer();
+                    renderMissileWarning();
                     renderShieldArc();
                     renderOrbitals();
                     renderLightning();
@@ -5435,6 +7156,70 @@
             ctx.stroke();
             
             ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        function renderMissileWarning() {
+            if (!player || bossHomingMissiles.length === 0) return;
+
+            const warningColor = '#FF6600';
+            const reticleRadius = 50;
+            const pulse = 0.5 + 0.5 * Math.abs(Math.sin(gameTime * 4));
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+
+            // Pulsating dashed reticle circle
+            ctx.globalAlpha = pulse * 0.5;
+            ctx.strokeStyle = warningColor;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.arc(0, 0, reticleRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Rotating corner brackets
+            ctx.rotate(gameTime * 2);
+            ctx.globalAlpha = pulse * 0.6;
+            ctx.lineWidth = 2;
+            const bSize = 38;
+            const bLen = 10;
+            for (let corner = 0; corner < 4; corner++) {
+                ctx.save();
+                ctx.rotate(corner * Math.PI / 2);
+                ctx.beginPath();
+                ctx.moveTo(bSize, bSize - bLen);
+                ctx.lineTo(bSize, bSize);
+                ctx.lineTo(bSize - bLen, bSize);
+                ctx.stroke();
+                ctx.restore();
+            }
+            ctx.rotate(-gameTime * 2);
+
+            // Directional arrow for each missile
+            ctx.globalAlpha = 0.85;
+            for (let i = 0; i < bossHomingMissiles.length; i++) {
+                const m = bossHomingMissiles[i];
+                const angle = Math.atan2(m.y - player.y, m.x - player.x);
+                const arrowDist = reticleRadius + 12;
+
+                ctx.save();
+                ctx.rotate(angle);
+                ctx.translate(arrowDist, 0);
+
+                // Triangle chevron pointing outward
+                ctx.fillStyle = warningColor;
+                ctx.beginPath();
+                ctx.moveTo(10, 0);
+                ctx.lineTo(-5, -6);
+                ctx.lineTo(-5, 6);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            ctx.globalAlpha = 1;
             ctx.restore();
         }
 
