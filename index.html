@@ -830,8 +830,8 @@
                         unlockedSkills.push(skill);
                     }
                 });
-                showFloatingText(player.x, player.y - 50, 'MISSILES UNLOCKED', '#FFD93D');
-                createTextExplosion(player.x, player.y, 'MISSILES UNLOCKED', '#FFD93D');
+                spawnFloatingText(player.x, player.y - 50, 'MISSILES UNLOCKED', '#FFD93D');
+                spawnFloatingText(player.x, player.y, 'MISSILES UNLOCKED', '#FFD93D');
             },
             'orbit': () => {
                 // Unlock orbital shield and all shield upgrades
@@ -843,8 +843,8 @@
                         unlockedSkills.push(skill);
                     }
                 });
-                showFloatingText(player.x, player.y - 50, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
-                createTextExplosion(player.x, player.y, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
+                spawnFloatingText(player.x, player.y - 50, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
+                spawnFloatingText(player.x, player.y, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
             },
             'chain': () => {
                 // Unlock lightning ray and all lightning upgrades
@@ -856,8 +856,8 @@
                         unlockedSkills.push(skill);
                     }
                 });
-                showFloatingText(player.x, player.y - 50, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
-                createTextExplosion(player.x, player.y, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
+                spawnFloatingText(player.x, player.y - 50, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
+                spawnFloatingText(player.x, player.y, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
             },
             'drone': () => {
                 // Unlock alien drone and all drone upgrades
@@ -869,8 +869,8 @@
                         unlockedSkills.push(skill);
                     }
                 });
-                showFloatingText(player.x, player.y - 50, 'ALIEN DRONES UNLOCKED', '#39FF14');
-                createTextExplosion(player.x, player.y, 'ALIEN DRONES UNLOCKED', '#39FF14');
+                spawnFloatingText(player.x, player.y - 50, 'ALIEN DRONES UNLOCKED', '#39FF14');
+                spawnFloatingText(player.x, player.y, 'ALIEN DRONES UNLOCKED', '#39FF14');
             },
             'full': () => {
                 // Unlock ALL skills
@@ -879,8 +879,8 @@
                         unlockedSkills.push(skill);
                     }
                 });
-                showFloatingText(player.x, player.y - 50, 'ALL ABILITIES UNLOCKED', '#FFD700');
-                createTextExplosion(player.x, player.y, 'FULL ARSENAL', '#FFD700');
+                spawnFloatingText(player.x, player.y - 50, 'ALL ABILITIES UNLOCKED', '#FFD700');
+                spawnFloatingText(player.x, player.y, 'FULL ARSENAL', '#FFD700');
             },
             'arena': () => {
                 // Toggle arena for testing
@@ -889,6 +889,9 @@
                 } else {
                     activateArena(player.x, player.y);
                 }
+            },
+            'boss': () => {
+                spawnBoss(0);
             }
         };
         
@@ -964,7 +967,26 @@
         const ARENA_CLOSE_SPEED = 900;
         let arenaCurrentRadius = ARENA_RADIUS;
         let arenaSpawnPaused = false;
-        
+
+        // ============================================================
+        // BOSS SYSTEM
+        // ============================================================
+        const BOSS_SPAWN_LEVELS = [8, 14, 20, 27, 35];
+        const BOSS_TYPES = ['orbitalGuardian', 'missileTitan', 'lightningNexus', 'plasmaOverlord', 'swarmMother'];
+        const BOSS_NAMES = ['ORBITAL GUARDIAN', 'MISSILE TITAN', 'LIGHTNING NEXUS', 'PLASMA OVERLORD', 'SWARM MOTHER'];
+        const BOSS_COLORS = ['#00DFFF', '#FFD93D', '#9F7AEA', '#FF6600', '#39FF14'];
+        const BOSS_BASE_HP = [200, 300, 450, 600, 800];
+        const BOSS_WEAPON_UNLOCK = ['orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone'];
+
+        let currentBoss = null;
+        let bossProjectiles = [];
+        let bossPhase = 1;
+        let bossPatternTimer = 0;
+        let bossDefeated = false;
+        let bossesDefeatedThisRun = [];
+        let bossHealthBarDisplayHP = 0;
+        let bossIncoming = null; // { bossIndex, timer } — pending boss during arena close
+
         // Milestones
         let lastMilestone = 0;
         let milestoneActive = false;
@@ -1328,6 +1350,16 @@
             arenaActive = false;
             arenaCurrentRadius = ARENA_RADIUS;
             arenaSpawnPaused = false;
+
+            // Reset boss state
+            currentBoss = null;
+            bossIncoming = null;
+            bossProjectiles = [];
+            bossPhase = 1;
+            bossPatternTimer = 0;
+            bossDefeated = false;
+            bossesDefeatedThisRun = [];
+            bossHealthBarDisplayHP = 0;
 
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
@@ -1817,6 +1849,9 @@
                     if (arenaCurrentRadius < ARENA_RADIUS) {
                         arenaCurrentRadius = ARENA_RADIUS;
                     }
+                } else if (bossIncoming) {
+                    // Arena finished closing — materialize the boss
+                    materializeBoss();
                 }
                 enforceArenaBoundary();
             }
@@ -1835,7 +1870,10 @@
             updateFloatingTexts();
             updatePickups();
             updateWeapons();
-            
+
+            // Update boss
+            updateBoss(deltaTime);
+
             // Check collisions
             checkCollisions();
             
@@ -1847,7 +1885,10 @@
             
             // Check milestones
             checkMilestones();
-            
+
+            // Check boss spawn
+            checkBossSpawn();
+
             // Update high score
             if (score > highScore) {
                 highScore = Math.floor(score);
@@ -2847,14 +2888,14 @@
             }
             enemyBullets.length = 0;
 
-            showFloatingText(player.x, player.y - 50, 'ARENA ACTIVATED', '#00CCFF');
-            createTextExplosion(player.x, player.y, 'BOSS FIGHT', '#00CCFF');
+            spawnFloatingText(player.x, player.y - 50, 'ARENA ACTIVATED', '#00CCFF');
+            spawnFloatingText(player.x, player.y, 'BOSS FIGHT', '#00CCFF');
         }
 
         function deactivateArena() {
             arenaActive = false;
             arenaSpawnPaused = false;
-            showFloatingText(player.x, player.y - 50, 'ARENA CLEARED', '#39FF14');
+            spawnFloatingText(player.x, player.y - 50, 'ARENA CLEARED', '#39FF14');
         }
 
         function enforceArenaBoundary() {
@@ -2881,6 +2922,360 @@
                     damagePlayer();
                 }
             }
+        }
+
+        // ============================================================
+        // BOSS FUNCTIONS
+        // ============================================================
+
+        function calculateBossHP(bossIndex) {
+            const baseHP = BOSS_BASE_HP[bossIndex];
+            const levelMultiplier = 1 + (playerLevel - BOSS_SPAWN_LEVELS[bossIndex]) * 0.15;
+            const prog = loadProgression();
+            const numWeapons = WEAPON_IDS.filter(wid => prog.unlockedWeapons[wid]).length;
+            const weaponMultiplier = 1 + (numWeapons * 0.20);
+            return Math.floor(baseHP * levelMultiplier * weaponMultiplier);
+        }
+
+        function spawnBoss(bossIndex) {
+            if (currentBoss || bossIncoming) return;
+
+            activateArena(player.x, player.y);
+            bossIncoming = { bossIndex: bossIndex, timer: 0 };
+
+            triggerFlash('#FF0000', 0.3, 300);
+            triggerSlowmo(500);
+            spawnFloatingText(player.x, player.y - 60, '\u26A0 BOSS INCOMING \u26A0', BOSS_COLORS[bossIndex]);
+        }
+
+        function materializeBoss() {
+            if (!bossIncoming) return;
+            const bossIndex = bossIncoming.bossIndex;
+            bossIncoming = null;
+
+            const calculatedHP = calculateBossHP(bossIndex);
+            currentBoss = {
+                type: BOSS_TYPES[bossIndex],
+                index: bossIndex,
+                name: BOSS_NAMES[bossIndex],
+                color: BOSS_COLORS[bossIndex],
+                x: arenaCenter.x,
+                y: arenaCenter.y,
+                hp: calculatedHP,
+                maxHp: calculatedHP,
+                phase: 1,
+                rotation: 0,
+                patternTimer: 0,
+                currentPattern: null,
+                oscillationTimer: 0,
+                size: 80 + bossIndex * 15,
+                weaponUnlock: BOSS_WEAPON_UNLOCK[bossIndex],
+                combatStartTime: gameTime,
+                sides: bossIndex % 2 === 0 ? 8 : 6,
+                flashTimer: 0
+            };
+            bossPhase = 1;
+            bossPatternTimer = 0;
+            bossDefeated = false;
+            bossHealthBarDisplayHP = calculatedHP;
+
+            triggerFlash('#FFFFFF', 0.5, 400);
+            triggerShake(10, 600);
+            triggerSlowmo(400);
+            spawnFloatingText(arenaCenter.x, arenaCenter.y - 80, currentBoss.name, currentBoss.color);
+
+            // Spawn ring burst at boss position
+            for (let i = 0; i < 12; i++) {
+                spawnRing(arenaCenter.x + (Math.random() - 0.5) * 60, arenaCenter.y + (Math.random() - 0.5) * 60, currentBoss.color, 50);
+            }
+        }
+
+        function checkBossSpawn() {
+            if (currentBoss || bossIncoming) return;
+            for (let i = 0; i < BOSS_SPAWN_LEVELS.length; i++) {
+                if (playerLevel >= BOSS_SPAWN_LEVELS[i] && !bossesDefeatedThisRun.includes(i)) {
+                    spawnBoss(i);
+                    break;
+                }
+            }
+        }
+
+        function updateBoss(dt) {
+            if (!currentBoss) return;
+
+            const boss = currentBoss;
+
+            // Oscillation movement (smooth ±50px)
+            boss.oscillationTimer += dt;
+            const oscX = Math.sin(boss.oscillationTimer * 1.5) * 50;
+            const oscY = Math.cos(boss.oscillationTimer * 1.1) * 50;
+            boss.x = arenaCenter.x + oscX;
+            boss.y = arenaCenter.y + oscY;
+
+            // Rotation (degrees)
+            boss.rotation += 60 * dt;
+
+            // Flash timer decay
+            if (boss.flashTimer > 0) {
+                boss.flashTimer -= dt;
+            }
+
+            // Pattern timer
+            boss.patternTimer += dt;
+
+            // Phase transition check
+            if (boss.hp <= boss.maxHp * 0.5 && boss.phase === 1) {
+                triggerPhaseTransition();
+            }
+
+            // Death check
+            if (boss.hp <= 0) {
+                onBossDefeated();
+            }
+        }
+
+        function triggerPhaseTransition() {
+            if (!currentBoss) return;
+            currentBoss.phase = 2;
+            bossPhase = 2;
+            triggerFlash(currentBoss.color, 0.4, 400);
+            triggerSlowmo(300);
+            triggerShake(8, 500);
+            spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', currentBoss.color);
+            spawnFloatingText(currentBoss.x, currentBoss.y, 'ENRAGED', currentBoss.color);
+        }
+
+        function damageBoss(amount) {
+            if (!currentBoss) return;
+            currentBoss.hp -= amount;
+            if (currentBoss.hp < 0) currentBoss.hp = 0;
+            currentBoss.flashTimer = 0.1;
+
+            spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, amount.toString(), '#FFFFFF');
+        }
+
+        function onBossDefeated() {
+            if (!currentBoss) return;
+
+            const boss = currentBoss;
+            bossesDefeatedThisRun.push(boss.index);
+            bossDefeated = true;
+
+            // Save weapon unlock to progression
+            const prog = loadProgression();
+            prog.unlockedWeapons[boss.weaponUnlock] = true;
+            if (!prog.bossDefeats[boss.type]) {
+                prog.bossDefeats[boss.type] = 0;
+            }
+            prog.bossDefeats[boss.type]++;
+            prog.stats.totalBossDefeats++;
+            saveProgression(prog);
+
+            // Visual effects
+            triggerFlash('#FFFFFF', 0.6, 500);
+            triggerSlowmo(800);
+            triggerShake(15, 800);
+            spawnFloatingText(boss.x, boss.y - 80, 'BOSS DEFEATED', '#FFD700');
+            spawnFloatingText(boss.x, boss.y, boss.name + ' DESTROYED', '#FFD700');
+            spawnFloatingText(boss.x, boss.y - 40, boss.weaponUnlock.replace(/_/g, ' ').toUpperCase() + ' UNLOCKED!', boss.color);
+
+            // Particle explosion
+            for (let i = 0; i < 40; i++) {
+                spawnRing(boss.x + (Math.random() - 0.5) * boss.size, boss.y + (Math.random() - 0.5) * boss.size, boss.color, 60);
+            }
+
+            // XP reward: grant enough XP for 2 levels
+            const xpReward = xpToNextLevel * 2;
+            collectXP(xpReward);
+
+            // Clear boss projectiles
+            bossProjectiles.length = 0;
+
+            // Deactivate arena
+            deactivateArena();
+            currentBoss = null;
+        }
+
+        function renderBoss() {
+            if (!currentBoss) return;
+
+            const boss = currentBoss;
+
+            ctx.save();
+            ctx.translate(boss.x, boss.y);
+            ctx.rotate(boss.rotation * Math.PI / 180);
+
+            const sides = boss.sides;
+            const size = boss.size;
+
+            // Outer glow ring
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * (size + 10);
+                const py = Math.sin(angle) * (size + 10);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = boss.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.3 + Math.sin(gameTime * 4) * 0.15;
+            setGlow(ctx, boss.color, 20);
+            ctx.stroke();
+            clearGlow(ctx);
+            ctx.globalAlpha = 1;
+
+            // Main body polygon
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * size;
+                const py = Math.sin(angle) * size;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+
+            // Fill with gradient
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+            const baseColor = boss.color;
+            gradient.addColorStop(0, baseColor);
+            gradient.addColorStop(0.5, baseColor + '88');
+            gradient.addColorStop(1, baseColor + '22');
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = boss.phase === 2 ? 0.7 : 0.5;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Border
+            ctx.strokeStyle = boss.color;
+            ctx.lineWidth = boss.phase === 2 ? 3 : 2;
+            ctx.stroke();
+
+            // Flash white on damage
+            if (boss.flashTimer > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(boss.flashTimer / 0.1, 0.6) + ')';
+                ctx.fill();
+            }
+
+            // Pulsating center core
+            const coreSize = 12 + Math.sin(gameTime * 6) * 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.globalAlpha = 0.6 + Math.sin(gameTime * 8) * 0.3;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Inner ring
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+            ctx.strokeStyle = boss.color;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.3;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Phase 2: extra visual (inner polygon spinning opposite)
+            if (boss.phase === 2) {
+                ctx.save();
+                ctx.rotate(-boss.rotation * 2 * Math.PI / 180);
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i;
+                    const px = Math.cos(angle) * (size * 0.55);
+                    const py = Math.sin(angle) * (size * 0.55);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = boss.color;
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+        function renderBossHealthBar() {
+            if (!currentBoss) return;
+
+            const boss = currentBoss;
+            const barWidth = 400;
+            const barHeight = 16;
+            const barX = (CANVAS_WIDTH - barWidth) / 2;
+            const barY = 90;
+
+            // Smooth HP interpolation
+            const hpDiff = boss.hp - bossHealthBarDisplayHP;
+            bossHealthBarDisplayHP += hpDiff * 0.1;
+            if (Math.abs(hpDiff) < 1) bossHealthBarDisplayHP = boss.hp;
+
+            const hpRatio = Math.max(0, bossHealthBarDisplayHP / boss.maxHp);
+
+            // Boss name
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 14px "Segoe UI", sans-serif';
+            ctx.fillStyle = boss.color;
+            setGlow(ctx, boss.color, 10);
+            ctx.fillText(boss.name, CANVAS_WIDTH / 2, barY - 8);
+            clearGlow(ctx);
+
+            // Phase indicator
+            ctx.font = '10px "Segoe UI", sans-serif';
+            ctx.fillStyle = boss.phase === 2 ? '#FF4444' : '#AAAAAA';
+            ctx.fillText('PHASE ' + boss.phase, CANVAS_WIDTH / 2, barY + barHeight + 16);
+
+            // Bar background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.beginPath();
+            ctx.roundRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4, 4);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4, 4);
+            ctx.stroke();
+
+            // HP fill with gradient
+            if (hpRatio > 0) {
+                const fillWidth = barWidth * hpRatio;
+                const hpGradient = ctx.createLinearGradient(barX, 0, barX + fillWidth, 0);
+
+                if (boss.phase === 1) {
+                    hpGradient.addColorStop(0, '#39FF14');
+                    hpGradient.addColorStop(1, '#FFD93D');
+                } else {
+                    hpGradient.addColorStop(0, '#FF4444');
+                    hpGradient.addColorStop(1, '#FF8800');
+                }
+
+                ctx.fillStyle = hpGradient;
+                ctx.beginPath();
+                ctx.roundRect(barX, barY, fillWidth, barHeight, 3);
+                ctx.fill();
+
+                // Shine on top
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.beginPath();
+                ctx.roundRect(barX, barY, fillWidth, barHeight / 2, [3, 3, 0, 0]);
+                ctx.fill();
+            }
+
+            // HP text
+            ctx.font = 'bold 10px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#FFFFFF';
+            ctx.globalAlpha = 0.8;
+            ctx.fillText(Math.ceil(bossHealthBarDisplayHP) + ' / ' + boss.maxHp, CANVAS_WIDTH / 2, barY + barHeight - 3);
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
         }
 
         // ============================================================
@@ -4282,6 +4677,32 @@
                 }
             }
 
+            // Bullet vs Boss
+            if (currentBoss) {
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    const b = bullets[i];
+                    const dx = currentBoss.x - b.x;
+                    const dy = currentBoss.y - b.y;
+                    const distSq = dx * dx + dy * dy;
+                    const hitDist = currentBoss.size * 0.85;
+                    if (distSq < hitDist * hitDist) {
+                        const damage = b.damage || 1;
+                        damageBoss(damage);
+                        spawnRing(b.x, b.y, currentBoss.color);
+
+                        if (b.type === 'rocket' && b.explosionRadius > 0) {
+                            spawnRing(b.x, b.y, COLORS.PLAYER, b.explosionRadius * 2.5);
+                            damageBoss(b.explosionDamage || 0);
+                        }
+
+                        if (!b.piercing) {
+                            pools.bullet.release(b);
+                            fastRemove(bullets, i);
+                        }
+                    }
+                }
+            }
+
             // Enemy vs Player (using spatial grid for nearby enemies only)
             const nearbyEnemiesForPlayer = spatialGrid.queryRadius(player.x, player.y, 100);
             for (const e of nearbyEnemiesForPlayer) {
@@ -4342,8 +4763,22 @@
                     fastRemove(enemyBullets, i);
                 }
             }
+
+            // Boss projectiles vs Player
+            for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+                const bp = bossProjectiles[i];
+                const dx = player.x - bp.x;
+                const dy = player.y - bp.y;
+                const distSq = dx * dx + dy * dy;
+                const collisionDistSq = PLAYER_COLLISION_RADIUS * PLAYER_COLLISION_RADIUS;
+
+                if (distSq < collisionDistSq && player.invulnerable <= 0) {
+                    damagePlayer();
+                    bossProjectiles.splice(i, 1);
+                }
+            }
         }
-        
+
         function damagePlayer() {
             // Reset shield regen timer
             player.shieldRegenTimer = 0;
@@ -4673,6 +5108,76 @@
             ctx.stroke();
 
             ctx.restore();
+
+            // Boss incoming warning marker at arena center
+            if (bossIncoming) {
+                const bi = bossIncoming;
+                const bossColor = BOSS_COLORS[bi.bossIndex];
+                const t = gameTime;
+                const warnPulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 5));
+
+                ctx.save();
+                ctx.translate(cx, cy);
+
+                // Pulsating concentric rings converging inward
+                for (let ring = 0; ring < 3; ring++) {
+                    const ringPhase = (t * 2 + ring * 0.7) % 2;
+                    const ringRadius = 120 * (1 - ringPhase / 2);
+                    const ringAlpha = (1 - ringPhase / 2) * 0.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+                    ctx.strokeStyle = bossColor;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = ringAlpha;
+                    ctx.stroke();
+                }
+
+                // Crosshair lines
+                ctx.globalAlpha = warnPulse * 0.6;
+                ctx.strokeStyle = bossColor;
+                ctx.lineWidth = 1.5;
+                const crossLen = 40;
+                ctx.beginPath();
+                ctx.moveTo(-crossLen, 0); ctx.lineTo(crossLen, 0);
+                ctx.moveTo(0, -crossLen); ctx.lineTo(0, crossLen);
+                ctx.stroke();
+
+                // Rotating corner brackets
+                ctx.rotate(t * 1.5);
+                ctx.globalAlpha = warnPulse * 0.7;
+                ctx.lineWidth = 2.5;
+                const bSize = 30;
+                const bLen = 12;
+                for (let corner = 0; corner < 4; corner++) {
+                    ctx.save();
+                    ctx.rotate(corner * Math.PI / 2);
+                    ctx.beginPath();
+                    ctx.moveTo(bSize, bSize - bLen);
+                    ctx.lineTo(bSize, bSize);
+                    ctx.lineTo(bSize - bLen, bSize);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Boss name text
+                ctx.rotate(-t * 1.5); // undo rotation for text
+                ctx.globalAlpha = warnPulse;
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.fillStyle = bossColor;
+                ctx.fillText(BOSS_NAMES[bi.bossIndex], 0, -70);
+
+                // "WARNING" blinking text
+                if (Math.sin(t * 8) > 0) {
+                    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                    ctx.fillStyle = '#FF4444';
+                    ctx.fillText('WARNING', 0, 70);
+                }
+
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
             ctx.restore();
         }
 
@@ -4711,6 +5216,7 @@
                 renderBullets();
                 renderDrones();
                 renderEnemyBullets();
+                renderBoss();
                 if (player && gameState !== 'gameOver') {
                     renderAura();
                     renderPlayer();
@@ -6147,6 +6653,9 @@
                 ctx.font = 'bold 14px "Segoe UI", sans-serif';
                 ctx.fillText('SKILL POINTS: ' + skillPoints + ' (Press TAB)', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 55);
             }
+
+            // Boss health bar (overlays HUD when boss is active)
+            renderBossHealthBar();
         }
         function renderPauseOverlay() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
