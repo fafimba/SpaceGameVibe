@@ -895,6 +895,9 @@
             },
             'titan': () => {
                 spawnBoss(1);
+            },
+            'nexus': () => {
+                spawnBoss(2);
             }
         };
         
@@ -978,7 +981,7 @@
         const BOSS_TYPES = ['orbitalGuardian', 'missileTitan', 'lightningNexus', 'plasmaOverlord', 'swarmMother'];
         const BOSS_NAMES = ['ORBITAL GUARDIAN', 'MISSILE TITAN', 'LIGHTNING NEXUS', 'PLASMA OVERLORD', 'SWARM MOTHER'];
         const BOSS_COLORS = ['#00DFFF', '#FFD93D', '#9F7AEA', '#FF6600', '#39FF14'];
-        const BOSS_BASE_HP = [2000, 6000, 9000, 12000, 16000];
+        const BOSS_BASE_HP = [2000, 6000, 8000, 12000, 16000];
         const BOSS_WEAPON_UNLOCK = ['orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone'];
 
         // Boss projectile constants
@@ -1003,6 +1006,12 @@
         // Missile Titan homing missiles
         let bossHomingMissiles = [];
         let bossMTCannonTimer = 0; // tracks cannon reload visual
+
+        // Lightning Nexus systems
+        let bossLightningStrikes = []; // { startX, startY, endX, endY, phase, timer, zigzag }
+        let bossTrailNodes = [];    // { x, y, radius, maxRadius, growing, growTimer, maxGrowTime, active }
+        let bossTrailRays = [];     // { startX, startY, endX, endY }
+        let bossTrailTimer = 0;     // countdown to spawn next node
 
         // Milestones
         let lastMilestone = 0;
@@ -1111,7 +1120,6 @@
                 if (this.available.length > 0) {
                     return this.available.pop();
                 }
-                console.warn('Pool exhausted, creating new object');
                 return this.factory();
             }
 
@@ -2303,6 +2311,17 @@
                 const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
                 if (angleDiff <= aimCone) return true;
             }
+            // Also check trail nodes
+            for (const tn of bossTrailNodes) {
+                if (!tn.active || tn.hp <= 0) continue;
+                const dx = tn.x - player.x;
+                const dy = tn.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > AUTO_AIM_MAX_DISTANCE) continue;
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone) return true;
+            }
             return false;
         }
 
@@ -2358,6 +2377,19 @@
                 if (angleDiff <= aimCone && dist < closestDist && dist <= AUTO_AIM_MAX_DISTANCE) {
                     closestDist = dist;
                     closestEnemy = bp;
+                }
+            }
+            // Also consider trail nodes as auto-aim targets
+            for (const tn of bossTrailNodes) {
+                if (!tn.active || tn.hp <= 0) continue;
+                const dx = tn.x - player.x;
+                const dy = tn.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const angleToEnemy = Math.atan2(dy, dx);
+                const angleDiff = Math.abs(normalizeAngle((angleToEnemy - playerRad) * 180 / Math.PI) * Math.PI / 180);
+                if (angleDiff <= aimCone && dist < closestDist && dist <= AUTO_AIM_MAX_DISTANCE) {
+                    closestDist = dist;
+                    closestEnemy = tn;
                 }
             }
             // Homing missiles get targeting priority (immediate threat)
@@ -2490,6 +2522,17 @@
                     closestEnemy = bp;
                 }
             }
+            // Also consider trail nodes for rocket targeting
+            for (const tn of bossTrailNodes) {
+                if (!tn.active || tn.hp <= 0) continue;
+                const dx = tn.x - player.x;
+                const dy = tn.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist && dist <= 600) {
+                    closestDist = dist;
+                    closestEnemy = tn;
+                }
+            }
             // Homing missiles get targeting priority for rockets
             let closestRocketMissileDist = Infinity;
             let closestRocketMissile = null;
@@ -2618,6 +2661,17 @@
                     closestEnemy = hm;
                 }
             }
+            // Also consider trail nodes for lightning initial target
+            for (const tn of bossTrailNodes) {
+                if (!tn.active || tn.hp <= 0) continue;
+                const dx = tn.x - player.x;
+                const dy = tn.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < closestDist && dist <= stats.lightningRange) {
+                    closestDist = dist;
+                    closestEnemy = tn;
+                }
+            }
 
             if (!closestEnemy) return;
 
@@ -2690,6 +2744,18 @@
                         nextTarget = hm;
                     }
                 }
+                // Also consider trail nodes as chain targets
+                for (const tn of bossTrailNodes) {
+                    if (!tn.active || tn.hp <= 0) continue;
+                    if (hitEnemies.has(tn)) continue;
+                    const dx = tn.x - lastHitX;
+                    const dy = tn.y - lastHitY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= stats.lightningChainRange && dist < nextDist) {
+                        nextDist = dist;
+                        nextTarget = tn;
+                    }
+                }
 
                 currentTarget = nextTarget;
             }
@@ -2713,6 +2779,14 @@
                     // Homing missile target
                     target.hp -= stats.lightningDamage;
                     spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                } else if (bossTrailNodes.includes(target)) {
+                    // Trail node target
+                    target.hp -= stats.lightningDamage;
+                    spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                    if (target.hp <= 0) {
+                        const idx = bossTrailNodes.indexOf(target);
+                        if (idx !== -1) destroyTrailNode(idx);
+                    }
                 } else {
                     const config = ENEMY_TYPES[target.type];
                     target.hp -= stats.lightningDamage;
@@ -2766,6 +2840,26 @@
                         if (dx * dx + dy * dy < 60 * 60) {
                             m.hp -= stats.lightningDamage;
                             spawnRing(m.x, m.y, SKILL_TREE['lightning_ray'].color, 15);
+                        }
+                    }
+                }
+            }
+
+            // Lightning also damages trail nodes near chain points
+            if (currentBoss && bossTrailNodes.length > 0) {
+                for (let cp = 1; cp < chainPoints.length; cp++) {
+                    const pt = chainPoints[cp];
+                    for (let ni = bossTrailNodes.length - 1; ni >= 0; ni--) {
+                        const node = bossTrailNodes[ni];
+                        if (!node.active || node.hp <= 0) continue;
+                        const dx = node.x - pt.x;
+                        const dy = node.y - pt.y;
+                        if (dx * dx + dy * dy < 60 * 60) {
+                            node.hp -= stats.lightningDamage;
+                            spawnRing(node.x, node.y, SKILL_TREE['lightning_ray'].color, 15);
+                            if (node.hp <= 0) {
+                                destroyTrailNode(ni);
+                            }
                         }
                     }
                 }
@@ -2908,6 +3002,17 @@
                         if (dist < nearestDist && dist < 600) {
                             nearestDist = dist;
                             nearestEnemy = bp;
+                        }
+                    }
+                    // Also consider trail nodes for rocket homing
+                    for (const tn of bossTrailNodes) {
+                        if (!tn.active || tn.hp <= 0) continue;
+                        const dx = tn.x - b.x;
+                        const dy = tn.y - b.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < nearestDist && dist < 600) {
+                            nearestDist = dist;
+                            nearestEnemy = tn;
                         }
                     }
                     // Homing missiles get targeting priority for rockets
@@ -3094,6 +3199,17 @@
                         nearestEnemy = hm;
                     }
                 }
+                // Also consider trail nodes for drone targeting
+                for (const tn of bossTrailNodes) {
+                    if (!tn.active || tn.hp <= 0) continue;
+                    const dx = tn.x - d.x;
+                    const dy = tn.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestEnemy = tn;
+                    }
+                }
 
                 // Homing behavior towards nearest enemy
                 if (nearestEnemy) {
@@ -3138,8 +3254,25 @@
                         break;
                     }
                 }
+                // Check trail node collision for drones
+                let hitTrailNode = null;
+                let hitTrailNodeIdx = -1;
+                if (!hitEnemy) {
+                    for (let ni = 0; ni < bossTrailNodes.length; ni++) {
+                        const tn = bossTrailNodes[ni];
+                        if (!tn.active || tn.hp <= 0) continue;
+                        const dx = tn.x - d.x;
+                        const dy = tn.y - d.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < tn.radius + DRONE_SIZE) {
+                            hitTrailNode = tn;
+                            hitTrailNodeIdx = ni;
+                            break;
+                        }
+                    }
+                }
                 // Check boss collision for drones
-                if (!hitEnemy && currentBoss) {
+                if (!hitEnemy && !hitTrailNode && currentBoss) {
                     const dx = currentBoss.x - d.x;
                     const dy = currentBoss.y - d.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3148,8 +3281,14 @@
                     }
                 }
 
-                if (hitEnemy || hitBoss) {
-                    if (hitBoss) {
+                if (hitEnemy || hitBoss || hitTrailNode) {
+                    if (hitTrailNode) {
+                        hitTrailNode.hp -= d.damage;
+                        spawnRing(hitTrailNode.x, hitTrailNode.y, droneColor);
+                        if (hitTrailNode.hp <= 0) {
+                            destroyTrailNode(hitTrailNodeIdx);
+                        }
+                    } else if (hitBoss) {
                         damageBoss(d.damage);
                         spawnRing(currentBoss.x, currentBoss.y, droneColor);
                     } else {
@@ -3366,6 +3505,19 @@
                 bossPatternIndex = 1; // will pick index 1 (homingMissile) from sequence
             }
 
+            // Initialize Lightning Nexus state
+            if (currentBoss.type === 'lightningNexus') {
+                bossLightningStrikes = [];
+                bossTrailNodes = [];
+                bossTrailRays = [];
+                bossTrailTimer = 1.5; // first trail node spawns 1.5s after boss appears
+                currentBoss.arcOffsets = []; // random zigzag offsets for vertex arcs
+                for (let i = 0; i < 8; i++) {
+                    currentBoss.arcOffsets.push(Math.random() * 20 - 10);
+                }
+                bossPatternCooldown = 1.5;
+            }
+
             // Spawn ring burst at boss position
             for (let i = 0; i < 12; i++) {
                 spawnRing(arenaCenter.x + (Math.random() - 0.5) * 60, arenaCenter.y + (Math.random() - 0.5) * 60, currentBoss.color, 50);
@@ -3417,6 +3569,10 @@
             if (boss.missileChargeTimer !== undefined && boss.missileChargeTimer > 0) {
                 boss.missileChargeTimer -= dt;
             }
+
+            // Lightning Nexus systems
+            updateLightningStrikes(dt);
+            updateTrailNodes(dt);
 
             // Boss attack patterns
             updateBossPatterns(dt);
@@ -3505,6 +3661,43 @@
 
                 spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
                 spawnFloatingText(currentBoss.x, currentBoss.y, 'FULL ARSENAL', '#FFD93D');
+            } else if (currentBoss.type === 'lightningNexus') {
+                // Purple flash + electric shockwave
+                triggerFlash('#9F7AEA', 0.8, 500);
+                triggerSlowmo(600);
+                triggerShake(18, 1000);
+
+                // 720° rage spin
+                currentBoss.phaseSpinRemaining = 720;
+
+                // Electric shockwave: 24 projectiles in ring
+                const count = 24;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, BOSS_PROJ_SPEED * 1.1, {
+                        color: '#00FFFF',
+                        radius: 8,
+                        hp: 2
+                    });
+                }
+
+                // Ring burst visuals
+                for (let i = 0; i < 10; i++) {
+                    spawnRing(currentBoss.x + (Math.random() - 0.5) * 60, currentBoss.y + (Math.random() - 0.5) * 60, '#9F7AEA', 90);
+                }
+
+                // Reset pattern sequence
+                bossPatternIndex = 0;
+                bossPatternActive = false;
+                bossPatternCooldown = 1.0;
+                bossPatternState = null;
+                bossLightningStrikes = [];
+                bossTrailNodes = [];
+                bossTrailRays = [];
+                bossTrailTimer = 1.0; // restart faster in P2
+
+                spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
+                spawnFloatingText(currentBoss.x, currentBoss.y, 'OVERCHARGED', '#00FFFF');
             } else {
                 triggerFlash(currentBoss.color, 0.4, 400);
                 triggerSlowmo(300);
@@ -3557,12 +3750,15 @@
             const xpReward = xpToNextLevel * 2;
             collectXP(xpReward);
 
-            // Clear boss projectiles, pattern state, spheres, and homing missiles
+            // Clear boss projectiles, pattern state, spheres, missiles, and lightning
             bossProjectiles.length = 0;
             bossPatternActive = false;
             bossPatternState = null;
             bossSpheres = [];
             bossHomingMissiles = [];
+            bossLightningStrikes = [];
+            bossTrailNodes = [];
+            bossTrailRays = [];
 
             // Deactivate arena
             deactivateArena();
@@ -3576,6 +3772,11 @@
 
             if (boss.type === 'missileTitan') {
                 renderMissileTitan();
+                return;
+            }
+
+            if (boss.type === 'lightningNexus') {
+                renderLightningNexus();
                 return;
             }
 
@@ -4140,6 +4341,10 @@
                         const seq = currentBoss.phase === 2 ? MT_PHASE2_SEQUENCE : MT_PHASE1_SEQUENCE;
                         const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
                         bossPatternCooldown = seq[prevIndex].pause;
+                    } else if (currentBoss.type === 'lightningNexus') {
+                        const seq = currentBoss.phase === 2 ? LN_PHASE2_SEQUENCE : LN_PHASE1_SEQUENCE;
+                        const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
+                        bossPatternCooldown = seq[prevIndex].pause;
                     } else {
                         bossPatternCooldown = currentBoss.phase === 2 ? 1.5 : 2.5;
                     }
@@ -4164,6 +4369,11 @@
                         const entry = seq[bossPatternIndex % seq.length];
                         currentBoss.currentPattern = getMTPattern(entry.pattern);
                         bossPatternState = getMTPatternState(entry.pattern);
+                    } else if (currentBoss.type === 'lightningNexus') {
+                        const seq = currentBoss.phase === 2 ? LN_PHASE2_SEQUENCE : LN_PHASE1_SEQUENCE;
+                        const entry = seq[bossPatternIndex % seq.length];
+                        currentBoss.currentPattern = getLNPattern(entry.pattern);
+                        bossPatternState = getLNPatternState(entry);
                     } else {
                         currentBoss.currentPattern = BOSS_PATTERNS[bossPatternIndex % BOSS_PATTERNS.length];
                         bossPatternState = { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false };
@@ -4716,6 +4926,800 @@
             }
 
             return state.elapsed >= 2.5;
+        }
+
+        // --- Lightning Nexus: Grid Lightning Strike System ---
+
+        // Compute line-circle intersection: line at given angle through arena center + perpendicular offset
+        function computeLineEndpoints(angle, offset) {
+            const cx = arenaCenter.x;
+            const cy = arenaCenter.y;
+            const R = ARENA_RADIUS;
+
+            // Line direction vector
+            const dirX = Math.cos(angle);
+            const dirY = Math.sin(angle);
+
+            // Perpendicular offset from center
+            const perpX = -dirY;
+            const perpY = dirX;
+
+            // Point on line closest to center
+            const px = cx + perpX * offset;
+            const py = cy + perpY * offset;
+
+            // Half-length of chord: sqrt(R^2 - offset^2)
+            const offsetSq = offset * offset;
+            if (offsetSq >= R * R) return null;
+            const halfChord = Math.sqrt(R * R - offsetSq);
+
+            return {
+                startX: px - dirX * halfChord,
+                startY: py - dirY * halfChord,
+                endX: px + dirX * halfChord,
+                endY: py + dirY * halfChord
+            };
+        }
+
+        // Generate N evenly spaced offsets across the arena diameter
+        function computeEvenOffsets(count) {
+            const offsets = [];
+            for (let i = 0; i < count; i++) {
+                offsets.push(ARENA_RADIUS * ((i + 1) / (count + 1) * 2 - 1));
+            }
+            return offsets;
+        }
+
+        function initLightningLines(patternType) {
+            bossLightningStrikes = [];
+            const lineDefs = []; // { angle, offset }
+
+            if (patternType === 'gridVH') {
+                // 3 vertical + 3 horizontal
+                const offsets3 = computeEvenOffsets(3);
+                for (const d of offsets3) lineDefs.push({ angle: Math.PI / 2, offset: d });
+                for (const d of offsets3) lineDefs.push({ angle: 0, offset: d });
+            } else if (patternType === 'singleDiagonal') {
+                // X cross: both diagonals through center
+                lineDefs.push({ angle: Math.PI / 4, offset: 0 });
+                lineDefs.push({ angle: 3 * Math.PI / 4, offset: 0 });
+            } else if (patternType === 'gridDiag3') {
+                const offsets3 = computeEvenOffsets(3);
+                for (const d of offsets3) lineDefs.push({ angle: Math.PI / 4, offset: d });
+                for (const d of offsets3) lineDefs.push({ angle: 3 * Math.PI / 4, offset: d });
+            } else if (patternType === 'vertical5') {
+                const offsets5 = computeEvenOffsets(5);
+                for (const d of offsets5) lineDefs.push({ angle: Math.PI / 2, offset: d });
+            } else if (patternType === 'horizontal5') {
+                const offsets5 = computeEvenOffsets(5);
+                for (const d of offsets5) lineDefs.push({ angle: 0, offset: d });
+            } else if (patternType === 'gridDiag5') {
+                const offsets5 = computeEvenOffsets(5);
+                for (const d of offsets5) lineDefs.push({ angle: Math.PI / 4, offset: d });
+                for (const d of offsets5) lineDefs.push({ angle: 3 * Math.PI / 4, offset: d });
+            }
+
+            for (const def of lineDefs) {
+                const ep = computeLineEndpoints(def.angle, def.offset);
+                if (!ep) continue;
+                const strike = {
+                    startX: ep.startX,
+                    startY: ep.startY,
+                    endX: ep.endX,
+                    endY: ep.endY,
+                    phase: 'telegraph',
+                    timer: 0,
+                    zigzag: []
+                };
+                for (let j = 0; j < 12; j++) {
+                    strike.zigzag.push((Math.random() - 0.5) * 30);
+                }
+                bossLightningStrikes.push(strike);
+            }
+        }
+
+        function updateLightningStrikes(dt) {
+            if (!currentBoss || currentBoss.type !== 'lightningNexus') return;
+            if (bossLightningStrikes.length === 0) return;
+
+            let allDone = true;
+            for (const s of bossLightningStrikes) {
+                s.timer += dt;
+
+                if (s.phase === 'telegraph') {
+                    if (s.timer >= 1.5) {
+                        s.phase = 'fire';
+                        s.timer = 0;
+                        triggerShake(6, 200);
+                        for (let j = 0; j < s.zigzag.length; j++) {
+                            s.zigzag[j] = (Math.random() - 0.5) * 40;
+                        }
+                    }
+                    allDone = false;
+                } else if (s.phase === 'fire') {
+                    if (Math.random() < 0.5) {
+                        for (let j = 0; j < s.zigzag.length; j++) {
+                            s.zigzag[j] = (Math.random() - 0.5) * 40;
+                        }
+                    }
+                    if (s.timer >= 0.5) {
+                        s.phase = 'cooldown';
+                        s.timer = 0;
+                    }
+                    allDone = false;
+                } else if (s.phase === 'cooldown') {
+                    if (s.timer < 1.0) {
+                        allDone = false;
+                    }
+                }
+            }
+
+            if (allDone) {
+                bossLightningStrikes = [];
+            }
+        }
+
+        function checkLightningStrikeCollisions() {
+            if (!currentBoss || currentBoss.type !== 'lightningNexus') return;
+            if (player.invulnerable > 0) return;
+
+            for (const s of bossLightningStrikes) {
+                if (s.phase !== 'fire') continue;
+
+                // Line-vs-circle collision using stored endpoints
+                const dx = s.endX - s.startX;
+                const dy = s.endY - s.startY;
+                const lenSq = dx * dx + dy * dy;
+                let t = ((player.x - s.startX) * dx + (player.y - s.startY) * dy) / lenSq;
+                t = Math.max(0, Math.min(1, t));
+                const closestX = s.startX + t * dx;
+                const closestY = s.startY + t * dy;
+                const distX = player.x - closestX;
+                const distY = player.y - closestY;
+                const dist = Math.sqrt(distX * distX + distY * distY);
+
+                if (dist < 12.5 + PLAYER_COLLISION_RADIUS) {
+                    damagePlayer();
+                    triggerShake(8, 200);
+                    triggerFlash('#9F7AEA', 0.3, 150);
+                    spawnRing(player.x, player.y, '#9F7AEA', 30);
+                    break;
+                }
+            }
+        }
+
+        function renderLightningStrikes() {
+            if (!currentBoss || currentBoss.type !== 'lightningNexus') return;
+            if (bossLightningStrikes.length === 0) return;
+
+            for (const s of bossLightningStrikes) {
+                if (s.phase === 'telegraph') {
+                    const blink = Math.sin(s.timer * 12) > 0 ? 0.4 : 0.15;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(s.startX, s.startY);
+                    ctx.lineTo(s.endX, s.endY);
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.lineWidth = 3;
+                    ctx.globalAlpha = blink;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                } else if (s.phase === 'fire') {
+                    ctx.save();
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+
+                    const dx = s.endX - s.startX;
+                    const dy = s.endY - s.startY;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    const perpX = -dy / len;
+                    const perpY = dx / len;
+                    const segments = s.zigzag.length;
+
+                    // 3 layers on the same zigzag path (like player lightning)
+                    for (let layer = 2; layer >= 0; layer--) {
+                        ctx.beginPath();
+                        ctx.moveTo(s.startX, s.startY);
+                        for (let i = 1; i < segments; i++) {
+                            const t = i / segments;
+                            const bx = s.startX + dx * t;
+                            const by = s.startY + dy * t;
+                            ctx.lineTo(bx + perpX * s.zigzag[i], by + perpY * s.zigzag[i]);
+                        }
+                        ctx.lineTo(s.endX, s.endY);
+
+                        if (layer === 0) {
+                            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                            ctx.lineWidth = 2;
+                        } else if (layer === 1) {
+                            ctx.strokeStyle = 'rgba(159, 122, 234, 0.7)';
+                            ctx.lineWidth = 5;
+                        } else {
+                            ctx.strokeStyle = 'rgba(99, 179, 237, 0.4)';
+                            ctx.lineWidth = 10;
+                        }
+                        ctx.stroke();
+                    }
+
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Lightning Lines pattern function — fires lightning + projectiles simultaneously
+        function bossPattern_LightningLines(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            if (!state.initialized) {
+                state.initialized = true;
+                initLightningLines(state.lineType);
+            }
+
+            // Simultaneous projectile fire during the pattern
+            const boss = currentBoss;
+            const projType = state.projType || 'spiral';
+            const isP2 = boss.phase === 2;
+            const speed = isP2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED;
+
+            if (projType === 'spiral') {
+                // Continuous spiral fire throughout the pattern
+                const interval = isP2 ? 0.08 : 0.12;
+                if (state.fireTimer >= interval) {
+                    state.fireTimer -= interval;
+                    if (!state.spiralAngle) state.spiralAngle = 0;
+                    spawnBossProjectile(boss.x, boss.y, state.spiralAngle, speed);
+                    if (isP2) {
+                        // Double spiral in P2
+                        spawnBossProjectile(boss.x, boss.y, state.spiralAngle + Math.PI, speed);
+                    }
+                    state.spiralAngle += 15 * Math.PI / 180;
+                }
+            } else if (projType === 'burst') {
+                // Repeated ring bursts
+                const interval = isP2 ? 0.7 : 1.0;
+                const count = isP2 ? 32 : 20;
+                if (state.fireTimer >= interval && state.bursts < (isP2 ? 4 : 3)) {
+                    state.fireTimer -= interval;
+                    state.bursts++;
+                    const offset = state.bursts * (Math.PI / count);
+                    for (let i = 0; i < count; i++) {
+                        const angle = (Math.PI * 2 / count) * i + offset;
+                        spawnBossProjectile(boss.x, boss.y, angle, speed);
+                    }
+                }
+            } else if (projType === 'corner') {
+                // Corner barrage from vertices
+                const interval = isP2 ? 0.25 : 0.4;
+                const maxBursts = isP2 ? 10 : 6;
+                if (state.fireTimer >= interval && state.bursts < maxBursts) {
+                    state.fireTimer -= interval;
+                    state.bursts++;
+                    const sides = boss.sides;
+                    for (let i = 0; i < sides; i++) {
+                        const vAngle = (Math.PI * 2 / sides) * i + boss.rotation * Math.PI / 180;
+                        const sx = boss.x + Math.cos(vAngle) * boss.size;
+                        const sy = boss.y + Math.sin(vAngle) * boss.size;
+                        spawnBossProjectile(sx, sy, vAngle, speed);
+                        if (isP2) {
+                            spawnBossProjectile(sx, sy, vAngle + 12 * Math.PI / 180, speed * 0.85);
+                            spawnBossProjectile(sx, sy, vAngle - 12 * Math.PI / 180, speed * 0.85);
+                        }
+                    }
+                }
+            }
+
+            // Total duration: 1.5 (telegraph) + 0.5 (fire) + 1.0 (cooldown) = 3.0s
+            return state.elapsed >= 3.0;
+        }
+
+        // --- Lightning Nexus: Chasing Electric Trail ---
+
+        function spawnTrailNode() {
+            if (!currentBoss || !player) return;
+            const isP2 = currentBoss.phase === 2;
+            bossTrailNodes.push({
+                x: player.x,
+                y: player.y,
+                radius: 0,
+                maxRadius: 48,
+                growing: true,
+                growTimer: 0,
+                maxGrowTime: isP2 ? 1.0 : 1.5,
+                active: false,
+                hp: 1066,
+                maxHp: 1066
+            });
+        }
+
+        function destroyTrailNode(nodeIndex) {
+            const node = bossTrailNodes[nodeIndex];
+            if (!node) return;
+
+            // Find incoming ray (ends at this node) and outgoing ray (starts from this node)
+            let incomingIdx = -1;
+            let outgoingIdx = -1;
+            for (let i = 0; i < bossTrailRays.length; i++) {
+                const r = bossTrailRays[i];
+                if (r.endX === node.x && r.endY === node.y) incomingIdx = i;
+                if (r.startX === node.x && r.startY === node.y) outgoingIdx = i;
+            }
+
+            // Merge rays: outgoing ray's start becomes incoming ray's start
+            if (incomingIdx !== -1 && outgoingIdx !== -1) {
+                bossTrailRays[outgoingIdx].startX = bossTrailRays[incomingIdx].startX;
+                bossTrailRays[outgoingIdx].startY = bossTrailRays[incomingIdx].startY;
+                bossTrailRays.splice(incomingIdx, 1);
+            } else if (incomingIdx !== -1) {
+                // Last node in chain — just remove incoming ray
+                bossTrailRays.splice(incomingIdx, 1);
+            } else if (outgoingIdx !== -1) {
+                // First node — reconnect outgoing to boss
+                bossTrailRays[outgoingIdx].startX = currentBoss ? currentBoss.x : bossTrailRays[outgoingIdx].startX;
+                bossTrailRays[outgoingIdx].startY = currentBoss ? currentBoss.y : bossTrailRays[outgoingIdx].startY;
+            }
+
+            // Death shockwave — 12 projectiles from node edges
+            const bossColor = currentBoss ? currentBoss.color : '#9F7AEA';
+            for (let j = 0; j < 12; j++) {
+                const expAngle = (Math.PI * 2 / 12) * j;
+                const edgeX = node.x + Math.cos(expAngle) * node.radius;
+                const edgeY = node.y + Math.sin(expAngle) * node.radius;
+                spawnBossProjectile(edgeX, edgeY, expAngle, BOSS_PROJ_SPEED * 0.9, {
+                    color: bossColor,
+                    radius: 6,
+                    hp: 2,
+                    life: 4
+                });
+            }
+            spawnRing(node.x, node.y, bossColor, 40);
+            spawnRing(node.x, node.y, bossColor, 60);
+            triggerShake(6, 200);
+
+            bossTrailNodes.splice(nodeIndex, 1);
+        }
+
+        function updateTrailNodes(dt) {
+            if (!currentBoss || currentBoss.type !== 'lightningNexus') return;
+            const isP2 = currentBoss.phase === 2;
+
+            // Spawn new nodes on timer
+            bossTrailTimer -= dt;
+            if (bossTrailTimer <= 0) {
+                spawnTrailNode();
+                bossTrailTimer = isP2 ? 2.0 : 3.0;
+            }
+
+            // Update growing nodes
+            for (const node of bossTrailNodes) {
+                if (!node.growing) continue;
+                node.growTimer += dt;
+                node.radius = node.maxRadius * Math.min(1, node.growTimer / node.maxGrowTime);
+
+                // Growth complete — activate and create connecting ray
+                if (node.growTimer >= node.maxGrowTime) {
+                    node.growing = false;
+                    node.active = true;
+
+                    // Find previous active node for ray connection
+                    let prevX = currentBoss.x;
+                    let prevY = currentBoss.y;
+                    const activeNodes = bossTrailNodes.filter(n => n.active && n !== node);
+                    if (activeNodes.length > 0) {
+                        const prev = activeNodes[activeNodes.length - 1];
+                        prevX = prev.x;
+                        prevY = prev.y;
+                    }
+
+                    bossTrailRays.push({
+                        startX: prevX,
+                        startY: prevY,
+                        endX: node.x,
+                        endY: node.y
+                    });
+                }
+            }
+
+            // Cap at 10 nodes — remove oldest node + its incoming ray, reconnect next ray
+            while (bossTrailNodes.length > 10) {
+                bossTrailNodes.shift();
+                if (bossTrailRays.length > 0) bossTrailRays.shift();
+                // Reconnect the next ray's start to the boss (since its previous start node was removed)
+                if (bossTrailRays.length > 0) {
+                    bossTrailRays[0].startX = currentBoss.x;
+                    bossTrailRays[0].startY = currentBoss.y;
+                }
+            }
+        }
+
+        function checkTrailCollisions() {
+            if (!currentBoss || currentBoss.type !== 'lightningNexus') return;
+            if (player.invulnerable > 0) return;
+            if (player._bossDmgCooldown > 0) return;
+
+            // Check circle borders (ring collision)
+            for (const node of bossTrailNodes) {
+                if (!node.active) continue; // only damage when fully grown
+                const dx = player.x - node.x;
+                const dy = player.y - node.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const ringDist = Math.abs(dist - node.radius);
+                if (ringDist < 15 + PLAYER_COLLISION_RADIUS) {
+                    player._bossDmgCooldown = 0.12;
+                    damagePlayer();
+                    triggerShake(6, 150);
+                    triggerFlash('#9F7AEA', 0.3, 150);
+                    spawnRing(player.x, player.y, '#00FFFF', 25);
+                    return;
+                }
+            }
+
+            // Check rays (line segment collision)
+            for (const ray of bossTrailRays) {
+                const dx = ray.endX - ray.startX;
+                const dy = ray.endY - ray.startY;
+                const lenSq = dx * dx + dy * dy;
+                if (lenSq === 0) continue;
+                let t = ((player.x - ray.startX) * dx + (player.y - ray.startY) * dy) / lenSq;
+                t = Math.max(0, Math.min(1, t));
+                const closestX = ray.startX + t * dx;
+                const closestY = ray.startY + t * dy;
+                const distX = player.x - closestX;
+                const distY = player.y - closestY;
+                const dist = Math.sqrt(distX * distX + distY * distY);
+
+                if (dist < 12.5 + PLAYER_COLLISION_RADIUS) {
+                    player._bossDmgCooldown = 0.12;
+                    damagePlayer();
+                    triggerShake(6, 150);
+                    triggerFlash('#9F7AEA', 0.3, 150);
+                    spawnRing(player.x, player.y, '#9F7AEA', 25);
+                    return;
+                }
+            }
+        }
+
+        function renderTrailNodes() {
+            if (!currentBoss || currentBoss.type !== 'lightningNexus') return;
+
+            // Render rays (lightning bolts between nodes)
+            for (const ray of bossTrailRays) {
+                const dx = ray.endX - ray.startX;
+                const dy = ray.endY - ray.startY;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len < 1) continue;
+                const perpX = -dy / len;
+                const perpY = dx / len;
+                const segments = Math.max(8, Math.floor(len / 40));
+
+                // Single zigzag path, regenerated each frame
+                const zigzag = [];
+                for (let i = 0; i <= segments; i++) {
+                    zigzag.push(i === 0 || i === segments ? 0 : (Math.random() - 0.5) * 25);
+                }
+
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // 3 layers on the same zigzag (like player lightning)
+                for (let layer = 2; layer >= 0; layer--) {
+                    ctx.beginPath();
+                    for (let i = 0; i <= segments; i++) {
+                        const frac = i / segments;
+                        const x = ray.startX + dx * frac + perpX * zigzag[i];
+                        const y = ray.startY + dy * frac + perpY * zigzag[i];
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+
+                    if (layer === 0) {
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.lineWidth = 1.5;
+                    } else if (layer === 1) {
+                        ctx.strokeStyle = 'rgba(159, 122, 234, 0.6)';
+                        ctx.lineWidth = 3;
+                    } else {
+                        ctx.strokeStyle = 'rgba(99, 179, 237, 0.35)';
+                        ctx.lineWidth = 6;
+                    }
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            // Render nodes (electrified circles)
+            for (const node of bossTrailNodes) {
+                if (node.radius < 2) continue;
+
+                ctx.save();
+                ctx.translate(node.x, node.y);
+
+                if (node.growing) {
+                    // Growing: pulsing electric circle with crackling border
+                    const pulse = 0.6 + 0.4 * Math.sin(gameTime * 12);
+                    const blink = Math.sin(gameTime * 20) > 0 ? 1.0 : 0.5;
+
+                    // Outer electric glow
+                    setGlow(ctx, '#00FFFF', 12);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${0.4 * blink * pulse})`;
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    clearGlow(ctx);
+
+                    // Inner purple ring
+                    ctx.beginPath();
+                    ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(159, 122, 234, ${0.6 * pulse})`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // Electric crackle sparks along circumference
+                    const sparkCount = 6;
+                    for (let i = 0; i < sparkCount; i++) {
+                        const angle = (Math.PI * 2 / sparkCount) * i + gameTime * 3;
+                        const sx = Math.cos(angle) * node.radius;
+                        const sy = Math.sin(angle) * node.radius;
+                        const jx = (Math.random() - 0.5) * 12;
+                        const jy = (Math.random() - 0.5) * 12;
+                        ctx.beginPath();
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(sx + jx, sy + jy);
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${0.8 * blink})`;
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                } else {
+                    // Active: solid electric circle — flickers when damaged
+                    const hpRatio = node.hp / node.maxHp;
+                    const damaged = hpRatio < 1;
+                    const flicker = damaged ? (Math.sin(gameTime * 25) > 0 ? 1.0 : 0.4) : 1.0;
+                    const baseAlpha = damaged ? (0.3 + 0.5 * hpRatio) : 0.5;
+
+                    setGlow(ctx, damaged ? '#FF4444' : '#9F7AEA', 8);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(${damaged ? '255, 68, 68' : '159, 122, 234'}, ${baseAlpha * flicker})`;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    clearGlow(ctx);
+
+                    // Subtle cyan inner ring
+                    ctx.beginPath();
+                    ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${0.2 * flicker})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    // Faint fill
+                    ctx.beginPath();
+                    ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${damaged ? '255, 68, 68' : '159, 122, 234'}, 0.05)`;
+                    ctx.fill();
+
+                    // Damage sparks when low HP
+                    if (hpRatio < 0.4) {
+                        for (let i = 0; i < 3; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const sx = Math.cos(angle) * node.radius;
+                            const sy = Math.sin(angle) * node.radius;
+                            ctx.beginPath();
+                            ctx.moveTo(sx, sy);
+                            ctx.lineTo(sx + (Math.random() - 0.5) * 16, sy + (Math.random() - 0.5) * 16);
+                            ctx.strokeStyle = `rgba(255, 68, 68, ${0.8 * flicker})`;
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // --- Lightning Nexus: Custom Renderer ---
+
+        function renderLightningNexus() {
+            const boss = currentBoss;
+            const sides = 8; // octagon
+            const size = boss.size;
+
+            ctx.save();
+            ctx.translate(boss.x, boss.y);
+            ctx.rotate(boss.rotation * Math.PI / 180);
+
+            // Pulsating aura
+            const auraPulse = Math.sin(gameTime * 5) * 0.15 + 0.25;
+            ctx.beginPath();
+            ctx.arc(0, 0, size + 25 + Math.sin(gameTime * 3) * 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#9F7AEA';
+            ctx.globalAlpha = auraPulse * (boss.phase === 2 ? 1.4 : 1);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Outer glow ring
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * (size + 10);
+                const py = Math.sin(angle) * (size + 10);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = '#9F7AEA';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.4 + Math.sin(gameTime * 4) * 0.2;
+            setGlow(ctx, '#9F7AEA', 20);
+            ctx.stroke();
+            clearGlow(ctx);
+            ctx.globalAlpha = 1;
+
+            // Main body octagon
+            const vertices = [];
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * size;
+                const py = Math.sin(angle) * size;
+                vertices.push({ x: px, y: py });
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+
+            // Fill with purple gradient
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+            gradient.addColorStop(0, '#9F7AEA');
+            gradient.addColorStop(0.5, '#9F7AEA88');
+            gradient.addColorStop(1, '#9F7AEA22');
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = boss.phase === 2 ? 0.7 : 0.5;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Border
+            ctx.strokeStyle = '#9F7AEA';
+            ctx.lineWidth = boss.phase === 2 ? 3 : 2;
+            ctx.stroke();
+
+            // Flash white on damage
+            if (boss.flashTimer > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(boss.flashTimer / 0.1, 0.6) + ')';
+                ctx.fill();
+            }
+
+            // Electric arcs between vertices — single zigzag, 3 layers
+            const arcCount = sides;
+            for (let i = 0; i < arcCount; i++) {
+                const v1 = vertices[i];
+                const v2 = vertices[(i + 1) % sides];
+                const arcDx = v2.x - v1.x;
+                const arcDy = v2.y - v1.y;
+                const arcLen = Math.sqrt(arcDx * arcDx + arcDy * arcDy);
+                if (arcLen < 1) continue;
+                const arcPerpX = -arcDy / arcLen;
+                const arcPerpY = arcDx / arcLen;
+
+                // Generate single zigzag path
+                const segCount = 5;
+                const zigzag = [];
+                for (let s = 0; s <= segCount; s++) {
+                    zigzag.push(s === 0 || s === segCount ? 0 : (Math.random() - 0.5) * 14);
+                }
+
+                const isP2 = boss.phase === 2;
+                for (let layer = 2; layer >= 0; layer--) {
+                    ctx.beginPath();
+                    for (let s = 0; s <= segCount; s++) {
+                        const t = s / segCount;
+                        const bx = v1.x + arcDx * t + arcPerpX * zigzag[s];
+                        const by = v1.y + arcDy * t + arcPerpY * zigzag[s];
+                        if (s === 0) ctx.moveTo(bx, by); else ctx.lineTo(bx, by);
+                    }
+
+                    if (layer === 0) {
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${isP2 ? 0.8 : 0.5})`;
+                        ctx.lineWidth = 1;
+                    } else if (layer === 1) {
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${isP2 ? 0.6 : 0.35})`;
+                        ctx.lineWidth = 2;
+                    } else {
+                        ctx.strokeStyle = `rgba(159, 122, 234, ${isP2 ? 0.3 : 0.15})`;
+                        ctx.lineWidth = 4;
+                    }
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.stroke();
+                }
+            }
+
+            // Pulsating center core
+            const coreSize = 14 + Math.sin(gameTime * 6) * 5;
+            ctx.beginPath();
+            ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.globalAlpha = 0.7 + Math.sin(gameTime * 8) * 0.3;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Inner electric ring
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#00FFFF';
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.3 + Math.sin(gameTime * 7) * 0.15;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Phase 2: inner octagon spinning opposite + constant spark particles
+            if (boss.phase === 2) {
+                ctx.save();
+                ctx.rotate(-boss.rotation * 2 * Math.PI / 180);
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i;
+                    const px = Math.cos(angle) * (size * 0.55);
+                    const py = Math.sin(angle) * (size * 0.55);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = '#00FFFF';
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
+            ctx.restore();
+
+            // Phase 2 constant spark particles (outside translate/rotate context)
+            if (boss.phase === 2 && Math.random() < 0.4) {
+                const sparkAngle = Math.random() * Math.PI * 2;
+                const sparkDist = boss.size + Math.random() * 30;
+                const sx = boss.x + Math.cos(sparkAngle) * sparkDist;
+                const sy = boss.y + Math.sin(sparkAngle) * sparkDist;
+                const p = pools.particle.acquire();
+                p.x = sx; p.y = sy;
+                p.vx = (Math.random() - 0.5) * 80;
+                p.vy = (Math.random() - 0.5) * 80;
+                p.life = 0.25; p.maxLife = 0.25;
+                p.size = 3 + Math.random() * 4;
+                p.color = Math.random() < 0.5 ? '#9F7AEA' : '#00FFFF';
+                p.type = 'spark';
+                particles.push(p);
+            }
+        }
+
+        // --- Lightning Nexus: Attack Sequences ---
+
+        const LN_PHASE1_SEQUENCE = [
+            { pattern: 'gridVH', proj: 'spiral', pause: 2 },
+            { pattern: 'singleDiagonal', proj: 'corner', pause: 2 },
+            { pattern: 'gridDiag3', proj: 'burst', pause: 2 }
+        ];
+        const LN_PHASE2_SEQUENCE = [
+            { pattern: 'vertical5', proj: 'corner', pause: 1 },
+            { pattern: 'horizontal5', proj: 'burst', pause: 1 },
+            { pattern: 'gridDiag5', proj: 'spiral', pause: 1 }
+        ];
+
+        function getLNPattern(name) {
+            return bossPattern_LightningLines;
+        }
+
+        function getLNPatternState(entry) {
+            return {
+                elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false,
+                initialized: false, lineType: entry.pattern, projType: entry.proj
+            };
         }
 
         // ============================================================
@@ -6051,6 +7055,19 @@
                         m.hp -= explosionDamage;
                     }
                 }
+
+                // Damage trail nodes in blast radius
+                for (let ni = bossTrailNodes.length - 1; ni >= 0; ni--) {
+                    const node = bossTrailNodes[ni];
+                    if (!node.active || node.hp <= 0) continue;
+                    const dx = node.x - explosionX;
+                    const dy = node.y - explosionY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= explosionRadius) {
+                        node.hp -= explosionDamage;
+                        if (node.hp <= 0) destroyTrailNode(ni);
+                    }
+                }
             }
 
             // Ricochet: spawn mini rockets
@@ -6361,6 +7378,59 @@
                 }
             }
 
+            // Player bullets vs Trail nodes (destructible)
+            if (currentBoss && currentBoss.type === 'lightningNexus' && bossTrailNodes.length > 0) {
+                for (let i = bossTrailNodes.length - 1; i >= 0; i--) {
+                    const node = bossTrailNodes[i];
+                    if (!node.active) continue;
+                    for (let j = bullets.length - 1; j >= 0; j--) {
+                        const b = bullets[j];
+                        const dx = node.x - b.x;
+                        const dy = node.y - b.y;
+                        const distSq = dx * dx + dy * dy;
+                        const hitDist = node.radius + 6;
+                        if (distSq < hitDist * hitDist) {
+                            node.hp -= (b.damage || 1);
+                            if (!b.piercing) {
+                                explodePlayerRocket(b);
+                                pools.bullet.release(b);
+                                fastRemove(bullets, j);
+                            }
+                            if (node.hp <= 0) {
+                                destroyTrailNode(i);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Orbitals vs Trail nodes
+                if (orbitals.length > 0) {
+                    const orbitalRadius = ORBITAL_RADIUS;
+                    for (let i = bossTrailNodes.length - 1; i >= 0; i--) {
+                        const node = bossTrailNodes[i];
+                        if (!node.active) continue;
+                        for (let k = 0; k < orbitals.length; k++) {
+                            const orb = orbitals[k];
+                            const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
+                            const orbY = player.y + Math.sin(orb.angle) * orbitalRadius;
+                            const dx = node.x - orbX;
+                            const dy = node.y - orbY;
+                            const distSq = dx * dx + dy * dy;
+                            const hitDist = node.radius + ORBITAL_SIZE;
+                            if (distSq < hitDist * hitDist) {
+                                node.hp -= 20;
+                                spawnRing(node.x, node.y, '#00FFFF', 20);
+                                if (node.hp <= 0) {
+                                    destroyTrailNode(i);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             // Boss spheres vs Player (gentle contact damage)
             if (currentBoss && currentBoss.type === 'orbitalGuardian' && bossSpheres.length > 0) {
                 if (!player._sphereDmgCooldown) player._sphereDmgCooldown = 0;
@@ -6413,6 +7483,10 @@
                     }
                 }
             }
+
+            // Lightning Nexus: lightning strikes vs Player
+            checkLightningStrikeCollisions();
+            checkTrailCollisions();
 
             // Player bullets vs Boss projectiles (destructible)
             if (currentBoss) {
@@ -6490,6 +7564,21 @@
                         if (distSq < auraRange * auraRange) {
                             m.hp -= stats.auraDamage || 5;
                             spawnRing(m.x, m.y, SKILL_TREE['plasma_field'].color, 20);
+                        }
+                    }
+
+                    // Plasma aura vs Trail nodes
+                    for (let i = bossTrailNodes.length - 1; i >= 0; i--) {
+                        const node = bossTrailNodes[i];
+                        if (!node.active || node.hp <= 0) continue;
+                        const dx = node.x - player.x;
+                        const dy = node.y - player.y;
+                        const distSq = dx * dx + dy * dy;
+                        const auraRange = stats.auraRadius + node.radius;
+                        if (distSq < auraRange * auraRange) {
+                            node.hp -= stats.auraDamage || 5;
+                            spawnRing(node.x, node.y, SKILL_TREE['plasma_field'].color, 20);
+                            if (node.hp <= 0) destroyTrailNode(i);
                         }
                     }
                 }
@@ -6937,6 +8026,8 @@
                 renderBossSpheres();
                 renderBossProjectiles();
                 renderHomingMissiles();
+                renderLightningStrikes();
+                renderTrailNodes();
                 if (player && gameState !== 'gameOver') {
                     renderAura();
                     renderPlayer();
