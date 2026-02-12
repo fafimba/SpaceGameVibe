@@ -1,5 +1,7 @@
 # Stellar Swarm - Comprehensive Codebase Analysis
 
+> **NOTA (2026-02-12):** Este análisis describe el código tal como está actualmente en index.html, incluyendo el sistema de bosses. El sistema de bosses ha sido **archivado** y será extraído del código principal. El nuevo sistema de progresión (upgrades multi-nivel, moneda persistente, tienda) se documenta en `WEAPON_EVOLUTION_DESIGN.md`. Las secciones de este documento que referencian bosses reflejan el estado del código antes de la refactorización.
+
 ## Overview
 Stellar Swarm is a Vampire Survivors-style space shooter built in vanilla JavaScript with Canvas 2D rendering. The game features a modular weapon system, dynamic wave spawning, progression through leveling and skill trees, and extensive optimization for performance.
 

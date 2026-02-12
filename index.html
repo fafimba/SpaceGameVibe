@@ -322,7 +322,8 @@
             SCOUT: { radius: 10, speed: 120, turnRate: 90, hp: 4, points: 10, color: '#FF6B6B', outline: '#C04848' },
             KAMIKAZE: { radius: 10, speed: 180, turnRate: 60, hp: 4, points: 25, color: '#FF9A6B', outline: '#D86A3A' },
             SPINNER: { radius: 14, speed: 90, turnRate: 60, hp: 4, points: 40, color: '#3A9AD9', outline: '#1E6F9A', fireRate: 1.2 },
-            TANK: { radius: 22, speed: 70, turnRate: 45, hp: 12, points: 75, color: '#C792FF', outline: '#8A5DBF' }
+            TANK: { radius: 22, speed: 70, turnRate: 45, hp: 12, points: 75, color: '#C792FF', outline: '#8A5DBF' },
+            ALIEN: { radius: 34, speed: 55, turnRate: 35, hp: 60, points: 0, color: '#39FF14', outline: '#1A5C1A' }
         };
         
         const INITIAL_SPAWN_INTERVAL_MIN = 0.15;
@@ -819,6 +820,7 @@
         
         // Cheat code system
         let cheatCodeBuffer = '';
+        let cheatCodeTimer = 0; // auto-clear buffer after inactivity
         const CHEAT_CODES = {
             'rocket': () => {
                 // Unlock missile launcher and all missile upgrades
@@ -898,6 +900,24 @@
             },
             'nexus': () => {
                 spawnBoss(2);
+            },
+            'plasma': () => {
+                spawnBoss(3);
+            },
+            'swarm': () => {
+                spawnBoss(4);
+            },
+            'reset': () => {
+                resetGame();
+                spawnFloatingText(player.x, player.y - 50, 'GAME RESET', '#FF6B6B');
+            },
+            'wipe': () => {
+                const prog = loadProgression();
+                prog.unlockedWeapons = { laser_cannon: true };
+                prog.bossDefeats = {};
+                saveProgression(prog);
+                spawnFloatingText(player.x, player.y - 50, 'PROGRESSION WIPED', '#FF6B6B');
+                spawnFloatingText(player.x, player.y, 'WEAPONS LOCKED', '#FF6B6B');
             }
         };
         
@@ -981,7 +1001,7 @@
         const BOSS_TYPES = ['orbitalGuardian', 'missileTitan', 'lightningNexus', 'plasmaOverlord', 'swarmMother'];
         const BOSS_NAMES = ['ORBITAL GUARDIAN', 'MISSILE TITAN', 'LIGHTNING NEXUS', 'PLASMA OVERLORD', 'SWARM MOTHER'];
         const BOSS_COLORS = ['#00DFFF', '#FFD93D', '#9F7AEA', '#FF6600', '#39FF14'];
-        const BOSS_BASE_HP = [2000, 6000, 8000, 12000, 16000];
+        const BOSS_BASE_HP = [2000, 6000, 8000, 11000, 15000];
         const BOSS_WEAPON_UNLOCK = ['orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone'];
 
         // Boss projectile constants
@@ -1000,6 +1020,14 @@
         let bossHealthBarDisplayHP = 0;
         let bossIncoming = null; // { bossIndex, timer } — pending boss during arena close
 
+        // Boss victory screen
+        let bossVictoryScreen = null; // null | 'weaponUnlock' | 'bossDefeated'
+        let bossVictoryTimer = 0;
+        let bossVictoryData = null; // { bossName, bossColor, weaponName, weaponColor, weaponIcon, levelsGranted, xpGranted, combatTime, bossMaxHp, bossX, bossY }
+        const BOSS_VICTORY_DURATION = 4.5;
+        const BOSS_VICTORY_MIN_SKIP = 1.5;
+        let bossVictoryParticles = [];
+
         // Orbital Guardian sphere system
         let bossSpheres = [];
 
@@ -1012,6 +1040,9 @@
         let bossTrailNodes = [];    // { x, y, radius, maxRadius, growing, growTimer, maxGrowTime, active }
         let bossTrailRays = [];     // { startX, startY, endX, endY }
         let bossTrailTimer = 0;     // countdown to spawn next node
+
+        // Plasma Overlord systems
+        let bossPlasmaRings = []; // { centerX, centerY, innerRadius, outerRadius, phase, timer, delay, expanding, expandSpeed, maxOuterRadius, thickness }
 
         // Milestones
         let lastMilestone = 0;
@@ -1390,6 +1421,15 @@
             bossPatternActive = false;
             bossPatternState = null;
             bossSpheres = [];
+            bossHomingMissiles = [];
+            bossLightningStrikes = [];
+            bossTrailNodes = [];
+            bossTrailRays = [];
+            bossPlasmaRings = [];
+            bossVictoryScreen = null;
+            bossVictoryTimer = 0;
+            bossVictoryData = null;
+            bossVictoryParticles = [];
 
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
@@ -1496,20 +1536,30 @@
         function setupInput() {
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
-                
+
+                // Boss victory screen: skip on any key (after min time), block all input before that
+                if (bossVictoryScreen) {
+                    if (bossVictoryTimer >= BOSS_VICTORY_MIN_SKIP) {
+                        dismissBossVictory();
+                    }
+                    return;
+                }
+
                 // Handle cheat codes (only when playing)
                 if (gameState === 'playing' && e.key.length === 1) {
                     cheatCodeBuffer += e.key.toLowerCase();
-                    
+                    cheatCodeTimer = 2.0; // clear buffer after 2s of inactivity
+
                     // Check if any cheat code matches the buffer
                     for (const [code, action] of Object.entries(CHEAT_CODES)) {
                         if (cheatCodeBuffer.includes(code)) {
                             action();
                             cheatCodeBuffer = '';
+                            cheatCodeTimer = 0;
                             break;
                         }
                     }
-                    
+
                     // Keep buffer manageable
                     if (cheatCodeBuffer.length > 20) {
                         cheatCodeBuffer = cheatCodeBuffer.slice(-10);
@@ -1525,8 +1575,8 @@
                     // skilltree: no ESC close - must choose an upgrade
                 }
 
-                // P key pauses the game
-                if (e.code === 'KeyP') {
+                // P key pauses the game (skip if cheat code buffer is active)
+                if (e.code === 'KeyP' && !cheatCodeBuffer) {
                     if (gameState === 'playing') {
                         gameState = 'paused';
                     } else if (gameState === 'paused') {
@@ -1594,6 +1644,15 @@
             const baseRect = { x: 30, y: 0, cx: 90, cy: 0 };
             
             joystickZone.addEventListener('touchstart', (e) => {
+                // Boss victory screen: skip on tap (after min time), block input before that
+                if (bossVictoryScreen) {
+                    if (bossVictoryTimer >= BOSS_VICTORY_MIN_SKIP) {
+                        dismissBossVictory();
+                    }
+                    e.preventDefault();
+                    return;
+                }
+
                 if (gameState === 'menu') {
                     gameState = 'playing';
                     resetGame();
@@ -1845,6 +1904,43 @@
             gameTime += deltaTime;
             idleTimer += deltaTime;
 
+            // Boss victory screen timer — update even when frozen
+            if (bossVictoryScreen) {
+                bossVictoryTimer += deltaTime;
+
+                // Update victory particles
+                for (let i = 0; i < bossVictoryParticles.length; i++) {
+                    const p = bossVictoryParticles[i];
+                    p.x += p.vx * deltaTime;
+                    p.y += p.vy * deltaTime;
+                    // Wrap around screen
+                    if (p.y < -10) { p.y = CANVAS_HEIGHT + 10; p.x = Math.random() * CANVAS_WIDTH; }
+                    if (p.x < -10) p.x = CANVAS_WIDTH + 10;
+                    if (p.x > CANVAS_WIDTH + 10) p.x = -10;
+                }
+
+                // Auto-dismiss after duration
+                if (bossVictoryTimer >= BOSS_VICTORY_DURATION) {
+                    dismissBossVictory();
+                }
+
+                // During victory: only update particles, floating texts, effects (visual), camera
+                updateCamera();
+                updateParticles();
+                updateFloatingTexts();
+                updateEffects();
+                return; // Skip all gameplay updates
+            }
+
+            // Auto-clear cheat code buffer after inactivity
+            if (cheatCodeTimer > 0) {
+                cheatCodeTimer -= deltaTime;
+                if (cheatCodeTimer <= 0) {
+                    cheatCodeBuffer = '';
+                    cheatCodeTimer = 0;
+                }
+            }
+
             // Update wave alert timer
             if (waveAlertActive) {
                 waveAlertTimer += deltaTime;
@@ -1906,13 +2002,13 @@
 
             // Check collisions
             checkCollisions();
-            
+
             // Update effects
             updateEffects();
 
             // Survival time bonus
             score += deltaTime;
-            
+
             // Check milestones
             checkMilestones();
 
@@ -2115,12 +2211,41 @@
             player.lightningTimer -= deltaTime;
             if (stats.hasLightning && player.lightningTimer <= 0) {
                 const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, stats.lightningRange);
+                const rangeSq = stats.lightningRange * stats.lightningRange;
                 // Include boss as target for lightning
                 if (currentBoss) {
                     const bdx = currentBoss.x - player.x;
                     const bdy = currentBoss.y - player.y;
-                    if (bdx * bdx + bdy * bdy < stats.lightningRange * stats.lightningRange) {
+                    if (bdx * bdx + bdy * bdy < rangeSq) {
                         nearbyEnemies.push(currentBoss);
+                    }
+                }
+                // Include boss projectiles as targets for lightning activation
+                for (const bp of bossProjectiles) {
+                    const dx = bp.x - player.x;
+                    const dy = bp.y - player.y;
+                    if (dx * dx + dy * dy < rangeSq) {
+                        nearbyEnemies.push(bp);
+                        break;
+                    }
+                }
+                // Include homing missiles as targets for lightning activation
+                for (const hm of bossHomingMissiles) {
+                    const dx = hm.x - player.x;
+                    const dy = hm.y - player.y;
+                    if (dx * dx + dy * dy < rangeSq) {
+                        nearbyEnemies.push(hm);
+                        break;
+                    }
+                }
+                // Include trail nodes as targets for lightning activation
+                for (const tn of bossTrailNodes) {
+                    if (!tn.active || tn.hp <= 0) continue;
+                    const dx = tn.x - player.x;
+                    const dy = tn.y - player.y;
+                    if (dx * dx + dy * dy < rangeSq) {
+                        nearbyEnemies.push(tn);
+                        break;
                     }
                 }
                 if (nearbyEnemies.length > 0) {
@@ -3518,6 +3643,19 @@
                 bossPatternCooldown = 1.5;
             }
 
+            // Initialize Plasma Overlord state
+            if (currentBoss.type === 'plasmaOverlord') {
+                bossPlasmaRings = [];
+                bossPatternCooldown = 2.0;
+            }
+
+            // Initialize Swarm Mother state
+            if (currentBoss.type === 'swarmMother') {
+                bossBroodExplosions = [];
+                bossBroodCooldown = 0;
+                bossPatternCooldown = 2.0;
+            }
+
             // Spawn ring burst at boss position
             for (let i = 0; i < 12; i++) {
                 spawnRing(arenaCenter.x + (Math.random() - 0.5) * 60, arenaCenter.y + (Math.random() - 0.5) * 60, currentBoss.color, 50);
@@ -3573,6 +3711,12 @@
             // Lightning Nexus systems
             updateLightningStrikes(dt);
             updateTrailNodes(dt);
+
+            // Plasma Overlord systems
+            updatePlasmaRings(dt);
+
+            // Swarm Mother systems
+            updateBroodExplosions(dt);
 
             // Boss attack patterns
             updateBossPatterns(dt);
@@ -3698,6 +3842,80 @@
 
                 spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
                 spawnFloatingText(currentBoss.x, currentBoss.y, 'OVERCHARGED', '#00FFFF');
+            } else if (currentBoss.type === 'plasmaOverlord') {
+                // Orange-red flash + plasma pincer shockwave
+                triggerFlash('#FF4400', 0.8, 500);
+                triggerSlowmo(600);
+                triggerShake(18, 1000);
+
+                // 720° rage spin
+                currentBoss.phaseSpinRemaining = 720;
+
+                // Ring burst visuals
+                for (let i = 0; i < 12; i++) {
+                    spawnRing(currentBoss.x + (Math.random() - 0.5) * 60, currentBoss.y + (Math.random() - 0.5) * 60, '#FF4400', 100);
+                }
+
+                // Reset pattern sequence and clear rings
+                bossPatternIndex = 0;
+                bossPatternActive = false;
+                bossPatternCooldown = 1.0;
+                bossPatternState = null;
+                bossPlasmaRings = [];
+
+                // Pincer shockwave: inner ring expands to half, outer ring telegraphs
+                const R = ARENA_RADIUS;
+                const t = R * 0.08;
+                bossPlasmaRings.push({
+                    centerX: currentBoss.x, centerY: currentBoss.y,
+                    innerRadius: 80, outerRadius: 80 + t,
+                    phase: 'fire', timer: 0, delay: 0,
+                    expanding: false, expandInFire: true, expandSpeed: 500, maxOuterRadius: R * 0.5, thickness: t
+                });
+                bossPlasmaRings.push({
+                    centerX: currentBoss.x, centerY: currentBoss.y,
+                    innerRadius: R * 0.7, outerRadius: R * 0.7 + t,
+                    phase: 'telegraph', timer: 0, delay: 0,
+                    expanding: false, expandInFire: false, expandSpeed: 0, maxOuterRadius: R * 0.7 + t, thickness: t
+                });
+
+                spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
+                spawnFloatingText(currentBoss.x, currentBoss.y, 'MELTDOWN', '#FFAA00');
+            } else if (currentBoss.type === 'swarmMother') {
+                // Green flash + swarm shockwave
+                triggerFlash('#39FF14', 0.8, 500);
+                triggerSlowmo(600);
+                triggerShake(20, 1200);
+
+                // 720° rage spin
+                currentBoss.phaseSpinRemaining = 720;
+
+                // Massive shockwave: 36 green projectiles
+                const count = 36;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, BOSS_PROJ_SPEED * 1.0, {
+                        color: '#39FF14',
+                        radius: 8,
+                        hp: 2
+                    });
+                }
+
+                // Ring burst visuals
+                for (let i = 0; i < 14; i++) {
+                    spawnRing(currentBoss.x + (Math.random() - 0.5) * 80, currentBoss.y + (Math.random() - 0.5) * 80, '#39FF14', 120);
+                }
+
+                // Reset pattern sequence
+                bossPatternIndex = 0;
+                bossPatternActive = false;
+                bossPatternCooldown = 1.0;
+                bossPatternState = null;
+                bossBroodExplosions = [];
+                bossBroodCooldown = 0;
+
+                spawnFloatingText(currentBoss.x, currentBoss.y - currentBoss.size, 'PHASE 2', '#FF4444');
+                spawnFloatingText(currentBoss.x, currentBoss.y, 'HIVE UNLEASHED', '#39FF14');
             } else {
                 triggerFlash(currentBoss.color, 0.4, 400);
                 triggerSlowmo(300);
@@ -3723,8 +3941,11 @@
             bossesDefeatedThisRun.push(boss.index);
             bossDefeated = true;
 
-            // Save weapon unlock to progression
+            // Determine first vs repeat defeat
             const prog = loadProgression();
+            const isFirstDefeat = !prog.bossDefeats[boss.type] || prog.bossDefeats[boss.type] === 0;
+
+            // Save progression
             prog.unlockedWeapons[boss.weaponUnlock] = true;
             if (!prog.bossDefeats[boss.type]) {
                 prog.bossDefeats[boss.type] = 0;
@@ -3733,24 +3954,43 @@
             prog.stats.totalBossDefeats++;
             saveProgression(prog);
 
-            // Visual effects
-            triggerFlash('#FFFFFF', 0.6, 500);
-            triggerSlowmo(800);
-            triggerShake(15, 800);
-            spawnFloatingText(boss.x, boss.y - 80, 'BOSS DEFEATED', '#FFD700');
-            spawnFloatingText(boss.x, boss.y, boss.name + ' DESTROYED', '#FFD700');
-            spawnFloatingText(boss.x, boss.y - 40, boss.weaponUnlock.replace(/_/g, ' ').toUpperCase() + ' UNLOCKED!', boss.color);
-
-            // Particle explosion
-            for (let i = 0; i < 40; i++) {
-                spawnRing(boss.x + (Math.random() - 0.5) * boss.size, boss.y + (Math.random() - 0.5) * boss.size, boss.color, 60);
+            // Unlock weapon in current run
+            if (!unlockedSkills.includes(boss.weaponUnlock)) {
+                unlockedSkills.push(boss.weaponUnlock);
             }
 
-            // XP reward: grant enough XP for 2 levels
-            const xpReward = xpToNextLevel * 2;
-            collectXP(xpReward);
+            // Weapon display info lookup
+            const WEAPON_DISPLAY = {
+                'orbital_shield': { name: 'ORBITAL SHIELD', color: '#00DFFF', icon: 'orbital' },
+                'missile_launcher': { name: 'MISSILE LAUNCHER', color: '#FFD93D', icon: 'rocket' },
+                'lightning_ray': { name: 'LIGHTNING RAY', color: '#9F7AEA', icon: 'lightning' },
+                'plasma_field': { name: 'PLASMA FIELD', color: '#7FDBFF', icon: 'aura' },
+                'alien_drone': { name: 'ALIEN DRONE', color: '#39FF14', icon: 'drone' }
+            };
+            const weaponInfo = WEAPON_DISPLAY[boss.weaponUnlock] || { name: boss.weaponUnlock.replace(/_/g, ' ').toUpperCase(), color: boss.color, icon: 'laser' };
 
-            // Clear boss projectiles, pattern state, spheres, missiles, and lightning
+            // Calculate rewards
+            const levelsGranted = isFirstDefeat ? 3 : 2;
+            const xpGranted = Math.floor(xpToNextLevel * levelsGranted);
+            const combatTime = boss.combatStartTime ? (gameTime - boss.combatStartTime) : 0;
+
+            // Visual effects
+            triggerFlash('#FFFFFF', 0.8, 600);
+            triggerSlowmo(1000);
+            triggerShake(20, 1000);
+
+            // Epic particle explosion at boss position
+            for (let i = 0; i < 60; i++) {
+                spawnRing(boss.x + (Math.random() - 0.5) * boss.size * 1.5, boss.y + (Math.random() - 0.5) * boss.size * 1.5, boss.color, 80 + Math.random() * 40);
+            }
+            for (let i = 0; i < 30; i++) {
+                spawnRing(boss.x + (Math.random() - 0.5) * boss.size, boss.y + (Math.random() - 0.5) * boss.size, '#FFFFFF', 50 + Math.random() * 30);
+            }
+
+            // Grant XP (this may trigger levelUp/skill tree)
+            collectXP(xpGranted);
+
+            // Clear boss projectiles, pattern state, spheres, missiles, lightning, and plasma
             bossProjectiles.length = 0;
             bossPatternActive = false;
             bossPatternState = null;
@@ -3759,14 +3999,62 @@
             bossLightningStrikes = [];
             bossTrailNodes = [];
             bossTrailRays = [];
+            bossPlasmaRings = [];
+            bossBroodExplosions = [];
 
-            // Deactivate arena
+            // Kill all boss-spawned enemies on defeat
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (enemies[i].noXP) {
+                    spawnRing(enemies[i].x, enemies[i].y, '#39FF14', 30);
+                    pools.enemy.release(enemies[i]);
+                    fastRemove(enemies, i);
+                }
+            }
+
+            // Set up victory screen (freeze game, show overlay)
+            bossVictoryScreen = isFirstDefeat ? 'weaponUnlock' : 'bossDefeated';
+            bossVictoryTimer = 0;
+            bossVictoryData = {
+                bossName: boss.name,
+                bossColor: boss.color,
+                weaponName: weaponInfo.name,
+                weaponColor: weaponInfo.color,
+                weaponIcon: weaponInfo.icon,
+                levelsGranted: levelsGranted,
+                xpGranted: xpGranted,
+                combatTime: combatTime,
+                bossMaxHp: boss.maxHp,
+                bossX: boss.x,
+                bossY: boss.y
+            };
+            // Spawn golden victory particles
+            bossVictoryParticles = [];
+            for (let i = 0; i < 30; i++) {
+                bossVictoryParticles.push({
+                    x: Math.random() * CANVAS_WIDTH,
+                    y: Math.random() * CANVAS_HEIGHT,
+                    vx: (Math.random() - 0.5) * 60,
+                    vy: -30 - Math.random() * 80,
+                    size: 2 + Math.random() * 4,
+                    alpha: 0.5 + Math.random() * 0.5,
+                    color: isFirstDefeat ? '#FFD700' : boss.color
+                });
+            }
+
+            // Don't deactivate arena or clear boss yet — wait for victory screen to finish
+        }
+
+        function dismissBossVictory() {
+            bossVictoryScreen = null;
+            bossVictoryTimer = 0;
+            bossVictoryData = null;
+            bossVictoryParticles = [];
             deactivateArena();
             currentBoss = null;
         }
 
         function renderBoss() {
-            if (!currentBoss) return;
+            if (!currentBoss || bossVictoryScreen) return;
 
             const boss = currentBoss;
 
@@ -3777,6 +4065,16 @@
 
             if (boss.type === 'lightningNexus') {
                 renderLightningNexus();
+                return;
+            }
+
+            if (boss.type === 'plasmaOverlord') {
+                renderPlasmaOverlord();
+                return;
+            }
+
+            if (boss.type === 'swarmMother') {
+                renderSwarmMother();
                 return;
             }
 
@@ -4040,7 +4338,7 @@
         }
 
         function renderBossHealthBar() {
-            if (!currentBoss) return;
+            if (!currentBoss || bossVictoryScreen) return;
 
             const boss = currentBoss;
             const barWidth = 400;
@@ -4345,6 +4643,14 @@
                         const seq = currentBoss.phase === 2 ? LN_PHASE2_SEQUENCE : LN_PHASE1_SEQUENCE;
                         const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
                         bossPatternCooldown = seq[prevIndex].pause;
+                    } else if (currentBoss.type === 'plasmaOverlord') {
+                        const seq = currentBoss.phase === 2 ? PO_PHASE2_SEQUENCE : PO_PHASE1_SEQUENCE;
+                        const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
+                        bossPatternCooldown = seq[prevIndex].pause;
+                    } else if (currentBoss.type === 'swarmMother') {
+                        const seq = currentBoss.phase === 2 ? SM_PHASE2_SEQUENCE : SM_PHASE1_SEQUENCE;
+                        const prevIndex = (bossPatternIndex - 1 + seq.length) % seq.length;
+                        bossPatternCooldown = seq[prevIndex].pause;
                     } else {
                         bossPatternCooldown = currentBoss.phase === 2 ? 1.5 : 2.5;
                     }
@@ -4374,6 +4680,16 @@
                         const entry = seq[bossPatternIndex % seq.length];
                         currentBoss.currentPattern = getLNPattern(entry.pattern);
                         bossPatternState = getLNPatternState(entry);
+                    } else if (currentBoss.type === 'plasmaOverlord') {
+                        const seq = currentBoss.phase === 2 ? PO_PHASE2_SEQUENCE : PO_PHASE1_SEQUENCE;
+                        const entry = seq[bossPatternIndex % seq.length];
+                        currentBoss.currentPattern = getPOPattern(entry.pattern);
+                        bossPatternState = getPOPatternState(entry);
+                    } else if (currentBoss.type === 'swarmMother') {
+                        const seq = currentBoss.phase === 2 ? SM_PHASE2_SEQUENCE : SM_PHASE1_SEQUENCE;
+                        const entry = seq[bossPatternIndex % seq.length];
+                        currentBoss.currentPattern = getSMPattern(entry.pattern);
+                        bossPatternState = getSMPatternState(entry);
                     } else {
                         currentBoss.currentPattern = BOSS_PATTERNS[bossPatternIndex % BOSS_PATTERNS.length];
                         bossPatternState = { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false };
@@ -5722,6 +6038,962 @@
             };
         }
 
+        // --- Plasma Overlord (Boss 3) ---
+
+        function initPlasmaRings(patternType) {
+            bossPlasmaRings = [];
+            const cx = arenaCenter.x;
+            const cy = arenaCenter.y;
+            const R = ARENA_RADIUS; // 1200
+
+            if (patternType === 'singleDonut') {
+                // One big donut at ~55% arena radius, 120px thick
+                bossPlasmaRings.push({
+                    centerX: cx, centerY: cy,
+                    innerRadius: R * 0.5, outerRadius: R * 0.6,
+                    phase: 'telegraph', timer: 0, delay: 0,
+                    expanding: false, expandSpeed: 0, maxOuterRadius: R * 0.6, thickness: R * 0.1
+                });
+            } else if (patternType === 'concentricTriple') {
+                // 3 concentric donuts spanning most of the arena
+                const radii = [R * 0.25, R * 0.5, R * 0.8];
+                const thicknesses = [R * 0.08, R * 0.1, R * 0.1];
+                for (let i = 0; i < 3; i++) {
+                    const half = thicknesses[i] / 2;
+                    bossPlasmaRings.push({
+                        centerX: cx, centerY: cy,
+                        innerRadius: radii[i] - half, outerRadius: radii[i] + half,
+                        phase: 'waiting', timer: 0, delay: i * 0.3,
+                        expanding: false, expandSpeed: 0, maxOuterRadius: radii[i] + half, thickness: thicknesses[i]
+                    });
+                }
+            } else if (patternType === 'pincerWave') {
+                // Inner ring: expands from boss to half arena (deals damage while moving)
+                const t = R * 0.08;
+                bossPlasmaRings.push({
+                    centerX: cx, centerY: cy,
+                    innerRadius: 80, outerRadius: 80 + t,
+                    phase: 'fire', timer: 0, delay: 0,
+                    expanding: false, expandInFire: true, expandSpeed: 500, maxOuterRadius: R * 0.5, thickness: t
+                });
+                // Outer ring: telegraphs at ~75% arena, fires when inner arrives
+                bossPlasmaRings.push({
+                    centerX: cx, centerY: cy,
+                    innerRadius: R * 0.7, outerRadius: R * 0.7 + t,
+                    phase: 'telegraph', timer: 0, delay: 0,
+                    expanding: false, expandInFire: false, expandSpeed: 0, maxOuterRadius: R * 0.7 + t, thickness: t
+                });
+            }
+        }
+
+        function updatePlasmaRings(dt) {
+            if (!currentBoss || currentBoss.type !== 'plasmaOverlord') return;
+            if (bossPlasmaRings.length === 0) return;
+
+            let allDone = true;
+            for (const r of bossPlasmaRings) {
+                // Handle delayed start
+                if (r.phase === 'waiting') {
+                    r.delay -= dt;
+                    if (r.delay <= 0) {
+                        r.phase = 'telegraph';
+                        r.timer = 0;
+                    }
+                    allDone = false;
+                    continue;
+                }
+
+                r.timer += dt;
+
+                if (r.phase === 'telegraph') {
+                    // Static expanding donuts snap to final position for telegraph
+                    if (r.expanding && r.outerRadius < r.maxOuterRadius) {
+                        r.outerRadius = r.maxOuterRadius;
+                        r.innerRadius = r.maxOuterRadius - r.thickness;
+                        r.expanding = false;
+                    }
+                    if (r.timer >= 1.2) {
+                        r.phase = 'fire';
+                        r.timer = 0;
+                        triggerShake(5, 150);
+                    }
+                    allDone = false;
+                } else if (r.phase === 'fire') {
+                    // expandInFire rings grow outward during fire (shockwave)
+                    if (r.expandInFire && r.outerRadius < r.maxOuterRadius) {
+                        r.innerRadius += r.expandSpeed * dt;
+                        r.outerRadius += r.expandSpeed * dt;
+                        if (r.outerRadius >= r.maxOuterRadius) {
+                            r.outerRadius = r.maxOuterRadius;
+                            r.innerRadius = r.maxOuterRadius - r.thickness;
+                        }
+                    }
+                    // expandInFire rings end when they reach max; static rings use 0.7s
+                    const fireDone = r.expandInFire ? (r.outerRadius >= r.maxOuterRadius) : (r.timer >= 0.7);
+                    if (fireDone) {
+                        r.phase = 'cooldown';
+                        r.timer = 0;
+                    }
+                    allDone = false;
+                } else if (r.phase === 'cooldown') {
+                    if (r.timer < 0.8) {
+                        allDone = false;
+                    }
+                }
+            }
+
+            if (allDone) {
+                bossPlasmaRings = [];
+            }
+        }
+
+        function checkPlasmaRingCollisions() {
+            if (!currentBoss || currentBoss.type !== 'plasmaOverlord') return;
+            if (player.invulnerable > 0) return;
+
+            for (const r of bossPlasmaRings) {
+                if (r.phase !== 'fire') continue;
+
+                const dx = player.x - r.centerX;
+                const dy = player.y - r.centerY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Player is inside the donut band if dist is between innerRadius and outerRadius
+                if (dist >= r.innerRadius - PLAYER_COLLISION_RADIUS && dist <= r.outerRadius + PLAYER_COLLISION_RADIUS) {
+                    damagePlayer();
+                    triggerShake(8, 200);
+                    triggerFlash('#FF6600', 0.3, 150);
+                    spawnRing(player.x, player.y, '#FF6600', 30);
+                    break;
+                }
+            }
+        }
+
+        function renderPlasmaRings() {
+            if (!currentBoss || currentBoss.type !== 'plasmaOverlord') return;
+            if (bossPlasmaRings.length === 0) return;
+
+            for (const r of bossPlasmaRings) {
+                if (r.phase === 'waiting') continue;
+
+                if (r.phase === 'telegraph') {
+                    // Blinking semitransparent orange/red donut
+                    const blink = Math.sin(r.timer * 14) > 0 ? 0.35 : 0.1;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, (r.innerRadius + r.outerRadius) / 2, 0, Math.PI * 2);
+                    ctx.lineWidth = r.outerRadius - r.innerRadius;
+                    ctx.strokeStyle = '#FF4400';
+                    ctx.globalAlpha = blink;
+                    ctx.stroke();
+                    // Inner edge line
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, r.innerRadius, 0, Math.PI * 2);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#FF6600';
+                    ctx.globalAlpha = blink * 0.8;
+                    ctx.stroke();
+                    // Outer edge line
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, r.outerRadius, 0, Math.PI * 2);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#FF6600';
+                    ctx.globalAlpha = blink * 0.8;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                } else if (r.phase === 'fire') {
+                    // Solid plasma donut with fire effect
+                    const midRadius = (r.innerRadius + r.outerRadius) / 2;
+                    const width = r.outerRadius - r.innerRadius;
+                    ctx.save();
+
+                    // Outer glow layer
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, midRadius, 0, Math.PI * 2);
+                    ctx.lineWidth = width + 16;
+                    ctx.strokeStyle = 'rgba(255, 60, 0, 0.25)';
+                    setGlow(ctx, '#FF4400', 15);
+                    ctx.stroke();
+                    clearGlow(ctx);
+
+                    // Main plasma band
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, midRadius, 0, Math.PI * 2);
+                    ctx.lineWidth = width;
+                    ctx.strokeStyle = '#FF5500';
+                    ctx.globalAlpha = 0.7 + Math.sin(gameTime * 10) * 0.15;
+                    ctx.stroke();
+
+                    // Inner bright core
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, midRadius, 0, Math.PI * 2);
+                    ctx.lineWidth = width * 0.4;
+                    ctx.strokeStyle = '#FFAA00';
+                    ctx.globalAlpha = 0.6 + Math.sin(gameTime * 12 + 1) * 0.2;
+                    ctx.stroke();
+
+                    // Wavy fire texture — draw small arcs with varying radius
+                    const segments = 24;
+                    ctx.beginPath();
+                    for (let i = 0; i <= segments; i++) {
+                        const a = (Math.PI * 2 / segments) * i;
+                        const waveOuter = r.outerRadius + Math.sin(a * 6 + gameTime * 8) * 6;
+                        const px = r.centerX + Math.cos(a) * waveOuter;
+                        const py = r.centerY + Math.sin(a) * waveOuter;
+                        if (i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.strokeStyle = '#FF8800';
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.5;
+                    ctx.stroke();
+
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                } else if (r.phase === 'cooldown') {
+                    // Fading residual
+                    const fade = Math.max(0, 1 - r.timer / 0.8);
+                    if (fade <= 0) continue;
+                    const midRadius = (r.innerRadius + r.outerRadius) / 2;
+                    const width = r.outerRadius - r.innerRadius;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(r.centerX, r.centerY, midRadius, 0, Math.PI * 2);
+                    ctx.lineWidth = width;
+                    ctx.strokeStyle = '#FF4400';
+                    ctx.globalAlpha = fade * 0.3;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Plasma Overlord pattern: Telegraph Plasma Rings
+        function bossPattern_PlasmaRings(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            if (!state.initialized) {
+                state.initialized = true;
+                initPlasmaRings(state.ringType);
+            }
+
+            // Optional simultaneous projectile fire
+            const boss = currentBoss;
+            const projType = state.projType || 'none';
+            const isP2 = boss.phase === 2;
+            const speed = isP2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED;
+
+            if (projType === 'spiral') {
+                const interval = isP2 ? 0.08 : 0.12;
+                if (state.fireTimer >= interval) {
+                    state.fireTimer -= interval;
+                    if (!state.spiralAngle) state.spiralAngle = 0;
+                    spawnBossProjectile(boss.x, boss.y, state.spiralAngle, speed);
+                    if (isP2) {
+                        spawnBossProjectile(boss.x, boss.y, state.spiralAngle + Math.PI, speed);
+                    }
+                    state.spiralAngle += 15 * Math.PI / 180;
+                }
+            } else if (projType === 'corner') {
+                const interval = isP2 ? 0.25 : 0.4;
+                const maxBursts = isP2 ? 10 : 6;
+                if (state.fireTimer >= interval && state.bursts < maxBursts) {
+                    state.fireTimer -= interval;
+                    state.bursts++;
+                    const sides = boss.sides;
+                    for (let i = 0; i < sides; i++) {
+                        const vAngle = (Math.PI * 2 / sides) * i + boss.rotation * Math.PI / 180;
+                        const sx = boss.x + Math.cos(vAngle) * boss.size;
+                        const sy = boss.y + Math.sin(vAngle) * boss.size;
+                        spawnBossProjectile(sx, sy, vAngle, speed);
+                        if (isP2) {
+                            spawnBossProjectile(sx, sy, vAngle + 12 * Math.PI / 180, speed * 0.85);
+                        }
+                    }
+                }
+            }
+
+            // Total duration depends on ring type
+            // static: telegraph(1.2) + fire(0.7) + cooldown(0.8) = 2.7
+            // concentric: + max delay(0.6) = 3.3
+            // pincerWave: inner expands ~1.1s fire + outer telegraph(1.2)+fire(0.7)+cooldown(0.8) = 2.7 → ~3.0
+            let totalDuration = 2.7;
+            if (state.ringType === 'concentricTriple') totalDuration = 3.3;
+            else if (state.ringType === 'pincerWave') totalDuration = 3.5;
+
+            return state.elapsed >= totalDuration;
+        }
+
+        // Plasma Overlord pattern: Donut Eruption
+        function bossPattern_DonutEruption(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+
+            if (!state.launched) state.launched = 0;
+            if (!state.launchTimer) state.launchTimer = 0;
+            state.launchTimer += dt;
+
+            const cx = arenaCenter.x;
+            const cy = arenaCenter.y;
+            const R = ARENA_RADIUS;
+            // 6 static donuts at different radii across the arena, with gaps between them
+            const radii = [R * 0.15, R * 0.3, R * 0.45, R * 0.58, R * 0.7, R * 0.83];
+            const thickness = R * 0.06;
+
+            // Launch donuts in rapid sequence (0.25s apart)
+            while (state.launched < 6 && state.launchTimer >= state.launched * 0.25) {
+                const i = state.launched;
+                const half = thickness / 2;
+                bossPlasmaRings.push({
+                    centerX: cx, centerY: cy,
+                    innerRadius: radii[i] - half, outerRadius: radii[i] + half,
+                    phase: 'telegraph', timer: 0, delay: 0,
+                    expanding: false, expandInFire: false, expandSpeed: 0, maxOuterRadius: radii[i] + half, thickness: thickness
+                });
+                state.launched++;
+                triggerShake(4, 100);
+            }
+
+            // 6 * 0.25s launch + telegraph(1.2) + fire(0.7) + cooldown(0.8)
+            return state.elapsed >= 4.2;
+        }
+
+        // Plasma Overlord custom render
+        function renderPlasmaOverlord() {
+            if (!currentBoss) return;
+            const boss = currentBoss;
+
+            ctx.save();
+            ctx.translate(boss.x, boss.y);
+            ctx.rotate(boss.rotation * Math.PI / 180);
+
+            const sides = 6;
+            const size = boss.size;
+
+            // Heat wave distortion — wavy lines radiating outward
+            ctx.save();
+            ctx.rotate(-boss.rotation * Math.PI / 180); // counter-rotate so waves stay fixed
+            const waveCount = 8;
+            for (let i = 0; i < waveCount; i++) {
+                const baseAngle = (Math.PI * 2 / waveCount) * i;
+                ctx.beginPath();
+                for (let d = size + 15; d < size + 80; d += 4) {
+                    const waveOffset = Math.sin(d * 0.05 + gameTime * 4 + i) * 8;
+                    const a = baseAngle + waveOffset * 0.005;
+                    const px = Math.cos(a) * d;
+                    const py = Math.sin(a) * d;
+                    if (d === size + 15) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.strokeStyle = '#FF4400';
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.15 + Math.sin(gameTime * 3 + i) * 0.08;
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // Outer glow ring
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * (size + 12);
+                const py = Math.sin(angle) * (size + 12);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = '#FF6600';
+            ctx.lineWidth = 2.5;
+            ctx.globalAlpha = 0.35 + Math.sin(gameTime * 4) * 0.15;
+            setGlow(ctx, '#FF4400', 20);
+            ctx.stroke();
+            clearGlow(ctx);
+            ctx.globalAlpha = 1;
+
+            // Main body — gradient from red (#FF0000) to orange (#FF6600)
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const px = Math.cos(angle) * size;
+                const py = Math.sin(angle) * size;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+            gradient.addColorStop(0, '#FF6600');
+            gradient.addColorStop(0.5, '#FF3300AA');
+            gradient.addColorStop(1, '#FF000033');
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = boss.phase === 2 ? 0.75 : 0.55;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Sharp border
+            ctx.strokeStyle = '#FF0000';
+            ctx.lineWidth = boss.phase === 2 ? 3.5 : 2.5;
+            ctx.stroke();
+
+            // Spike accents on each vertex — aggressive look
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const vx = Math.cos(angle) * size;
+                const vy = Math.sin(angle) * size;
+                const spikeLen = 18 + Math.sin(gameTime * 6 + i * 2) * 5;
+                const sx = Math.cos(angle) * (size + spikeLen);
+                const sy = Math.sin(angle) * (size + spikeLen);
+                ctx.beginPath();
+                ctx.moveTo(vx, vy);
+                ctx.lineTo(sx, sy);
+                ctx.strokeStyle = '#FF6600';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.7;
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+
+            // Flash white on damage
+            if (boss.flashTimer > 0) {
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                    const px = Math.cos(angle) * size;
+                    const py = Math.sin(angle) * size;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(boss.flashTimer / 0.1, 0.6) + ')';
+                ctx.fill();
+            }
+
+            // Pulsating yellow center sphere
+            const coreSize = 16 + Math.sin(gameTime * 7) * 6;
+            const coreGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize);
+            coreGradient.addColorStop(0, '#FFFF00');
+            coreGradient.addColorStop(0.5, '#FFAA00');
+            coreGradient.addColorStop(1, '#FF440000');
+            ctx.beginPath();
+            ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+            ctx.fillStyle = coreGradient;
+            ctx.globalAlpha = 0.8 + Math.sin(gameTime * 9) * 0.15;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Inner ring
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#FF6600';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.3;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Phase 2: inner hexagon spinning opposite + plasma tendrils
+            if (boss.phase === 2) {
+                ctx.save();
+                ctx.rotate(-boss.rotation * 2 * Math.PI / 180);
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i;
+                    const px = Math.cos(angle) * (size * 0.55);
+                    const py = Math.sin(angle) * (size * 0.55);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = '#FFAA00';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+
+                // Spark particles in P2
+                if (Math.random() < 0.4) {
+                    const sparkAngle = Math.random() * Math.PI * 2;
+                    const sparkDist = size * (0.6 + Math.random() * 0.5);
+                    const p = pools.particle.acquire();
+                    if (p) {
+                        p.x = boss.x + Math.cos(sparkAngle) * sparkDist;
+                        p.y = boss.y + Math.sin(sparkAngle) * sparkDist;
+                        p.vx = (Math.random() - 0.5) * 60;
+                        p.vy = (Math.random() - 0.5) * 60;
+                        p.life = 0.3 + Math.random() * 0.3;
+                        p.maxLife = p.life;
+                        p.radius = 2 + Math.random() * 2;
+                        p.color = Math.random() < 0.5 ? '#FF6600' : '#FFAA00';
+                        p.type = 'spark';
+                        particles.push(p);
+                    }
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // --- Plasma Overlord: Attack Sequences ---
+
+        const PO_PHASE1_SEQUENCE = [
+            { pattern: 'plasmaRing', ringType: 'singleDonut', proj: 'spiral', pause: 2 },
+            { pattern: 'ringWave', pause: 1.5 },
+            { pattern: 'plasmaRing', ringType: 'concentricTriple', proj: 'corner', pause: 2 },
+            { pattern: 'spiralOutward', pause: 1.5 }
+        ];
+        const PO_PHASE2_SEQUENCE = [
+            { pattern: 'plasmaRing', ringType: 'pincerWave', proj: 'spiral', pause: 1 },
+            { pattern: 'donutEruption', pause: 1 },
+            { pattern: 'plasmaRing', ringType: 'pincerWave', proj: 'corner', pause: 1 }
+        ];
+
+        // Plasma Overlord heavy spiral: double spiral, faster fire rate, longer duration
+        function bossPattern_POSpiralOutward(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const isP2 = currentBoss.phase === 2;
+            const fireInterval = isP2 ? 0.06 : 0.09;
+            if (state.fireTimer >= fireInterval) {
+                state.fireTimer -= fireInterval;
+                const speed = isP2 ? BOSS_PROJ_SPEED * 1.5 : BOSS_PROJ_SPEED * 1.1;
+                // Double spiral
+                spawnBossProjectile(currentBoss.x, currentBoss.y, state.angle, speed);
+                spawnBossProjectile(currentBoss.x, currentBoss.y, state.angle + Math.PI, speed);
+                if (isP2) {
+                    // Triple spiral in P2
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, state.angle + Math.PI * 2 / 3, speed);
+                }
+                state.angle += 12 * Math.PI / 180;
+            }
+
+            return state.elapsed >= (isP2 ? 3.5 : 3);
+        }
+
+        // Plasma Overlord heavy ring wave: multiple waves, more projectiles
+        function bossPattern_PORingWave(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            state.elapsed += dt;
+            state.fireTimer += dt;
+
+            const isP2 = currentBoss.phase === 2;
+            const waveCount = isP2 ? 4 : 3;
+            const projCount = isP2 ? 36 : 28;
+            const waveInterval = isP2 ? 0.5 : 0.7;
+
+            if (state.fireTimer >= waveInterval && state.bursts < waveCount) {
+                state.fireTimer -= waveInterval;
+                state.bursts++;
+                const speed = isP2 ? BOSS_PROJ_SPEED * 1.4 : BOSS_PROJ_SPEED * 1.1;
+                const offset = state.bursts * (Math.PI / projCount);
+                for (let i = 0; i < projCount; i++) {
+                    const angle = (Math.PI * 2 / projCount) * i + offset;
+                    spawnBossProjectile(currentBoss.x, currentBoss.y, angle, speed);
+                }
+            }
+
+            return state.bursts >= waveCount;
+        }
+
+        function getPOPattern(name) {
+            switch (name) {
+                case 'plasmaRing': return bossPattern_PlasmaRings;
+                case 'donutEruption': return bossPattern_DonutEruption;
+                case 'ringWave': return bossPattern_PORingWave;
+                case 'spiralOutward': return bossPattern_POSpiralOutward;
+                case 'cornerBarrage': return bossPattern_CornerBarrage;
+                default: return bossPattern_POSpiralOutward;
+            }
+        }
+
+        function getPOPatternState(entry) {
+            if (entry.pattern === 'plasmaRing') {
+                return {
+                    elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false,
+                    initialized: false, ringType: entry.ringType, projType: entry.proj || 'none'
+                };
+            } else if (entry.pattern === 'donutEruption') {
+                return {
+                    elapsed: 0, launched: 0, launchTimer: 0
+                };
+            } else {
+                return { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false };
+            }
+        }
+
+        // ============================================================
+        // SWARM MOTHER (Boss 4) — Hive Spawn + Brood Explosion
+        // ============================================================
+
+        let bossBroodExplosions = [];
+        let bossBroodCooldown = 0;
+
+        // --- Hive Spawn: spawns aliens from center + scouts/kamikazes from border ---
+        function bossPattern_HiveSpawn(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            if (!state.fired) {
+                state.fired = true;
+                const isP2 = currentBoss.phase === 2;
+                const bx = currentBoss.x;
+                const by = currentBoss.y;
+                const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
+
+                // --- Center spawn: 5 aliens (10 in P2) ---
+                const alienConfig = ENEMY_TYPES['ALIEN'];
+                const scaledAlienHp = Math.ceil(alienConfig.hp * hpMultiplier);
+                const alienCount = isP2 ? 10 : 5;
+                for (let i = 0; i < alienCount; i++) {
+                    const angle = (Math.PI * 2 / alienCount) * i + Math.random() * 0.3;
+                    const dist = 60 + Math.random() * 40;
+                    const alien = pools.enemy.acquire();
+                    alien.x = bx + Math.cos(angle) * dist;
+                    alien.y = by + Math.sin(angle) * dist;
+                    alien.vx = Math.cos(angle) * alienConfig.speed;
+                    alien.vy = Math.sin(angle) * alienConfig.speed;
+                    alien.angle = angle * 180 / Math.PI;
+                    alien.type = 'ALIEN';
+                    alien.hp = scaledAlienHp;
+                    alien.maxHp = scaledAlienHp;
+                    alien.fireTimer = 0;
+                    alien.burstCooldown = 0;
+                    alien.spawnTime = gameTime;
+                    alien.offScreenTime = 0;
+                    alien.noXP = true;
+                    enemies.push(alien);
+                }
+
+                // --- Border spawn: 4 points, 30 enemies each (mix scout/kamikaze) ---
+                const borderCount = 30;
+                for (let p = 0; p < 4; p++) {
+                    const pointAngle = (Math.PI * 2 / 4) * p;
+                    const spawnX = arenaCenter.x + Math.cos(pointAngle) * (ARENA_RADIUS - 50);
+                    const spawnY = arenaCenter.y + Math.sin(pointAngle) * (ARENA_RADIUS - 50);
+                    const angleToCenter = Math.atan2(arenaCenter.y - spawnY, arenaCenter.x - spawnX);
+
+                    for (let j = 0; j < borderCount; j++) {
+                        const isKamikaze = Math.random() < 0.4;
+                        const type = isKamikaze ? 'KAMIKAZE' : 'SCOUT';
+                        const config = ENEMY_TYPES[type];
+                        const scaledHp = Math.ceil(config.hp * hpMultiplier);
+                        const spread = (Math.random() - 0.5) * 0.8;
+                        const spawnDist = Math.random() * 80;
+
+                        const e = pools.enemy.acquire();
+                        e.x = spawnX + Math.cos(pointAngle + Math.PI / 2) * spawnDist * (Math.random() - 0.5) * 2;
+                        e.y = spawnY + Math.sin(pointAngle + Math.PI / 2) * spawnDist * (Math.random() - 0.5) * 2;
+                        e.vx = Math.cos(angleToCenter + spread) * config.speed;
+                        e.vy = Math.sin(angleToCenter + spread) * config.speed;
+                        e.angle = (angleToCenter + spread) * 180 / Math.PI;
+                        e.type = type;
+                        e.hp = scaledHp;
+                        e.maxHp = scaledHp;
+                        e.fireTimer = config.fireRate || 0;
+                        e.burstCooldown = 0;
+                        e.spawnTime = gameTime;
+                        e.offScreenTime = 0;
+                        e.noXP = true;
+                        enemies.push(e);
+                    }
+                }
+
+                // Visual burst
+                for (let i = 0; i < 8; i++) {
+                    spawnRing(bx + (Math.random() - 0.5) * 60, by + (Math.random() - 0.5) * 60, '#39FF14', 60);
+                }
+                spawnFloatingText(bx, by - currentBoss.size - 20, 'HIVE SPAWN', '#39FF14');
+            }
+            state.elapsed += dt;
+            return state.elapsed > 0.5;
+        }
+
+        // --- Brood Explosion: knockback shockwave ---
+        function bossPattern_BroodExplosion(dt) {
+            if (!currentBoss) return true;
+            const state = bossPatternState;
+            if (!state.fired) {
+                // Only fire if enough enemies present and cooldown expired
+                const enemyCount = enemies.length;
+                if (enemyCount < 8 || bossBroodCooldown > 0) {
+                    return true; // Skip pattern
+                }
+                state.fired = true;
+                bossBroodCooldown = currentBoss.phase === 2 ? 4 : 8;
+
+                const bx = currentBoss.x;
+                const by = currentBoss.y;
+                const explosionRadius = ARENA_RADIUS * 0.5;
+
+                // Start explosion visual
+                bossBroodExplosions.push({
+                    x: bx, y: by,
+                    radius: 0,
+                    maxRadius: explosionRadius,
+                    timer: 0,
+                    duration: 0.6,
+                    damageDealt: false
+                });
+
+                // Knockback all enemies outward
+                for (let i = 0; i < enemies.length; i++) {
+                    const e = enemies[i];
+                    const dx = e.x - bx;
+                    const dy = e.y - by;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < explosionRadius && dist > 0) {
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+                        e.vx += nx * 500;
+                        e.vy += ny * 500;
+                    }
+                }
+
+                // Damage player if in range
+                if (player) {
+                    const pdx = player.x - bx;
+                    const pdy = player.y - by;
+                    if (Math.sqrt(pdx * pdx + pdy * pdy) < explosionRadius) {
+                        damagePlayer();
+                        damagePlayer();
+                    }
+                }
+
+                // Particles
+                for (let i = 0; i < 20; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * explosionRadius * 0.5;
+                    spawnRing(bx + Math.cos(angle) * dist, by + Math.sin(angle) * dist, '#39FF14', 50);
+                }
+                spawnFloatingText(bx, by - currentBoss.size - 20, 'BROOD EXPLOSION', '#FF4444');
+            }
+            state.elapsed += dt;
+            return state.elapsed > 0.3;
+        }
+
+        function updateBroodExplosions(dt) {
+            if (!currentBoss || currentBoss.type !== 'swarmMother') return;
+
+            // Update brood cooldown
+            if (bossBroodCooldown > 0) {
+                bossBroodCooldown -= dt;
+                if (bossBroodCooldown < 0) bossBroodCooldown = 0;
+            }
+
+            // Update active explosions
+            for (let i = bossBroodExplosions.length - 1; i >= 0; i--) {
+                const exp = bossBroodExplosions[i];
+                exp.timer += dt;
+                exp.radius = (exp.timer / exp.duration) * exp.maxRadius;
+                if (exp.timer >= exp.duration) {
+                    bossBroodExplosions.splice(i, 1);
+                }
+            }
+        }
+
+        function renderBroodExplosions() {
+            if (!currentBoss || currentBoss.type !== 'swarmMother') return;
+
+            for (const exp of bossBroodExplosions) {
+                const progress = exp.timer / exp.duration;
+                const alpha = 0.5 * (1 - progress);
+                ctx.save();
+
+                // Expanding circle
+                ctx.beginPath();
+                ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#39FF14';
+                ctx.lineWidth = 4 * (1 - progress);
+                ctx.globalAlpha = alpha;
+                setGlow(ctx, '#39FF14', 15);
+                ctx.stroke();
+                clearGlow(ctx);
+
+                // Fill
+                ctx.fillStyle = '#39FF14';
+                ctx.globalAlpha = alpha * 0.15;
+                ctx.fill();
+
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+        }
+
+        // --- Swarm Mother Custom Renderer ---
+        function renderSwarmMother() {
+            const boss = currentBoss;
+            const sides = boss.sides;
+            const size = boss.size;
+
+            ctx.save();
+            ctx.translate(boss.x, boss.y);
+            ctx.rotate(boss.rotation * Math.PI / 180);
+
+            const isP2 = boss.phase === 2;
+            const pulse = Math.sin(gameTime * 3) * 0.08;
+
+            // Outer aura glow
+            ctx.beginPath();
+            ctx.arc(0, 0, size + 25 + Math.sin(gameTime * 2) * 8, 0, Math.PI * 2);
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.15 + Math.sin(gameTime * 4) * 0.08;
+            setGlow(ctx, '#39FF14', 25);
+            ctx.stroke();
+            clearGlow(ctx);
+            ctx.globalAlpha = 1;
+
+            // Main octagon body with membrane pulsation
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const membranePulse = Math.sin(gameTime * 4 + i * 1.3) * 5;
+                const r = size + membranePulse;
+                const px = Math.cos(angle) * r;
+                const py = Math.sin(angle) * r;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+
+            // Fill dark green
+            const bodyGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+            bodyGrad.addColorStop(0, '#2A8C2A');
+            bodyGrad.addColorStop(0.6, '#1A5C1A');
+            bodyGrad.addColorStop(1, '#0D3B0D');
+            ctx.fillStyle = bodyGrad;
+            ctx.globalAlpha = isP2 ? 0.85 : 0.7;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Neon border
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = isP2 ? 3.5 : 2.5;
+            setGlow(ctx, '#39FF14', isP2 ? 12 : 6);
+            ctx.stroke();
+            clearGlow(ctx);
+
+            // Flash white on damage
+            if (boss.flashTimer > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(boss.flashTimer / 0.1, 0.6) + ')';
+                ctx.fill();
+            }
+
+            // Internal honeycomb pattern (hexagonal grid)
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = 0.8;
+            ctx.globalAlpha = isP2 ? 0.35 : 0.2;
+            const hexSize = 22;
+            const hexH = hexSize * Math.sqrt(3);
+            for (let row = -3; row <= 3; row++) {
+                for (let col = -3; col <= 3; col++) {
+                    const cx = col * hexSize * 1.5;
+                    const cy = row * hexH + (col % 2 !== 0 ? hexH / 2 : 0);
+                    const dist = Math.sqrt(cx * cx + cy * cy);
+                    if (dist > size * 0.8) continue;
+
+                    ctx.beginPath();
+                    for (let k = 0; k < 6; k++) {
+                        const a = (Math.PI / 3) * k + Math.PI / 6;
+                        const hx = cx + Math.cos(a) * (hexSize * 0.5);
+                        const hy = cy + Math.sin(a) * (hexSize * 0.5);
+                        if (k === 0) ctx.moveTo(hx, hy);
+                        else ctx.lineTo(hx, hy);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            }
+            ctx.globalAlpha = 1;
+
+            // Brood chamber center (red pulsating)
+            const coreSize = 20 + Math.sin(gameTime * 5) * 5;
+            const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize);
+            coreGrad.addColorStop(0, '#FF2222');
+            coreGrad.addColorStop(0.5, '#CC0000');
+            coreGrad.addColorStop(1, 'rgba(100, 0, 0, 0)');
+            ctx.beginPath();
+            ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
+            ctx.fillStyle = coreGrad;
+            ctx.globalAlpha = 0.7 + Math.sin(gameTime * 6) * 0.2;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // Inner ring
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.45, 0, Math.PI * 2);
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.25;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Phase 2: extra inner octagon spinning opposite + spark particles
+            if (isP2) {
+                ctx.save();
+                ctx.rotate(-boss.rotation * 2.5 * Math.PI / 180);
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i;
+                    const px = Math.cos(angle) * (size * 0.6);
+                    const py = Math.sin(angle) * (size * 0.6);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = '#39FF14';
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+        // --- Swarm Mother Phase Sequences ---
+        const SM_PHASE1_SEQUENCE = [
+            { pattern: 'hiveSpawn', pause: 1 },
+            { pattern: 'ringWave', pause: 2 },
+            { pattern: 'hiveSpawn', pause: 1 },
+            { pattern: 'spiralOutward', pause: 1 },
+            { pattern: 'broodExplosion', pause: 1 }
+        ];
+
+        const SM_PHASE2_SEQUENCE = [
+            { pattern: 'hiveSpawn', pause: 0.5 },
+            { pattern: 'cornerBarrage', pause: 1 },
+            { pattern: 'hiveSpawn', pause: 0.5 },
+            { pattern: 'broodExplosion', pause: 0.5 },
+            { pattern: 'spiralOutward', pause: 0.5 },
+            { pattern: 'targetedBurst', pause: 0.5 }
+        ];
+
+        function getSMPattern(name) {
+            switch (name) {
+                case 'hiveSpawn': return bossPattern_HiveSpawn;
+                case 'broodExplosion': return bossPattern_BroodExplosion;
+                case 'ringWave': return bossPattern_RingWave;
+                case 'spiralOutward': return bossPattern_SpiralOutward;
+                case 'cornerBarrage': return bossPattern_CornerBarrage;
+                case 'targetedBurst': return bossPattern_TargetedBurst;
+                default: return bossPattern_HiveSpawn;
+            }
+        }
+
+        function getSMPatternState(entry) {
+            return { elapsed: 0, fireTimer: 0, angle: 0, bursts: 0, fired: false };
+        }
+
         // ============================================================
 
         function updateSpawnSystem() {
@@ -6239,11 +7511,38 @@
 
             // Spawn explosion ring
             spawnRing(enemy.x, enemy.y, config.color, 40);
-            
-            // Direct XP gain
-            const xpValue = enemy.type === 'TANK' ? 3 : (enemy.type === 'SPINNER' ? 2 : 1);
-            collectXP(xpValue);
-            
+
+            // Direct XP gain (boss-spawned enemies give no XP)
+            if (!enemy.noXP) {
+                const xpValue = enemy.type === 'TANK' ? 3 : (enemy.type === 'SPINNER' ? 2 : 1);
+                collectXP(xpValue);
+            }
+
+            // Alien splits into 5 tanks on death
+            if (enemy.type === 'ALIEN') {
+                const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
+                const tankConfig = ENEMY_TYPES['TANK'];
+                const scaledTankHp = Math.ceil(tankConfig.hp * hpMultiplier);
+                for (let i = 0; i < 5; i++) {
+                    const angle = (Math.PI * 2 / 5) * i + Math.random() * 0.3;
+                    const tank = pools.enemy.acquire();
+                    tank.x = enemy.x + Math.cos(angle) * 40;
+                    tank.y = enemy.y + Math.sin(angle) * 40;
+                    tank.vx = Math.cos(angle) * 80;
+                    tank.vy = Math.sin(angle) * 80;
+                    tank.angle = angle * 180 / Math.PI;
+                    tank.type = 'TANK';
+                    tank.hp = scaledTankHp;
+                    tank.maxHp = scaledTankHp;
+                    tank.fireTimer = 0;
+                    tank.burstCooldown = 0;
+                    tank.spawnTime = gameTime;
+                    tank.offScreenTime = 0;
+                    tank.noXP = enemy.noXP || false;
+                    enemies.push(tank);
+                }
+            }
+
             // Tank splits into scouts
             if (enemy.type === 'TANK') {
                 for (let i = 0; i < 2; i++) {
@@ -6261,6 +7560,7 @@
                     scout.burstCooldown = 0;
                     scout.spawnTime = gameTime;
                     scout.offScreenTime = 0;
+                    scout.noXP = enemy.noXP || false;
                     enemies.push(scout);
                 }
             }
@@ -7488,6 +8788,9 @@
             checkLightningStrikeCollisions();
             checkTrailCollisions();
 
+            // Plasma Overlord: plasma rings vs Player
+            checkPlasmaRingCollisions();
+
             // Player bullets vs Boss projectiles (destructible)
             if (currentBoss) {
                 for (let i = bossProjectiles.length - 1; i >= 0; i--) {
@@ -8027,6 +9330,8 @@
                 renderBossProjectiles();
                 renderHomingMissiles();
                 renderLightningStrikes();
+                renderPlasmaRings();
+                renderBroodExplosions();
                 renderTrailNodes();
                 if (player && gameState !== 'gameOver') {
                     renderAura();
@@ -8633,7 +9938,7 @@
 
         function renderEnemies() {
             // Sort enemies by type for batched rendering
-            const byType = { SCOUT: [], KAMIKAZE: [], SPINNER: [], TANK: [] };
+            const byType = { SCOUT: [], KAMIKAZE: [], SPINNER: [], TANK: [], ALIEN: [] };
 
             for (const e of enemies) {
                 if (shouldRenderEntity(e, CULLING_DISTANCES.enemies)) {
@@ -8749,9 +10054,51 @@
                 }
             }
 
+            // Batch render aliens (large green enemies)
+            if (byType.ALIEN.length > 0) {
+                const config = ENEMY_TYPES['ALIEN'];
+
+                for (const e of byType.ALIEN) {
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+                    ctx.rotate(e.angle * Math.PI / 180);
+
+                    // Outer circle
+                    ctx.strokeStyle = config.color;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, config.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Inner hexagon
+                    ctx.strokeStyle = config.outline;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (Math.PI / 3) * i + gameTime * 2;
+                        const x = Math.cos(angle) * config.radius * 0.6;
+                        const y = Math.sin(angle) * config.radius * 0.6;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Pulsing core
+                    ctx.fillStyle = config.color;
+                    ctx.globalAlpha = 0.3 + Math.sin(gameTime * 5) * 0.15;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, config.radius * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+
+                    ctx.restore();
+                }
+            }
+
             ctx.shadowBlur = 0;
         }
-        
+
         function renderPickups() {
             for (const p of pickups) {
                 // Skip rendering if too far from camera
@@ -8881,6 +10228,242 @@
             ctx.shadowBlur = 0;
         }
         
+        function drawWeaponIconAt(cx, cy, icon, color, size) {
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.save();
+            ctx.translate(cx, cy);
+            const s = size;
+            switch (icon) {
+                case 'laser':
+                    ctx.beginPath();
+                    ctx.moveTo(-s, 0);
+                    ctx.lineTo(s, 0);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'rocket':
+                    ctx.beginPath();
+                    ctx.moveTo(0, -s);
+                    ctx.lineTo(-s * 0.7, s * 0.7);
+                    ctx.lineTo(s * 0.7, s * 0.7);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'orbital':
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s * 0.6, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(s * 0.6, 0, s * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(-s * 0.6, 0, s * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'lightning':
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(s * 0.3, -s);
+                    ctx.lineTo(-s * 0.2, -s * 0.1);
+                    ctx.lineTo(s * 0.3, s * 0.1);
+                    ctx.lineTo(-s * 0.3, s);
+                    ctx.stroke();
+                    break;
+                case 'aura':
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s * 0.35, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s * 0.7, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                case 'drone':
+                    ctx.beginPath();
+                    ctx.moveTo(0, -s * 0.8);
+                    ctx.lineTo(s * 0.6, 0);
+                    ctx.lineTo(0, s * 0.8);
+                    ctx.lineTo(-s * 0.6, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+            }
+            ctx.restore();
+        }
+
+        function renderBossVictoryScreen() {
+            if (!bossVictoryScreen || !bossVictoryData) return;
+
+            const t = bossVictoryTimer;
+            const d = bossVictoryData;
+            const cx = CANVAS_WIDTH / 2;
+            const cy = CANVAS_HEIGHT / 2;
+
+            // Fade-in for dark overlay (0 → 0.8 over 0.5s)
+            const overlayAlpha = Math.min(t / 0.5, 1) * 0.8;
+            // Fade-out in last 0.5s
+            const fadeOut = t > BOSS_VICTORY_DURATION - 0.5 ? (BOSS_VICTORY_DURATION - t) / 0.5 : 1;
+            const masterAlpha = fadeOut;
+
+            ctx.save();
+
+            // Dark overlay
+            ctx.fillStyle = `rgba(0, 0, 0, ${overlayAlpha * masterAlpha})`;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Victory particles
+            for (const p of bossVictoryParticles) {
+                ctx.globalAlpha = p.alpha * masterAlpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Content appears after 0.3s
+            const contentAlpha = Math.max(0, Math.min((t - 0.3) / 0.4, 1)) * masterAlpha;
+            if (contentAlpha <= 0) { ctx.restore(); return; }
+
+            ctx.globalAlpha = contentAlpha;
+            ctx.textAlign = 'center';
+
+            if (bossVictoryScreen === 'weaponUnlock') {
+                // === WEAPON UNLOCK SCREEN ===
+
+                // Title zoom-in effect (scale from 1.5 to 1.0 over 0.5s)
+                const titleProgress = Math.min((t - 0.3) / 0.5, 1);
+                const titleScale = 1 + (1 - titleProgress) * 0.5;
+
+                ctx.save();
+                ctx.translate(cx, cy - 140);
+                ctx.scale(titleScale, titleScale);
+
+                // "WEAPON UNLOCKED!" title
+                ctx.font = 'bold 52px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#FFD700';
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = '#FFD700';
+                    ctx.shadowBlur = 20;
+                }
+                ctx.fillText('WEAPON UNLOCKED!', 0, 0);
+                ctx.shadowBlur = 0;
+                ctx.restore();
+
+                // Boss name subtitle
+                ctx.font = '18px "Segoe UI", sans-serif';
+                ctx.fillStyle = d.bossColor;
+                ctx.fillText(d.bossName + ' DEFEATED', cx, cy - 90);
+
+                // Weapon icon (large, centered)
+                const iconSize = 35;
+                const iconY = cy - 20;
+
+                // Icon circle background
+                ctx.beginPath();
+                ctx.arc(cx, iconY, iconSize + 10, 0, Math.PI * 2);
+                ctx.strokeStyle = d.weaponColor;
+                ctx.lineWidth = 3;
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = d.weaponColor;
+                    ctx.shadowBlur = 15;
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Pulsating glow behind icon
+                const pulse = 0.7 + Math.sin(t * 4) * 0.3;
+                ctx.beginPath();
+                ctx.arc(cx, iconY, iconSize + 5, 0, Math.PI * 2);
+                ctx.fillStyle = d.weaponColor;
+                ctx.globalAlpha = contentAlpha * pulse * 0.15;
+                ctx.fill();
+                ctx.globalAlpha = contentAlpha;
+
+                drawWeaponIconAt(cx, iconY, d.weaponIcon, d.weaponColor, iconSize);
+
+                // Weapon name
+                ctx.font = 'bold 36px "Segoe UI", sans-serif';
+                ctx.fillStyle = d.weaponColor;
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = d.weaponColor;
+                    ctx.shadowBlur = 10;
+                }
+                ctx.fillText(d.weaponName, cx, iconY + 65);
+                ctx.shadowBlur = 0;
+
+                // Subtitle
+                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(200, 200, 220, 0.8)';
+                ctx.fillText('Available in future runs', cx, iconY + 95);
+
+                // Stats
+                const statsY = iconY + 140;
+                ctx.font = '14px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(180, 180, 200, 0.6)';
+                const minutes = Math.floor(d.combatTime / 60);
+                const seconds = Math.floor(d.combatTime % 60);
+                const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                ctx.fillText(`Combat time: ${timeStr}  ·  Boss HP: ${d.bossMaxHp.toLocaleString()}`, cx, statsY);
+
+                // Rewards
+                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#FFD700';
+                ctx.fillText(`+${d.levelsGranted} LEVELS  ·  +${d.xpGranted.toLocaleString()} XP`, cx, statsY + 35);
+
+            } else {
+                // === BOSS DEFEATED (repeat) SCREEN ===
+
+                // Title
+                const titleProgress = Math.min((t - 0.3) / 0.5, 1);
+                const titleScale = 1 + (1 - titleProgress) * 0.3;
+
+                ctx.save();
+                ctx.translate(cx, cy - 80);
+                ctx.scale(titleScale, titleScale);
+
+                ctx.font = 'bold 46px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#39FF14';
+                if (ENABLE_GLOW_EFFECTS) {
+                    ctx.shadowColor = '#39FF14';
+                    ctx.shadowBlur = 15;
+                }
+                ctx.fillText('BOSS DEFEATED!', 0, 0);
+                ctx.shadowBlur = 0;
+                ctx.restore();
+
+                // Boss name
+                ctx.font = '20px "Segoe UI", sans-serif';
+                ctx.fillStyle = d.bossColor;
+                ctx.fillText(d.bossName, cx, cy - 25);
+
+                // Level reward
+                ctx.font = 'bold 38px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#FFD700';
+                ctx.fillText(`+${d.levelsGranted} LEVELS`, cx, cy + 30);
+
+                // XP reward
+                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#AAFFAA';
+                ctx.fillText(`+${d.xpGranted.toLocaleString()} XP`, cx, cy + 65);
+            }
+
+            // Skip hint (appears after min skip time)
+            if (t >= BOSS_VICTORY_MIN_SKIP) {
+                const hintAlpha = Math.min((t - BOSS_VICTORY_MIN_SKIP) / 0.3, 1) * 0.5 * masterAlpha;
+                ctx.globalAlpha = hintAlpha;
+                ctx.font = '13px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#AAAAAA';
+                ctx.fillText('Press any key to continue', cx, CANVAS_HEIGHT - 60);
+            }
+
+            ctx.restore();
+        }
+
         function renderUI() {
             if (gameState === 'menu') {
                 renderMenu();
@@ -8888,6 +10471,10 @@
                 renderHUD();
                 if (gameState === 'paused') {
                     renderPauseOverlay();
+                }
+                // Boss victory screen overlay (on top of HUD)
+                if (bossVictoryScreen) {
+                    renderBossVictoryScreen();
                 }
                 // skilltree rendering is handled by HTML panel
             } else if (gameState === 'gameOver') {

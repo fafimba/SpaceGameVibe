@@ -577,30 +577,36 @@ IMPLEMENTAR:
    - Cada 3s (Fase 1) / 2s (Fase 2), spawna enemigos:
 
    Desde el centro (boss):
-   - 5 enemigos tipo alien
-   -el alien es como el tank pero más grande y con mucha más vida (color verde)
-   -al morir spawnea 5 enemigos tank
+   - 5 Scouts + 3 Kamikazes + 1 Tank (Fase 1)
+   - 8 Scouts + 5 Kamikazes + 2 Spinners + 2 Tanks (Fase 2)
+   - Se dispersan explosivamente desde el centro
 
    Desde el borde del ring (4 puntos equidistantes):
-   - 30 enemigos por punto (van hacia el centro)
+   - 4 enemigos por punto (van hacia el centro)
    - Tipo: mix de Scouts y Kamikazes
 
-   TODOS enemigos NO DAN XP  al morir 
+   TODOS los enemigos spawneados tienen 50% de HP normal (son más débiles)
+   TODOS dan XP normal al morir (a diferencia de los que se limpian al iniciar boss)
 
 2. Habilidad única: BROOD EXPLOSION
    - Se activa cuando hay 8+ enemigos en el campo
    - Cooldown: 8s (Fase 1), 4s (Fase 2)
-   - Efecto: onda expansiva verde desde el boss (radio mitad del radio de la arenapx)
+   - Efecto: onda expansiva verde desde el boss (radio 500px)
    - Daño al jugador: 2 (si está en rango)
    - NO mata a los enemigos, los empuja hacia afuera (knockback 500px/s)
    - Visual: círculo verde expandiéndose con partículas
 
+3. Efecto pasivo: SPORE CLOUD
+   - Mientras el boss vive, emitir partículas verdes flotantes constantemente
+   - Solo visual, no dañan
+   - Crean atmósfera de "nido alienígena"
 
 4. Renderizado:
    - Octágono grande (140px) verde oscuro (#1A5C1A) con bordes neón (#39FF14)
    - Patrón de hexágonos internos (colmena)
    - Membranas palpitantes (bordes que se mueven ligeramente)
    - Centro: cámara de cría roja pulsante
+   - Tentáculos/tendriles que se extienden y retraen del boss
    - En Fase 2: todo más brillante y activo
 
 5. Secuencia Fase 1:
@@ -610,6 +616,8 @@ IMPLEMENTAR:
    HiveSpawn(doble) → CornerBarrage → pausa 1s → HiveSpawn → BroodExplosion → SpiralOutward+TargetedBurst simultáneo → repetir
 
 7. IMPORTANTE para rendimiento:
+   - Los enemigos spawneados por el boss cuentan hacia MAX_ENEMIES
+   - Si hay demasiados, dejar de spawnear (pero el boss sigue atacando con proyectiles)
    - Los drones del jugador (si tiene alien_drone) son especialmente útiles aquí
 ```
 
