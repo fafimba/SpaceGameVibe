@@ -35,6 +35,14 @@ h1 { text-align: center; font-size: 26px; margin-bottom: 4px; letter-spacing: 2p
     margin: 0 auto;
 }
 .palette-card {
+    display: grid;
+    grid-template-columns: 1fr 165px;
+    grid-template-areas:
+        "header header"
+        "desktop mobile"
+        "swatches swatches"
+        "notes notes";
+    column-gap: 10px;
     border-radius: 14px;
     overflow: hidden;
     border: 2px solid rgba(255,255,255,0.07);
@@ -43,6 +51,7 @@ h1 { text-align: center; font-size: 26px; margin-bottom: 4px; letter-spacing: 2p
 }
 .palette-card:hover { border-color: rgba(255,255,255,0.2); }
 .palette-header {
+    grid-area: header;
     padding: 14px 18px 10px;
     display: flex;
     justify-content: space-between;
@@ -63,22 +72,73 @@ h1 { text-align: center; font-size: 26px; margin-bottom: 4px; letter-spacing: 2p
 .tag-pop { background: rgba(255,100,200,0.12); color: #FF64C8; }
 .tag-pastel { background: rgba(160,220,255,0.15); color: #A0DCFF; }
 
-.scenes { display: flex; gap: 10px; padding: 4px 10px; align-items: flex-start; }
 .scene-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #666; text-align: center; margin-bottom: 3px; }
-.scene-wrap { display: flex; flex-direction: column; }
-.scene-wrap.desktop { flex: 1; min-width: 0; }
-.scene-wrap.mobile { width: 155px; flex-shrink: 0; }
+.scene-wrap { display: flex; flex-direction: column; padding: 4px 0; }
+.scene-wrap.desktop { grid-area: desktop; padding-left: 10px; min-width: 0; }
+.scene-wrap.mobile { grid-area: mobile; padding-right: 10px; }
 canvas.scene { display: block; border-radius: 4px; }
 canvas.scene-desktop { width: 100%; height: 300px; }
-canvas.scene-mobile { width: 155px; height: 300px; }
-.swatches { display: flex; flex-wrap: wrap; gap: 5px; padding: 12px 16px; }
+canvas.scene-mobile { width: 100%; height: 300px; }
+.swatches {
+    grid-area: swatches;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 4px 12px;
+    padding: 12px 16px;
+}
+.swatch-cat {
+    grid-column: 1 / -1;
+    font-size: 8px; font-weight: 700; letter-spacing: 1px;
+    color: #555; margin-top: 4px; text-transform: uppercase;
+}
 .swatch { display: flex; align-items: center; gap: 5px; font-size: 9.5px; color: #aaa; }
 .swatch-color {
-    width: 16px; height: 16px; border-radius: 3px;
+    width: 14px; height: 14px; border-radius: 3px;
     border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
 }
 .palette-notes {
+    grid-area: notes;
     padding: 0 16px 14px; font-size: 12px; color: #999; line-height: 1.5;
+}
+
+/* ---- MOBILE RESPONSIVE ---- */
+@media (max-width: 700px) {
+    body { padding: 10px; }
+    h1 { font-size: 20px; }
+    .subtitle { font-size: 11px; }
+    .section-label { font-size: 11px; margin: 20px auto 10px; }
+    .palettes {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .palette-card {
+        grid-template-columns: 120px 1fr;
+        grid-template-areas:
+            "header header"
+            "desktop desktop"
+            "mobile swatches"
+            "notes notes";
+        column-gap: 0;
+    }
+    .scene-wrap.desktop { padding: 4px 8px; }
+    .scene-wrap.mobile { padding: 0 0 0 8px; }
+    canvas.scene-desktop { height: 180px; }
+    canvas.scene-mobile { height: 210px; }
+    .scene-label { font-size: 8px; margin-bottom: 2px; }
+    .swatches {
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 6px;
+        padding: 4px 6px;
+        align-self: start;
+        margin-top: 14px;
+    }
+    .swatch { font-size: 7px; gap: 2px; line-height: 1.1; }
+    .swatch-color { width: 9px; height: 9px; border-radius: 2px; }
+    .swatch-cat { margin-top: 2px; margin-bottom: 0; font-size: 6px; }
+    .palette-notes { display: none; }
+    .palette-name { font-size: 13px; }
+    .palette-tag { font-size: 8px; padding: 2px 6px; }
+    .palette-header { padding: 8px 10px 6px; }
 }
 </style>
 </head>
@@ -395,7 +455,7 @@ function applyCasualVignette(ctx, W, H) {
 // SCENE RENDERER
 // ==========================================
 
-function renderScene(canvas, p) {
+function renderScene(canvas, p, isMobile) {
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
@@ -464,40 +524,52 @@ function renderScene(canvas, p) {
         }
     }
 
-    // ---- ENEMIES (same geometry for all palettes) ----
-    // Many scouts to represent visual density of actual gameplay
-    const enemyDefs = [
-        // Scouts — swarming all over
-        { type: 'scout', x: W*0.72, y: H*0.28, r: 7 },
-        { type: 'scout', x: W*0.80, y: H*0.44, r: 7 },
-        { type: 'scout', x: W*0.43, y: H*0.13, r: 7 },
-        { type: 'scout', x: W*0.55, y: H*0.32, r: 7 },
-        { type: 'scout', x: W*0.63, y: H*0.42, r: 7 },
-        { type: 'scout', x: W*0.78, y: H*0.15, r: 7 },
-        { type: 'scout', x: W*0.88, y: H*0.33, r: 7 },
-        { type: 'scout', x: W*0.50, y: H*0.55, r: 7 },
-        { type: 'scout', x: W*0.68, y: H*0.52, r: 7 },
-        { type: 'scout', x: W*0.74, y: H*0.68, r: 7 },
-        { type: 'scout', x: W*0.60, y: H*0.22, r: 7 },
-        { type: 'scout', x: W*0.82, y: H*0.58, r: 7 },
-        { type: 'scout', x: W*0.47, y: H*0.38, r: 7 },
-        { type: 'scout', x: W*0.92, y: H*0.48, r: 7 },
-        { type: 'scout', x: W*0.38, y: H*0.25, r: 7 },
-        { type: 'scout', x: W*0.70, y: H*0.78, r: 7 },
-        { type: 'scout', x: W*0.58, y: H*0.70, r: 7 },
-        { type: 'scout', x: W*0.86, y: H*0.76, r: 7 },
-        { type: 'scout', x: W*0.15, y: H*0.30, r: 7 },
-        { type: 'scout', x: W*0.22, y: H*0.18, r: 7 },
-        { type: 'scout', x: W*0.10, y: H*0.50, r: 7 },
-        { type: 'scout', x: W*0.25, y: H*0.60, r: 7 },
-        { type: 'scout', x: W*0.18, y: H*0.42, r: 7 },
-        { type: 'scout', x: W*0.33, y: H*0.68, r: 7 },
-        // Other enemy types
-        { type: 'kamikaze', x: W*0.66, y: H*0.60, r: 7 },
-        { type: 'kamikaze', x: W*0.90, y: H*0.20, r: 7 },
-        { type: 'spinner', x: W*0.85, y: H*0.66, r: 9 },
-        { type: 'tank', x: W*0.56, y: H*0.18, r: 13 },
-        { type: 'alien', x: W*0.17, y: H*0.73, r: 18 },
+    // ---- ENEMIES ----
+    // Offset Y so elements don't overlap HUD at top
+    const oY = H * 0.08;
+    const enemyDefs = isMobile ? [
+        { type: 'scout', x: W*0.70, y: oY+H*0.20, r: 5 },
+        { type: 'scout', x: W*0.55, y: oY+H*0.32, r: 5 },
+        { type: 'scout', x: W*0.82, y: oY+H*0.40, r: 5 },
+        { type: 'scout', x: W*0.45, y: oY+H*0.50, r: 5 },
+        { type: 'scout', x: W*0.65, y: oY+H*0.60, r: 5 },
+        { type: 'scout', x: W*0.88, y: oY+H*0.28, r: 5 },
+        { type: 'scout', x: W*0.30, y: oY+H*0.38, r: 5 },
+        { type: 'scout', x: W*0.20, y: oY+H*0.54, r: 5 },
+        { type: 'scout', x: W*0.75, y: oY+H*0.70, r: 5 },
+        { type: 'kamikaze', x: W*0.60, y: oY+H*0.45, r: 5 },
+        { type: 'spinner', x: W*0.85, y: oY+H*0.58, r: 7 },
+        { type: 'tank', x: W*0.42, y: oY+H*0.16, r: 9 },
+    ] : [
+        { type: 'scout', x: W*0.72, y: oY+H*0.24, r: 7 },
+        { type: 'scout', x: W*0.80, y: oY+H*0.40, r: 7 },
+        { type: 'scout', x: W*0.43, y: oY+H*0.12, r: 7 },
+        { type: 'scout', x: W*0.55, y: oY+H*0.28, r: 7 },
+        { type: 'scout', x: W*0.63, y: oY+H*0.38, r: 7 },
+        { type: 'scout', x: W*0.78, y: oY+H*0.14, r: 7 },
+        { type: 'scout', x: W*0.88, y: oY+H*0.30, r: 7 },
+        { type: 'scout', x: W*0.50, y: oY+H*0.50, r: 7 },
+        { type: 'scout', x: W*0.68, y: oY+H*0.48, r: 7 },
+        { type: 'scout', x: W*0.74, y: oY+H*0.62, r: 7 },
+        { type: 'scout', x: W*0.60, y: oY+H*0.20, r: 7 },
+        { type: 'scout', x: W*0.82, y: oY+H*0.54, r: 7 },
+        { type: 'scout', x: W*0.47, y: oY+H*0.34, r: 7 },
+        { type: 'scout', x: W*0.92, y: oY+H*0.44, r: 7 },
+        { type: 'scout', x: W*0.38, y: oY+H*0.22, r: 7 },
+        { type: 'scout', x: W*0.70, y: oY+H*0.72, r: 7 },
+        { type: 'scout', x: W*0.58, y: oY+H*0.64, r: 7 },
+        { type: 'scout', x: W*0.86, y: oY+H*0.70, r: 7 },
+        { type: 'scout', x: W*0.15, y: oY+H*0.28, r: 7 },
+        { type: 'scout', x: W*0.22, y: oY+H*0.16, r: 7 },
+        { type: 'scout', x: W*0.10, y: oY+H*0.46, r: 7 },
+        { type: 'scout', x: W*0.25, y: oY+H*0.56, r: 7 },
+        { type: 'scout', x: W*0.18, y: oY+H*0.38, r: 7 },
+        { type: 'scout', x: W*0.33, y: oY+H*0.62, r: 7 },
+        { type: 'kamikaze', x: W*0.66, y: oY+H*0.56, r: 7 },
+        { type: 'kamikaze', x: W*0.90, y: oY+H*0.18, r: 7 },
+        { type: 'spinner', x: W*0.85, y: oY+H*0.60, r: 9 },
+        { type: 'tank', x: W*0.56, y: oY+H*0.16, r: 13 },
+        { type: 'alien', x: W*0.17, y: oY+H*0.67, r: 18 },
     ];
 
     for (const e of enemyDefs) {
@@ -527,7 +599,7 @@ function renderScene(canvas, p) {
     }
 
     // ---- PLAYER (same ship for all) ----
-    const px = W*0.34, py = H*0.47;
+    const px = W*0.34, py = oY + H*0.42;
 
     // Thruster
     const thrGrad = ctx.createRadialGradient(px-11, py, 0, px-11, py, 14);
@@ -580,100 +652,85 @@ function renderScene(canvas, p) {
     // Missiles — small dashes
     ctx.fillStyle = p.weapons.missile;
     ctx.fillRect(px+28, py-18, 6, 2);
-    ctx.fillRect(px+46, py-16, 6, 2);
+    if (!isMobile) ctx.fillRect(px+46, py-16, 6, 2);
 
-    // Lightning
-    ctx.strokeStyle = p.weapons.lightning;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px+28, py+22);
-    ctx.lineTo(px+23, py+32);
-    ctx.lineTo(px+50, py+46);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    // Drone — outline circle with center dot
-    ctx.beginPath();
-    ctx.arc(px-24, py-28, 5, 0, Math.PI*2);
-    ctx.strokeStyle = p.weapons.drone;
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(px-24, py-28, 1.2, 0, Math.PI*2);
-    ctx.fillStyle = p.weapons.drone;
-    ctx.fill();
-
-    // Plasma aura
-    ctx.beginPath();
-    ctx.arc(px, py, 34, 0, Math.PI*2);
-    ctx.strokeStyle = p.weapons.plasma;
-    ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.2;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    // ---- HUD PANEL (bottom) ----
-    const hudY = H - 48;
-    ctx.fillStyle = p.hud.panel;
-    ctx.fillRect(8, hudY, W-16, 38);
-    ctx.strokeStyle = p.hud.border;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(8, hudY, W-16, 38);
-
-    ctx.font = 'bold 11px "Segoe UI", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = p.hud.text;
-    ctx.fillText('LVL 12', 18, hudY+16);
-    ctx.fillStyle = p.hud.accent;
-    ctx.font = 'bold 10px "Segoe UI", sans-serif';
-    ctx.fillText('STELLAR SWARM', 18, hudY+30);
-
-    // XP bar
-    const barX = 130, barW = 75, barH = 5;
-    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
-    ctx.fillRect(barX, hudY+10, barW, barH);
-    ctx.fillStyle = p.xp;
-    ctx.fillRect(barX, hudY+10, barW*0.65, barH);
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = p.hud.score;
-    ctx.font = 'bold 12px "Segoe UI", sans-serif';
-    ctx.fillText('24,580', W-18, hudY+16);
-    ctx.fillStyle = p.hud.hp;
-    ctx.font = 'bold 11px "Segoe UI", sans-serif';
-    ctx.fillText('♥♥♥♡', W-18, hudY+30);
-
-    // ---- WEAPON BAR (top) ----
-    const wCols = [p.weapons.laser, p.weapons.missile, p.weapons.shield, p.weapons.lightning, p.weapons.plasma, p.weapons.drone];
-    const wNames = ['LAS','MIS','SHD','LIT','PLS','DRN'];
-    const wS = 20, wG = 5;
-    const wTotal = wCols.length*(wS+wG)-wG;
-    const wX0 = (W-wTotal)/2;
-    for (let i=0; i<wCols.length; i++) {
-        const wx = wX0 + i*(wS+wG) + wS/2;
-        ctx.beginPath();
-        ctx.arc(wx, 16, wS/2, 0, Math.PI*2);
-        ctx.strokeStyle = wCols[i];
+    // Desktop-only weapon effects (skip on mobile to reduce clutter)
+    if (!isMobile) {
+        // Lightning
+        ctx.strokeStyle = p.weapons.lightning;
         ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px+28, py+22);
+        ctx.lineTo(px+23, py+32);
+        ctx.lineTo(px+50, py+46);
         ctx.stroke();
-        ctx.font = '7px "Segoe UI", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = wCols[i];
-        ctx.fillText(wNames[i], wx, 19);
+        ctx.globalAlpha = 1;
+
+        // Drone — outline circle with center dot
+        ctx.beginPath();
+        ctx.arc(px-24, py-28, 5, 0, Math.PI*2);
+        ctx.strokeStyle = p.weapons.drone;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px-24, py-28, 1.2, 0, Math.PI*2);
+        ctx.fillStyle = p.weapons.drone;
+        ctx.fill();
+
+        // Plasma aura
+        ctx.beginPath();
+        ctx.arc(px, py, 34, 0, Math.PI*2);
+        ctx.strokeStyle = p.weapons.plasma;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.2;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
     }
 
-    // ---- WAVE ALERT ----
-    ctx.font = 'bold 13px "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = p.hud.hp;
-    ctx.globalAlpha = 0.85;
-    ctx.fillText('WAVE 7', W/2, 46);
-    ctx.font = '8px "Segoe UI", sans-serif';
+    // ---- HUD (same layout for desktop & mobile, no background panel) ----
+    const fs = isMobile ? 0.7 : 1; // font/size scale
+
+    // Top-left: KILLS + SCORE
+    ctx.font = `${5*fs}px "Segoe UI", sans-serif`;
+    ctx.textAlign = 'left';
     ctx.fillStyle = p.hud.dim;
-    ctx.fillText('INCOMING SWARM', W/2, 58);
-    ctx.globalAlpha = 1;
+    ctx.fillText('KILLS', 6, 10*fs);
+    ctx.font = `bold ${12*fs}px "Segoe UI", sans-serif`;
+    ctx.fillStyle = p.hud.text;
+    ctx.fillText('3', 6, 23*fs);
+    ctx.font = `${5*fs}px "Segoe UI", sans-serif`;
+    ctx.fillStyle = p.hud.dim;
+    ctx.fillText('SCORE', 6, 32*fs);
+    ctx.font = `bold ${8*fs}px "Segoe UI", sans-serif`;
+    ctx.fillStyle = p.hud.text;
+    ctx.fillText('44', 6, 42*fs);
+
+    // Top-center: HP bar + XP bar
+    const bx = W*0.22, bw = W*0.50;
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)';
+    ctx.fillRect(bx, 8*fs, bw, 4*fs);
+    ctx.fillStyle = '#33CC55';
+    ctx.fillRect(bx, 8*fs, bw*0.8, 4*fs);
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)';
+    ctx.fillRect(bx, 16*fs, bw, 3*fs);
+    ctx.fillStyle = p.hud.accent;
+    ctx.fillRect(bx, 16*fs, bw*0.12, 3*fs);
+
+    // Top-right: lives (small triangles)
+    const triS = 5*fs;
+    for (let i = 0; i < 3; i++) {
+        const lx = W - 8 - i*(triS*2.5), ly = 10*fs;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly - triS);
+        ctx.lineTo(lx - triS*0.8, ly + triS*0.6);
+        ctx.lineTo(lx + triS*0.8, ly + triS*0.6);
+        ctx.closePath();
+        ctx.strokeStyle = p.player;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
 
     // ---- POST-PROCESSING ----
     if (isCRT) applyCRT(ctx, W, H);
@@ -687,18 +744,21 @@ function renderScene(canvas, p) {
 // ==========================================
 
 function swatches(p) {
-    const items = [
-        [p.bg.base, 'Fondo'], [p.bg.center, 'Centro'],
-        [p.player, 'Jugador'], [p.thruster, 'Propulsor'],
-        [p.bullet, 'Balas'], [p.enemyBullet, 'Balas enem.'],
-        [p.enemies.scout, 'Scout'], [p.enemies.kamikaze, 'Kamikaze'],
-        [p.enemies.spinner, 'Spinner'], [p.enemies.tank, 'Tank'],
-        [p.enemies.alien, 'Alien'],
-        [p.weapons.laser, 'Láser'], [p.weapons.missile, 'Misil'],
-        [p.weapons.shield, 'Escudo'], [p.weapons.lightning, 'Rayo'],
-        [p.weapons.drone, 'Dron'],
-    ];
-    return items.map(([c,l]) => `<div class="swatch"><div class="swatch-color" style="background:${c}"></div><span>${l}</span></div>`).join('');
+    const sw = (c,l) => `<div class="swatch"><div class="swatch-color" style="background:${c}"></div><span>${l}</span></div>`;
+    const cat = (label) => `<div class="swatch-cat">${label}</div>`;
+    return [
+        sw(p.bg.base, 'Fondo'), sw(p.bg.center, 'Centro'),
+        sw(p.player, 'Jugador'), sw(p.thruster, 'Propulsor'),
+        sw(p.bullet, 'Balas'), sw(p.enemyBullet, 'Balas enem.'),
+        cat('ENEMIGOS'),
+        sw(p.enemies.scout, 'Scout'), sw(p.enemies.kamikaze, 'Kamikaze'),
+        sw(p.enemies.spinner, 'Spinner'), sw(p.enemies.tank, 'Tank'),
+        sw(p.enemies.alien, 'Alien'),
+        cat('ARMAS'),
+        sw(p.weapons.laser, 'Láser'), sw(p.weapons.missile, 'Misil'),
+        sw(p.weapons.shield, 'Escudo'), sw(p.weapons.lightning, 'Rayo'),
+        sw(p.weapons.plasma, 'Plasma'), sw(p.weapons.drone, 'Dron'),
+    ].join('');
 }
 
 // ==========================================
@@ -728,15 +788,13 @@ for (const section of SECTIONS) {
                 <span class="palette-name">${p.name}</span>
                 <span class="palette-tag ${p.tagClass}">${p.tag}</span>
             </div>
-            <div class="scenes">
-                <div class="scene-wrap desktop">
-                    <div class="scene-label">Desktop</div>
-                    <canvas class="scene scene-desktop" id="${dId}"></canvas>
-                </div>
-                <div class="scene-wrap mobile">
-                    <div class="scene-label">Mobile</div>
-                    <canvas class="scene scene-mobile" id="${mId}"></canvas>
-                </div>
+            <div class="scene-wrap desktop">
+                <div class="scene-label">Desktop</div>
+                <canvas class="scene scene-desktop" id="${dId}"></canvas>
+            </div>
+            <div class="scene-wrap mobile">
+                <div class="scene-label">Mobile</div>
+                <canvas class="scene scene-mobile" id="${mId}"></canvas>
             </div>
             <div class="swatches">${swatches(p)}</div>
             <div class="palette-notes">${p.notes}</div>
@@ -751,8 +809,8 @@ function renderAll() {
     let idx = 0;
     for (const section of SECTIONS) {
         for (const p of section.palettes) {
-            renderScene(document.getElementById(`d${idx}`), p);
-            renderScene(document.getElementById(`m${idx}`), p);
+            renderScene(document.getElementById(`d${idx}`), p, false);
+            renderScene(document.getElementById(`m${idx}`), p, true);
             idx++;
         }
     }
