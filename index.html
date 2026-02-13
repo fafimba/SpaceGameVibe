@@ -471,8 +471,8 @@
                         icon: 'spread',
                         levels: [
                             { description: '3 projectiles in cone', effect: { spreadCount: 3 } },
-                            { description: '5 projectiles, wider cone', effect: { spreadCount: 5, spreadAngle: 15 } },
-                            { description: '7 projectiles, wide cone', effect: { spreadCount: 7, spreadAngle: 30 } }
+                            { description: '5 projectiles, focused cone', effect: { spreadCount: 5 } },
+                            { description: '7 projectiles, dense cone', effect: { spreadCount: 7 } }
                         ]
                     },
                     'piercing_lens': {
@@ -1002,7 +1002,6 @@
         let crystalsThisRun = 0;
         let tempDamageMultiplier = 1;
         let tempDamageTimer = 0;
-        let crystalPickups = [];
         let lastRunCrystals = null; // Breakdown for game over screen
         // Permanent upgrade effects (set from cachedProgression in resetGame)
         let playerMaxHP = PLAYER_MAX_HP;
@@ -1498,7 +1497,6 @@
             upgradeLevels = {};
             activeEvolutions = [];
             crystalsThisRun = 0;
-            crystalPickups = [];
             lastRunCrystals = null;
             tempDamageMultiplier = 1;
             tempDamageTimer = 0;
@@ -1650,7 +1648,7 @@
                 keys[e.code] = false;
             });
 
-            // Canvas click for shop + tutorial
+            // Canvas click for shop + tutorial + menu
             canvas.addEventListener('click', (e) => {
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = CANVAS_WIDTH / rect.width;
@@ -1661,20 +1659,9 @@
                 if (gameState === 'shop') {
                     handleShopClick(clickX, clickY);
                 } else if (gameState === 'tutorial') {
-                    // Check if click is on left or right card
-                    const cardW = 300;
-                    const gap = 60;
-                    const totalW = 2 * cardW + gap;
-                    const startX = (CANVAS_WIDTH - totalW) / 2;
-                    const cardY = 290;
-                    const cardH = 320;
-                    if (clickY >= cardY && clickY <= cardY + cardH) {
-                        if (clickX >= startX && clickX <= startX + cardW) {
-                            selectTutorialWeapon('orbital_shield');
-                        } else if (clickX >= startX + cardW + gap && clickX <= startX + totalW) {
-                            selectTutorialWeapon('missile_launcher');
-                        }
-                    }
+                    handleTutorialClick(clickX, clickY);
+                } else if (gameState === 'menu' || gameState === 'gameOver') {
+                    handleMenuClick(clickX, clickY);
                 }
             });
         }
@@ -1707,18 +1694,45 @@
                 // Init audio on first touch
                 AudioManager.init();
 
+                // Helper to convert touch to canvas coordinates
+                function touchToCanvas(touch) {
+                    const rect = canvas.getBoundingClientRect();
+                    return {
+                        x: (touch.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+                        y: (touch.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
+                    };
+                }
+
                 if (gameState === 'menu') {
-                    startGame();
+                    const coords = touchToCanvas(e.touches[0]);
+                    if (!handleMenuClick(coords.x, coords.y)) {
+                        startGame();
+                    }
                     return;
                 }
 
                 if (gameState === 'gameOver') {
-                    startGame();
+                    const coords = touchToCanvas(e.touches[0]);
+                    if (!handleMenuClick(coords.x, coords.y)) {
+                        startGame();
+                    }
                     return;
                 }
 
-                if (gameState === 'skilltree' || gameState === 'tutorial' || gameState === 'shop') {
-                    return; // Don't activate joystick during overlays
+                if (gameState === 'shop') {
+                    const coords = touchToCanvas(e.touches[0]);
+                    handleShopClick(coords.x, coords.y);
+                    return;
+                }
+
+                if (gameState === 'tutorial') {
+                    const coords = touchToCanvas(e.touches[0]);
+                    handleTutorialClick(coords.x, coords.y);
+                    return;
+                }
+
+                if (gameState === 'skilltree') {
+                    return; // Don't activate joystick during skill tree overlay
                 }
 
                 joystickTouch = e.touches[0];
@@ -2005,7 +2019,6 @@
             updateParticles();
             updateFloatingTexts();
             updatePickups();
-            updateCrystalPickups();
             updateWeapons();
 
             // Temp damage buff timer
@@ -2246,8 +2259,8 @@
 
                 const bsLvl = upgradeLevels['beam_splitter'] || 0;
                 if (bsLvl >= 1) spreadCount = 3;
-                if (bsLvl >= 2) { spreadCount = 5; spreadAngle = 15; }
-                if (bsLvl >= 3) { spreadCount = 7; spreadAngle = 30; }
+                if (bsLvl >= 2) spreadCount = 5;
+                if (bsLvl >= 3) spreadCount = 7;
 
                 const plLvl = upgradeLevels['piercing_lens'] || 0;
                 if (plLvl >= 1) pierce = 2;
@@ -2499,14 +2512,17 @@
             
             // Fire main weapon (LASER or BEAM if pierce unlocked)
             const hasPierce = stats.pierce > 0 || stats.pierceInfinite;
+            const hasSpread = stats.spreadCount > 0;
             if (hasPierce) {
                 // Pierce/Beam shot
+                const pierceSpeedMult = hasSpread ? 1 : 1.2;
+                const pierceLifeMult = hasSpread ? 1 : 1.5;
                 const bullet = pools.bullet.acquire();
                 bullet.x = noseX;
                 bullet.y = noseY;
-                bullet.vx = Math.cos(targetRad) * (bulletSpeed * 1.2);
-                bullet.vy = Math.sin(targetRad) * (bulletSpeed * 1.2);
-                bullet.life = BULLET_LIFETIME * 1.5;
+                bullet.vx = Math.cos(targetRad) * (bulletSpeed * pierceSpeedMult);
+                bullet.vy = Math.sin(targetRad) * (bulletSpeed * pierceSpeedMult);
+                bullet.life = BULLET_LIFETIME * pierceLifeMult;
                 bullet.damage = stats.damage;
                 bullet.type = 'beam';
                 bullet.color = COLORS.BULLET;
@@ -3668,13 +3684,6 @@
             // Spawn alien drones if skill unlocked
             spawnAlienDrone(enemy.x, enemy.y);
 
-            // Drop crystal (tanks always, 5% others)
-            if (enemy.type === 'TANK' || Math.random() < 0.05) {
-                crystalPickups.push({
-                    x: enemy.x, y: enemy.y,
-                    size: 8, lifetime: 15, magnetRange: 150
-                });
-            }
 
             pools.enemy.release(enemy);
             fastRemove(enemies, index);
@@ -3787,65 +3796,6 @@
             }
         }
 
-        // ============================================================
-        // CRYSTAL PICKUPS
-        // ============================================================
-
-        function updateCrystalPickups() {
-            if (!player) return;
-            for (let i = crystalPickups.length - 1; i >= 0; i--) {
-                const c = crystalPickups[i];
-                c.lifetime -= deltaTime;
-                if (c.lifetime <= 0) {
-                    crystalPickups.splice(i, 1);
-                    continue;
-                }
-
-                const dx = player.x - c.x;
-                const dy = player.y - c.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                // Magnetism
-                if (dist < c.magnetRange && dist > 0) {
-                    const speed = 300 * (1 - dist / c.magnetRange);
-                    c.x += (dx / dist) * speed * deltaTime;
-                    c.y += (dy / dist) * speed * deltaTime;
-                }
-
-                // Collect
-                if (dist < 25) {
-                    crystalsThisRun++;
-                    spawnFloatingText(c.x, c.y, '+1', '#E0F0FF');
-                    crystalPickups.splice(i, 1);
-                }
-            }
-        }
-
-        function renderCrystalPickups() {
-            for (const c of crystalPickups) {
-                ctx.save();
-                ctx.translate(c.x, c.y);
-                ctx.globalAlpha = Math.min(1, c.lifetime * 2);
-
-                // Diamond shape
-                ctx.fillStyle = '#E0F0FF';
-                ctx.beginPath();
-                ctx.moveTo(0, -6);
-                ctx.lineTo(5, 0);
-                ctx.lineTo(0, 6);
-                ctx.lineTo(-5, 0);
-                ctx.closePath();
-                ctx.fill();
-
-                // Glow outline
-                ctx.strokeStyle = '#FFFFFF';
-                ctx.lineWidth = 1;
-                ctx.globalAlpha *= 0.5;
-                ctx.stroke();
-
-                ctx.restore();
-            }
-        }
 
         // ============================================================
         // XP & LEVEL SYSTEM
@@ -5101,7 +5051,6 @@
             // Game entities (all rendered in world coordinates)
             if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver') {
                 renderPickups();
-                renderCrystalPickups();
                 renderEnemies();
                 renderBullets();
                 renderDrones();
@@ -6093,11 +6042,31 @@
             ctx.globalAlpha = 1;
 
             // Shop hint + crystal balance
-            ctx.font = '18px "Segoe UI", sans-serif';
-            ctx.fillStyle = '#E0F0FF';
-            ctx.globalAlpha = 0.8;
-            ctx.fillText('[S] SHOP  \u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, 375);
-            ctx.globalAlpha = 1;
+            let menuBtns = [];
+            if (isMobile()) {
+                const shopBtnW = 340;
+                const shopBtnH = 55;
+                const shopBtnX = (CANVAS_WIDTH - shopBtnW) / 2;
+                const shopBtnY = 348;
+                ctx.fillStyle = 'rgba(224, 240, 255, 0.12)';
+                ctx.strokeStyle = 'rgba(224, 240, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.roundRect(shopBtnX, shopBtnY, shopBtnW, shopBtnH, 8);
+                ctx.fill();
+                ctx.stroke();
+                ctx.font = 'bold 26px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#E0F0FF';
+                ctx.fillText('SHOP  \u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, shopBtnY + 37);
+                menuBtns.push({ type: 'shop', x: shopBtnX, y: shopBtnY, w: shopBtnW, h: shopBtnH });
+            } else {
+                ctx.font = '18px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#E0F0FF';
+                ctx.globalAlpha = 0.8;
+                ctx.fillText('[S] SHOP  \u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, 375);
+                ctx.globalAlpha = 1;
+            }
+            currentMenuButtons = menuBtns;
 
             // Controls
             renderControlsHelp(410);
@@ -6690,14 +6659,16 @@
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.textAlign = 'center';
 
-            // Title
-            ctx.font = 'bold 42px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('CHOOSE YOUR SECOND WEAPON', CANVAS_WIDTH / 2, 200);
+            const mobile = isMobile();
 
-            ctx.font = '18px "Segoe UI", sans-serif';
+            // Title
+            ctx.font = mobile ? 'bold 50px "Segoe UI", sans-serif' : 'bold 42px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_PRIMARY;
+            ctx.fillText('CHOOSE YOUR SECOND WEAPON', CANVAS_WIDTH / 2, mobile ? 180 : 200);
+
+            ctx.font = mobile ? '24px "Segoe UI", sans-serif' : '18px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('You already have the Laser Cannon. Pick a free companion weapon to start with.', CANVAS_WIDTH / 2, 240);
+            ctx.fillText('You already have the Laser Cannon. Pick a free companion weapon.', CANVAS_WIDTH / 2, mobile ? 230 : 240);
 
             // Two weapon cards
             const weapons = [
@@ -6705,12 +6676,14 @@
                 { id: 'missile_launcher', key: '2' }
             ];
 
-            const cardW = 300;
-            const cardH = 320;
-            const gap = 60;
+            const cardW = mobile ? 450 : 300;
+            const cardH = mobile ? 400 : 320;
+            const gap = mobile ? 50 : 60;
             const totalW = weapons.length * cardW + (weapons.length - 1) * gap;
             const startX = (CANVAS_WIDTH - totalW) / 2;
-            const cardY = 290;
+            const cardY = mobile ? 270 : 290;
+
+            let tutButtons = [];
 
             for (let i = 0; i < weapons.length; i++) {
                 const w = WEAPONS[weapons[i].id];
@@ -6720,46 +6693,59 @@
                 // Card background
                 ctx.fillStyle = 'rgba(20, 25, 40, 0.9)';
                 ctx.strokeStyle = w.color;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = mobile ? 3 : 2;
                 ctx.beginPath();
                 ctx.roundRect(x, cardY, cardW, cardH, 12);
                 ctx.fill();
                 ctx.stroke();
 
-                // Key badge
-                ctx.fillStyle = w.color;
-                ctx.font = 'bold 28px "Segoe UI", sans-serif';
-                ctx.fillText('[' + weapons[i].key + ']', cx, cardY + 45);
+                // Store full card as clickable region
+                tutButtons.push({ id: weapons[i].id, x: x, y: cardY, w: cardW, h: cardH });
+
+                if (mobile) {
+                    // TAP badge
+                    ctx.fillStyle = w.color;
+                    ctx.font = 'bold 30px "Segoe UI", sans-serif';
+                    ctx.fillText('TAP', cx, cardY + 50);
+                } else {
+                    // Key badge
+                    ctx.fillStyle = w.color;
+                    ctx.font = 'bold 28px "Segoe UI", sans-serif';
+                    ctx.fillText('[' + weapons[i].key + ']', cx, cardY + 45);
+                }
 
                 // Weapon name
-                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.font = mobile ? 'bold 30px "Segoe UI", sans-serif' : 'bold 22px "Segoe UI", sans-serif';
                 ctx.fillStyle = w.color;
-                ctx.fillText(w.name, cx, cardY + 85);
+                ctx.fillText(w.name, cx, cardY + (mobile ? 100 : 85));
 
                 // Description
-                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.font = mobile ? '22px "Segoe UI", sans-serif' : '16px "Segoe UI", sans-serif';
                 ctx.fillStyle = COLORS.UI_SECONDARY;
-                ctx.fillText(w.description, cx, cardY + 115);
+                ctx.fillText(w.description, cx, cardY + (mobile ? 140 : 115));
 
                 // Branch preview
-                ctx.font = '14px "Segoe UI", sans-serif';
+                ctx.font = mobile ? '20px "Segoe UI", sans-serif' : '14px "Segoe UI", sans-serif';
                 ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                let by = cardY + 155;
+                let by = cardY + (mobile ? 185 : 155);
+                const branchGap = mobile ? 30 : 22;
                 for (const [, branch] of Object.entries(w.branches)) {
-                    ctx.fillText('• ' + branch.name, cx, by);
-                    by += 22;
+                    ctx.fillText('\u2022 ' + branch.name, cx, by);
+                    by += branchGap;
                 }
 
                 // FREE tag
-                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.font = mobile ? 'bold 24px "Segoe UI", sans-serif' : 'bold 16px "Segoe UI", sans-serif';
                 ctx.fillStyle = '#39FF14';
-                ctx.fillText('FREE', cx, cardY + cardH - 20);
+                ctx.fillText('FREE', cx, cardY + cardH - (mobile ? 25 : 20));
             }
 
-            // Tap instruction for mobile
-            ctx.font = '16px "Segoe UI", sans-serif';
+            currentTutorialButtons = tutButtons;
+
+            // Instruction
+            ctx.font = mobile ? '24px "Segoe UI", sans-serif' : '16px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('Press 1 or 2 to choose', CANVAS_WIDTH / 2, cardY + cardH + 40);
+            ctx.fillText(mobile ? 'Tap a card to choose' : 'Press 1 or 2 to choose', CANVAS_WIDTH / 2, cardY + cardH + (mobile ? 50 : 40));
         }
 
         // ============================================================
@@ -6774,204 +6760,388 @@
             ctx.textAlign = 'center';
 
             const prog = loadProgression();
+            const mobile = isMobile();
 
             // Header
-            ctx.font = 'bold 42px "Segoe UI", sans-serif';
+            ctx.font = mobile ? 'bold 52px "Segoe UI", sans-serif' : 'bold 42px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('SHOP', CANVAS_WIDTH / 2, 60);
+            ctx.fillText('SHOP', CANVAS_WIDTH / 2, mobile ? 55 : 60);
 
             // Crystal balance
-            ctx.font = 'bold 22px "Segoe UI", sans-serif';
+            ctx.font = mobile ? 'bold 30px "Segoe UI", sans-serif' : 'bold 22px "Segoe UI", sans-serif';
             ctx.fillStyle = '#E0F0FF';
-            ctx.fillText('\u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, 95);
+            ctx.fillText('\u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, mobile ? 90 : 95);
 
             // === WEAPONS SECTION ===
-            ctx.font = 'bold 20px "Segoe UI", sans-serif';
+            ctx.font = mobile ? 'bold 28px "Segoe UI", sans-serif' : 'bold 20px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.HUD_CYAN;
             ctx.textAlign = 'left';
-            ctx.fillText('WEAPONS', 80, 140);
+            ctx.fillText('WEAPONS', mobile ? 60 : 80, mobile ? 130 : 140);
 
             const weaponIds = WEAPON_IDS;
-            const wCardW = 260;
-            const wCardH = 100;
-            const wGap = 16;
-            const wTotalW = 3 * wCardW + 2 * wGap;
-            const wStartX = (CANVAS_WIDTH - wTotalW) / 2;
-            let shopButtons = []; // Collect clickable regions
+            let shopButtons = [];
 
-            for (let i = 0; i < weaponIds.length; i++) {
-                const wid = weaponIds[i];
-                const w = WEAPONS[wid];
-                const col = i % 3;
-                const row = Math.floor(i / 3);
-                const x = wStartX + col * (wCardW + wGap);
-                const y = 160 + row * (wCardH + wGap);
-                const isUnlocked = !!prog.unlockedWeapons[wid];
-                const canBuy = !isUnlocked && canBuyWeapon(wid, prog);
-                const reqText = !isUnlocked ? getWeaponRequirementText(wid, prog) : null;
+            if (mobile) {
+                // Mobile: 2 columns, bigger cards
+                const wCardW = 580;
+                const wCardH = 130;
+                const wGap = 24;
+                const wCols = 2;
+                const wTotalW = wCols * wCardW + (wCols - 1) * wGap;
+                const wStartX = (CANVAS_WIDTH - wTotalW) / 2;
+                const wStartY = 150;
 
-                // Card background
-                ctx.fillStyle = isUnlocked ? 'rgba(20, 40, 30, 0.8)' : 'rgba(20, 25, 40, 0.8)';
-                ctx.strokeStyle = isUnlocked ? 'rgba(57, 255, 20, 0.4)' : (canBuy ? w.color : 'rgba(255,255,255,0.15)');
-                ctx.lineWidth = isUnlocked ? 2 : 1;
-                ctx.beginPath();
-                ctx.roundRect(x, y, wCardW, wCardH, 8);
-                ctx.fill();
-                ctx.stroke();
+                for (let i = 0; i < weaponIds.length; i++) {
+                    const wid = weaponIds[i];
+                    const w = WEAPONS[wid];
+                    const col = i % wCols;
+                    const row = Math.floor(i / wCols);
+                    const x = wStartX + col * (wCardW + wGap);
+                    const y = wStartY + row * (wCardH + wGap);
+                    const isUnlocked = !!prog.unlockedWeapons[wid];
+                    const canBuy = !isUnlocked && canBuyWeapon(wid, prog);
+                    const reqText = !isUnlocked ? getWeaponRequirementText(wid, prog) : null;
 
-                // Weapon name
-                ctx.textAlign = 'left';
-                ctx.font = 'bold 16px "Segoe UI", sans-serif';
-                ctx.fillStyle = isUnlocked ? '#39FF14' : (canBuy ? w.color : 'rgba(255,255,255,0.4)');
-                ctx.fillText(w.name, x + 15, y + 28);
-
-                // Description
-                ctx.font = '12px "Segoe UI", sans-serif';
-                ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                ctx.fillText(w.description, x + 15, y + 48);
-
-                if (isUnlocked) {
-                    // Checkmark
-                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                    ctx.fillStyle = '#39FF14';
-                    ctx.fillText('OWNED', x + 15, y + 75);
-                } else if (canBuy) {
-                    // Price + buy button
-                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                    ctx.fillStyle = '#E0F0FF';
-                    ctx.fillText('\u25C6 ' + w.shopPrice, x + 15, y + 75);
-
-                    // Buy button
-                    const btnX = x + wCardW - 75;
-                    const btnY = y + 60;
-                    const btnW = 60;
-                    const btnH = 26;
-                    ctx.fillStyle = w.color;
+                    // Card background
+                    ctx.fillStyle = isUnlocked ? 'rgba(20, 40, 30, 0.8)' : 'rgba(20, 25, 40, 0.8)';
+                    ctx.strokeStyle = isUnlocked ? 'rgba(57, 255, 20, 0.4)' : (canBuy ? w.color : 'rgba(255,255,255,0.15)');
+                    ctx.lineWidth = isUnlocked ? 2 : 1;
                     ctx.beginPath();
-                    ctx.roundRect(btnX, btnY, btnW, btnH, 4);
+                    ctx.roundRect(x, y, wCardW, wCardH, 10);
                     ctx.fill();
-                    ctx.fillStyle = '#000';
-                    ctx.font = 'bold 12px "Segoe UI", sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('BUY', btnX + btnW / 2, btnY + 18);
+                    ctx.stroke();
+
+                    // Weapon name
                     ctx.textAlign = 'left';
+                    ctx.font = 'bold 24px "Segoe UI", sans-serif';
+                    ctx.fillStyle = isUnlocked ? '#39FF14' : (canBuy ? w.color : 'rgba(255,255,255,0.4)');
+                    ctx.fillText(w.name, x + 20, y + 35);
 
-                    shopButtons.push({ type: 'weapon', id: wid, x: btnX, y: btnY, w: btnW, h: btnH });
-                } else if (reqText) {
-                    // Locked requirement
-                    ctx.font = '12px "Segoe UI", sans-serif';
-                    ctx.fillStyle = 'rgba(255,100,100,0.6)';
-                    ctx.fillText(reqText, x + 15, y + 75);
-                } else {
-                    // Not enough crystals
-                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                    ctx.fillStyle = 'rgba(224, 240, 255, 0.4)';
-                    ctx.fillText('\u25C6 ' + w.shopPrice, x + 15, y + 75);
+                    // Description
+                    ctx.font = '18px "Segoe UI", sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillText(w.description, x + 20, y + 62);
+
+                    if (isUnlocked) {
+                        ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#39FF14';
+                        ctx.fillText('OWNED', x + 20, y + 100);
+                    } else if (canBuy) {
+                        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#E0F0FF';
+                        ctx.fillText('\u25C6 ' + w.shopPrice, x + 20, y + 100);
+
+                        // Buy button - large tap target
+                        const btnW = 140;
+                        const btnH = 44;
+                        const btnX = x + wCardW - btnW - 15;
+                        const btnY = y + wCardH - btnH - 12;
+                        ctx.fillStyle = w.color;
+                        ctx.beginPath();
+                        ctx.roundRect(btnX, btnY, btnW, btnH, 6);
+                        ctx.fill();
+                        ctx.fillStyle = '#000';
+                        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('BUY', btnX + btnW / 2, btnY + 30);
+                        ctx.textAlign = 'left';
+
+                        shopButtons.push({ type: 'weapon', id: wid, x: btnX, y: btnY, w: btnW, h: btnH });
+                    } else if (reqText) {
+                        ctx.font = '18px "Segoe UI", sans-serif';
+                        ctx.fillStyle = 'rgba(255,100,100,0.6)';
+                        ctx.fillText(reqText, x + 20, y + 100);
+                    } else {
+                        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                        ctx.fillStyle = 'rgba(224, 240, 255, 0.4)';
+                        ctx.fillText('\u25C6 ' + w.shopPrice, x + 20, y + 100);
+                    }
                 }
-            }
 
-            // === PERMANENT UPGRADES SECTION ===
-            const puStartY = 160 + 2 * (wCardH + wGap) + 30;
-            ctx.font = 'bold 20px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_CYAN;
-            ctx.textAlign = 'left';
-            ctx.fillText('PERMANENT UPGRADES', 80, puStartY);
+                // === PERMANENT UPGRADES SECTION (mobile) ===
+                const puStartY = wStartY + 3 * (wCardH + wGap) + 10;
+                ctx.font = 'bold 28px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_CYAN;
+                ctx.textAlign = 'left';
+                ctx.fillText('UPGRADES', 60, puStartY);
 
-            const puKeys = Object.keys(PERMANENT_UPGRADES);
-            const puCardW = (CANVAS_WIDTH - 160 - (puKeys.length - 1) * 12) / puKeys.length;
-            const puCardH = 200;
-            const puY = puStartY + 20;
+                const puKeys = Object.keys(PERMANENT_UPGRADES);
+                const puCols = 3;
+                const puCardGap = 20;
+                const puCardW = (CANVAS_WIDTH - 120 - (puCols - 1) * puCardGap) / puCols;
+                const puCardH = 155;
+                const puY = puStartY + 16;
 
-            for (let i = 0; i < puKeys.length; i++) {
-                const key = puKeys[i];
-                const def = PERMANENT_UPGRADES[key];
-                const level = (prog.permanentUpgrades && prog.permanentUpgrades[key]) || 0;
-                const cost = getUpgradeCost(key, level);
-                const canAfford = (prog.crystals || 0) >= cost && level < def.maxLevel;
-                const isMaxed = level >= def.maxLevel;
-                const x = 80 + i * (puCardW + 12);
+                for (let i = 0; i < puKeys.length; i++) {
+                    const key = puKeys[i];
+                    const def = PERMANENT_UPGRADES[key];
+                    const level = (prog.permanentUpgrades && prog.permanentUpgrades[key]) || 0;
+                    const cost = getUpgradeCost(key, level);
+                    const canAfford = (prog.crystals || 0) >= cost && level < def.maxLevel;
+                    const isMaxed = level >= def.maxLevel;
 
-                // Card
-                ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
-                ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
+                    const col = i < puCols ? i : (i - puCols);
+                    const row = i < puCols ? 0 : 1;
+                    // Center the second row if it has fewer items
+                    let rowStartX = 60;
+                    if (row === 1) {
+                        const itemsInRow = puKeys.length - puCols;
+                        const rowW = itemsInRow * puCardW + (itemsInRow - 1) * puCardGap;
+                        rowStartX = (CANVAS_WIDTH - rowW) / 2;
+                    }
+                    const x = rowStartX + col * (puCardW + puCardGap);
+                    const y = puY + row * (puCardH + puCardGap);
+
+                    // Card
+                    ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
+                    ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, puCardW, puCardH, 8);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.textAlign = 'center';
+                    const cx = x + puCardW / 2;
+                    ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                    ctx.fillStyle = def.color;
+                    ctx.fillText(def.name, cx, y + 28);
+
+                    // Progress bar
+                    const barW = puCardW - 40;
+                    const barX = x + 20;
+                    const barY = y + 45;
+                    const segW = (barW - 9) / 10;
+                    for (let s = 0; s < 10; s++) {
+                        const sx = barX + s * (segW + 1);
+                        ctx.fillStyle = s < level ? def.color : 'rgba(255,255,255,0.1)';
+                        ctx.fillRect(sx, barY, segW, 14);
+                    }
+
+                    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.UI_SECONDARY;
+                    ctx.fillText(level + '/' + def.maxLevel, cx, barY + 34);
+
+                    if (isMaxed) {
+                        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#39FF14';
+                        ctx.fillText('MAX', cx, y + puCardH - 20);
+                    } else {
+                        ctx.font = 'bold 18px "Segoe UI", sans-serif';
+                        ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
+                        ctx.fillText('\u25C6 ' + cost, cx, y + puCardH - 38);
+
+                        if (canAfford) {
+                            const btnW = puCardW - 30;
+                            const btnH = 36;
+                            const btnX = x + 15;
+                            const btnY = y + puCardH - btnH - 5;
+                            ctx.fillStyle = def.color;
+                            ctx.beginPath();
+                            ctx.roundRect(btnX, btnY, btnW, btnH, 4);
+                            ctx.fill();
+                            ctx.fillStyle = '#000';
+                            ctx.font = 'bold 18px "Segoe UI", sans-serif';
+                            ctx.fillText('BUY', cx, btnY + 25);
+
+                            shopButtons.push({ type: 'upgrade', id: key, x: btnX, y: btnY, w: btnW, h: btnH });
+                        }
+                    }
+                }
+
+                // BACK button (mobile)
+                const backW = 300;
+                const backH = 55;
+                const backX = (CANVAS_WIDTH - backW) / 2;
+                const backY = CANVAS_HEIGHT - backH - 15;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.roundRect(x, puY, puCardW, puCardH, 8);
+                ctx.roundRect(backX, backY, backW, backH, 8);
                 ctx.fill();
                 ctx.stroke();
-
-                // Name
                 ctx.textAlign = 'center';
-                const cx = x + puCardW / 2;
-                ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                ctx.fillStyle = def.color;
-                ctx.fillText(def.name, cx, puY + 25);
-
-                // Description
-                ctx.font = '11px "Segoe UI", sans-serif';
-                ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                ctx.fillText(def.description, cx, puY + 45);
-
-                // Progress bar (10 segments)
-                const barW = puCardW - 30;
-                const barX = x + 15;
-                const barY = puY + 60;
-                const segW = (barW - 9) / 10; // 9 gaps of 1px
-                for (let s = 0; s < 10; s++) {
-                    const sx = barX + s * (segW + 1);
-                    ctx.fillStyle = s < level ? def.color : 'rgba(255,255,255,0.1)';
-                    ctx.fillRect(sx, barY, segW, 12);
-                }
-
-                // Level text
-                ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                ctx.font = 'bold 26px "Segoe UI", sans-serif';
                 ctx.fillStyle = COLORS.UI_SECONDARY;
-                ctx.fillText(level + '/' + def.maxLevel, cx, barY + 32);
+                ctx.fillText('BACK', CANVAS_WIDTH / 2, backY + 37);
+                shopButtons.push({ type: 'back', x: backX, y: backY, w: backW, h: backH });
 
-                // Cost or MAX
-                if (isMaxed) {
-                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                    ctx.fillStyle = '#39FF14';
-                    ctx.fillText('MAX', cx, puY + puCardH - 35);
-                } else {
-                    ctx.font = '13px "Segoe UI", sans-serif';
-                    ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
-                    ctx.fillText('\u25C6 ' + cost, cx, puY + puCardH - 50);
+            } else {
+                // Desktop layout (original)
+                const wCardW = 260;
+                const wCardH = 100;
+                const wGap = 16;
+                const wTotalW = 3 * wCardW + 2 * wGap;
+                const wStartX = (CANVAS_WIDTH - wTotalW) / 2;
 
-                    if (canAfford) {
-                        const btnW = 70;
+                for (let i = 0; i < weaponIds.length; i++) {
+                    const wid = weaponIds[i];
+                    const w = WEAPONS[wid];
+                    const col = i % 3;
+                    const row = Math.floor(i / 3);
+                    const x = wStartX + col * (wCardW + wGap);
+                    const y = 160 + row * (wCardH + wGap);
+                    const isUnlocked = !!prog.unlockedWeapons[wid];
+                    const canBuy = !isUnlocked && canBuyWeapon(wid, prog);
+                    const reqText = !isUnlocked ? getWeaponRequirementText(wid, prog) : null;
+
+                    ctx.fillStyle = isUnlocked ? 'rgba(20, 40, 30, 0.8)' : 'rgba(20, 25, 40, 0.8)';
+                    ctx.strokeStyle = isUnlocked ? 'rgba(57, 255, 20, 0.4)' : (canBuy ? w.color : 'rgba(255,255,255,0.15)');
+                    ctx.lineWidth = isUnlocked ? 2 : 1;
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, wCardW, wCardH, 8);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.textAlign = 'left';
+                    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                    ctx.fillStyle = isUnlocked ? '#39FF14' : (canBuy ? w.color : 'rgba(255,255,255,0.4)');
+                    ctx.fillText(w.name, x + 15, y + 28);
+
+                    ctx.font = '12px "Segoe UI", sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillText(w.description, x + 15, y + 48);
+
+                    if (isUnlocked) {
+                        ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#39FF14';
+                        ctx.fillText('OWNED', x + 15, y + 75);
+                    } else if (canBuy) {
+                        ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#E0F0FF';
+                        ctx.fillText('\u25C6 ' + w.shopPrice, x + 15, y + 75);
+
+                        const btnX = x + wCardW - 75;
+                        const btnY = y + 60;
+                        const btnW = 60;
                         const btnH = 26;
-                        const btnX = cx - btnW / 2;
-                        const btnY = puY + puCardH - 38;
-                        ctx.fillStyle = def.color;
+                        ctx.fillStyle = w.color;
                         ctx.beginPath();
                         ctx.roundRect(btnX, btnY, btnW, btnH, 4);
                         ctx.fill();
                         ctx.fillStyle = '#000';
                         ctx.font = 'bold 12px "Segoe UI", sans-serif';
-                        ctx.fillText('BUY', cx, btnY + 18);
+                        ctx.textAlign = 'center';
+                        ctx.fillText('BUY', btnX + btnW / 2, btnY + 18);
+                        ctx.textAlign = 'left';
 
-                        shopButtons.push({ type: 'upgrade', id: key, x: btnX, y: btnY, w: btnW, h: btnH });
+                        shopButtons.push({ type: 'weapon', id: wid, x: btnX, y: btnY, w: btnW, h: btnH });
+                    } else if (reqText) {
+                        ctx.font = '12px "Segoe UI", sans-serif';
+                        ctx.fillStyle = 'rgba(255,100,100,0.6)';
+                        ctx.fillText(reqText, x + 15, y + 75);
+                    } else {
+                        ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                        ctx.fillStyle = 'rgba(224, 240, 255, 0.4)';
+                        ctx.fillText('\u25C6 ' + w.shopPrice, x + 15, y + 75);
                     }
                 }
+
+                // === PERMANENT UPGRADES SECTION (desktop) ===
+                const wCardHDesktop = wCardH;
+                const puStartY = 160 + 2 * (wCardHDesktop + wGap) + 30;
+                ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_CYAN;
+                ctx.textAlign = 'left';
+                ctx.fillText('PERMANENT UPGRADES', 80, puStartY);
+
+                const puKeys = Object.keys(PERMANENT_UPGRADES);
+                const puCardW = (CANVAS_WIDTH - 160 - (puKeys.length - 1) * 12) / puKeys.length;
+                const puCardH = 200;
+                const puY = puStartY + 20;
+
+                for (let i = 0; i < puKeys.length; i++) {
+                    const key = puKeys[i];
+                    const def = PERMANENT_UPGRADES[key];
+                    const level = (prog.permanentUpgrades && prog.permanentUpgrades[key]) || 0;
+                    const cost = getUpgradeCost(key, level);
+                    const canAfford = (prog.crystals || 0) >= cost && level < def.maxLevel;
+                    const isMaxed = level >= def.maxLevel;
+                    const x = 80 + i * (puCardW + 12);
+
+                    ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
+                    ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(x, puY, puCardW, puCardH, 8);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.textAlign = 'center';
+                    const cx = x + puCardW / 2;
+                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    ctx.fillStyle = def.color;
+                    ctx.fillText(def.name, cx, puY + 25);
+
+                    ctx.font = '11px "Segoe UI", sans-serif';
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillText(def.description, cx, puY + 45);
+
+                    const barW = puCardW - 30;
+                    const barX = x + 15;
+                    const barY = puY + 60;
+                    const segW = (barW - 9) / 10;
+                    for (let s = 0; s < 10; s++) {
+                        const sx = barX + s * (segW + 1);
+                        ctx.fillStyle = s < level ? def.color : 'rgba(255,255,255,0.1)';
+                        ctx.fillRect(sx, barY, segW, 12);
+                    }
+
+                    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.UI_SECONDARY;
+                    ctx.fillText(level + '/' + def.maxLevel, cx, barY + 32);
+
+                    if (isMaxed) {
+                        ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#39FF14';
+                        ctx.fillText('MAX', cx, puY + puCardH - 35);
+                    } else {
+                        ctx.font = '13px "Segoe UI", sans-serif';
+                        ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
+                        ctx.fillText('\u25C6 ' + cost, cx, puY + puCardH - 50);
+
+                        if (canAfford) {
+                            const btnW = 70;
+                            const btnH = 26;
+                            const btnX = cx - btnW / 2;
+                            const btnY = puY + puCardH - 38;
+                            ctx.fillStyle = def.color;
+                            ctx.beginPath();
+                            ctx.roundRect(btnX, btnY, btnW, btnH, 4);
+                            ctx.fill();
+                            ctx.fillStyle = '#000';
+                            ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                            ctx.fillText('BUY', cx, btnY + 18);
+
+                            shopButtons.push({ type: 'upgrade', id: key, x: btnX, y: btnY, w: btnW, h: btnH });
+                        }
+                    }
+                }
+
+                // Back instruction (desktop)
+                ctx.textAlign = 'center';
+                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_SECONDARY;
+                ctx.fillText('Press ESC or S to go back', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
             }
 
             // Store buttons for click handling
             currentShopButtons = shopButtons;
-
-            // Back instruction
-            ctx.textAlign = 'center';
-            ctx.font = '16px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('Press ESC or S to go back', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
         }
 
         let currentShopButtons = [];
+        let currentTutorialButtons = [];
+        let currentMenuButtons = [];
 
         function handleShopClick(clickX, clickY) {
             for (const btn of currentShopButtons) {
                 if (clickX >= btn.x && clickX <= btn.x + btn.w &&
                     clickY >= btn.y && clickY <= btn.y + btn.h) {
+                    if (btn.type === 'back') {
+                        gameState = shopReturnState || 'menu';
+                        return true;
+                    }
                     const prog = loadProgression();
                     if (btn.type === 'weapon') {
                         if (canBuyWeapon(btn.id, prog)) {
@@ -6989,6 +7159,31 @@
                         }
                     }
                     return true;
+                }
+            }
+            return false;
+        }
+
+        function handleTutorialClick(clickX, clickY) {
+            for (const btn of currentTutorialButtons) {
+                if (clickX >= btn.x && clickX <= btn.x + btn.w &&
+                    clickY >= btn.y && clickY <= btn.y + btn.h) {
+                    selectTutorialWeapon(btn.id);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function handleMenuClick(clickX, clickY) {
+            for (const btn of currentMenuButtons) {
+                if (clickX >= btn.x && clickX <= btn.x + btn.w &&
+                    clickY >= btn.y && clickY <= btn.y + btn.h) {
+                    if (btn.type === 'shop') {
+                        shopReturnState = gameState;
+                        gameState = 'shop';
+                        return true;
+                    }
                 }
             }
             return false;
@@ -7104,21 +7299,72 @@
                 ctx.shadowBlur = 0;
                 cy += 35;
 
-                // Retry prompt
-                ctx.font = 'bold 22px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.UI_PRIMARY;
-                const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
-                ctx.globalAlpha = pulse;
-                ctx.fillText('Press R or TAP to Retry    [S] SHOP', cx, cy + 5);
-                ctx.globalAlpha = 1;
+                // Retry prompt + Shop button
+                if (isMobile()) {
+                    ctx.font = 'bold 26px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.UI_PRIMARY;
+                    const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+                    ctx.globalAlpha = pulse;
+                    ctx.fillText('TAP TO RETRY', cx, cy + 5);
+                    ctx.globalAlpha = 1;
+
+                    // Shop button
+                    const shopBtnW = 280;
+                    const shopBtnH = 50;
+                    const shopBtnX = cx - shopBtnW / 2;
+                    const shopBtnY = cy + 22;
+                    ctx.fillStyle = 'rgba(224, 240, 255, 0.12)';
+                    ctx.strokeStyle = 'rgba(224, 240, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(shopBtnX, shopBtnY, shopBtnW, shopBtnH, 8);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.font = 'bold 24px "Segoe UI", sans-serif';
+                    ctx.fillStyle = '#E0F0FF';
+                    ctx.fillText('SHOP', cx, shopBtnY + 34);
+                    currentMenuButtons = [{ type: 'shop', x: shopBtnX, y: shopBtnY, w: shopBtnW, h: shopBtnH }];
+                } else {
+                    ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.UI_PRIMARY;
+                    const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+                    ctx.globalAlpha = pulse;
+                    ctx.fillText('Press R or TAP to Retry    [S] SHOP', cx, cy + 5);
+                    ctx.globalAlpha = 1;
+                }
             } else {
                 // Retry prompt (fallback)
-                ctx.font = 'bold 22px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.UI_PRIMARY;
-                const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
-                ctx.globalAlpha = pulse;
-                ctx.fillText('Press R or TAP to Retry    [S] SHOP', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
-                ctx.globalAlpha = 1;
+                if (isMobile()) {
+                    ctx.font = 'bold 26px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.UI_PRIMARY;
+                    const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+                    ctx.globalAlpha = pulse;
+                    ctx.fillText('TAP TO RETRY', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
+                    ctx.globalAlpha = 1;
+
+                    const shopBtnW = 280;
+                    const shopBtnH = 50;
+                    const shopBtnX = CANVAS_WIDTH / 2 - shopBtnW / 2;
+                    const shopBtnY = CANVAS_HEIGHT / 2 + 118;
+                    ctx.fillStyle = 'rgba(224, 240, 255, 0.12)';
+                    ctx.strokeStyle = 'rgba(224, 240, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(shopBtnX, shopBtnY, shopBtnW, shopBtnH, 8);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.font = 'bold 24px "Segoe UI", sans-serif';
+                    ctx.fillStyle = '#E0F0FF';
+                    ctx.fillText('SHOP', CANVAS_WIDTH / 2, shopBtnY + 34);
+                    currentMenuButtons = [{ type: 'shop', x: shopBtnX, y: shopBtnY, w: shopBtnW, h: shopBtnH }];
+                } else {
+                    ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.UI_PRIMARY;
+                    const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+                    ctx.globalAlpha = pulse;
+                    ctx.fillText('Press R or TAP to Retry    [S] SHOP', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
+                    ctx.globalAlpha = 1;
+                }
             }
         }
         
