@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellar Swarm — Propuestas de Paleta v3</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #1a1a1a;
+    color: #eee;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 20px;
+    min-height: 100vh;
+}
+h1 { text-align: center; font-size: 26px; margin-bottom: 4px; letter-spacing: 2px; }
+.subtitle { text-align: center; color: #888; font-size: 13px; margin-bottom: 10px; }
+.section-label {
+    max-width: 1800px;
+    margin: 30px auto 14px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #666;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 8px;
+}
+.section-label:first-of-type { margin-top: 20px; }
+.palettes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(620px, 1fr));
+    gap: 22px;
+    max-width: 1800px;
+    margin: 0 auto;
+}
+.palette-card {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.07);
+    background: #111;
+    transition: border-color 0.3s;
+}
+.palette-card:hover { border-color: rgba(255,255,255,0.2); }
+.palette-header {
+    padding: 14px 18px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.palette-name { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.palette-tag {
+    font-size: 10px; padding: 3px 9px; border-radius: 10px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.tag-ref { background: rgba(127,219,255,0.12); color: #7FDBFF; }
+.tag-rec { background: rgba(0,255,170,0.12); color: #00FFAA; }
+.tag-warm { background: rgba(255,180,60,0.12); color: #FFB43C; }
+.tag-cool { background: rgba(100,180,255,0.12); color: #64B4FF; }
+.tag-alt { background: rgba(200,160,255,0.12); color: #C8A0FF; }
+.tag-bold { background: rgba(255,100,100,0.12); color: #FF6464; }
+.tag-casual { background: rgba(255,200,50,0.15); color: #FFC832; }
+.tag-pop { background: rgba(255,100,200,0.12); color: #FF64C8; }
+.tag-pastel { background: rgba(160,220,255,0.15); color: #A0DCFF; }
+
+.scenes { display: flex; gap: 10px; padding: 4px 10px; align-items: flex-start; }
+.scene-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #666; text-align: center; margin-bottom: 3px; }
+.scene-wrap { display: flex; flex-direction: column; }
+.scene-wrap.desktop { flex: 1; min-width: 0; }
+.scene-wrap.mobile { width: 155px; flex-shrink: 0; }
+canvas.scene { display: block; border-radius: 4px; }
+canvas.scene-desktop { width: 100%; height: 300px; }
+canvas.scene-mobile { width: 155px; height: 300px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 5px; padding: 12px 16px; }
+.swatch { display: flex; align-items: center; gap: 5px; font-size: 9.5px; color: #aaa; }
+.swatch-color {
+    width: 16px; height: 16px; border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
+}
+.palette-notes {
+    padding: 0 16px 14px; font-size: 12px; color: #999; line-height: 1.5;
+}
+</style>
+</head>
+<body>
+
+<h1>STELLAR SWARM</h1>
+<p class="subtitle">Propuestas de paleta v4 — 8 paletas comparadas</p>
+
+<div id="content"></div>
+
+<script>
+// ==========================================
+// PALETTE DEFINITIONS
+// ==========================================
+
+const SECTIONS = [
+    {
+        label: "Referencia — Paleta actual del juego",
+        palettes: [
+            {
+                name: "ACTUAL",
+                tag: "Actual", tagClass: "tag-ref",
+                notes: "Tu paleta actual. Fondo casi negro, acentos cyan. Para comparar con todas las propuestas.",
+                style: 'none',
+                bg: { base: '#060d1e', center: '#0e1a30' },
+                grid: { color: 'rgba(127,219,255,0.07)', width: 0.5 },
+                player: '#7FDBFF', playerOutline: '#3A9AD9', thruster: '#FFDD57',
+                bullet: '#7FDBFF', enemyBullet: '#FF6B6B',
+                xp: '#00FFAA', gold: '#FFDD57',
+                enemies: {
+                    scout: '#FF6B6B', kamikaze: '#FF9A6B', spinner: '#3A9AD9',
+                    tank: '#C792FF', alien: '#39FF14'
+                },
+                weapons: { laser: '#FF6B5B', missile: '#FFD93D', shield: '#00DFFF', lightning: '#9F7AEA', plasma: '#7FDBFF', drone: '#39FF14' },
+                hud: { panel: 'rgba(5,12,30,0.85)', border: 'rgba(127,219,255,0.15)', text: '#E8F0FF', dim: 'rgba(200,215,240,0.55)', accent: '#7FDBFF', score: '#FFDD57', hp: '#FF6B6B' }
+            }
+        ]
+    },
+    {
+        label: "Estéticas especiales",
+        palettes: [
+            {
+                name: "BLUEPRINT",
+                tag: "Plano técnico", tagClass: "tag-cool",
+                notes: "Azul blueprint clásico con elementos en blanco/cyan. Estética de plano técnico espacial — como un radar de mesa de mando. Look muy reconocible.",
+                style: 'blueprint',
+                bg: { base: '#1A3A6E', center: '#244888' },
+                grid: { color: 'rgba(100,180,255,0.15)', width: 0.6 },
+                player: '#FFFFFF', playerOutline: '#88CCFF', thruster: '#FFAA33',
+                bullet: '#FFFFFF', enemyBullet: '#FF5566',
+                xp: '#88FFBB', gold: '#FFDD55',
+                enemies: {
+                    scout: '#FF5566', kamikaze: '#FF8844', spinner: '#88DDFF',
+                    tank: '#DDAAFF', alien: '#88FFAA'
+                },
+                weapons: { laser: '#FF5566', missile: '#FFDD55', shield: '#88DDFF', lightning: '#DDAAFF', plasma: '#FFFFFF', drone: '#88FFAA' },
+                hud: { panel: 'rgba(10,30,60,0.7)', border: 'rgba(100,180,255,0.3)', text: '#C8DDFF', dim: 'rgba(100,160,220,0.5)', accent: '#88CCFF', score: '#FFDD55', hp: '#FF5566' }
+            },
+            {
+                name: "FALLOUT TERMINAL",
+                tag: "Retro verde", tagClass: "tag-rec",
+                notes: "Fósforo verde Pip-Boy. Scanlines y bordes hundidos CRT. La que tenía su encanto.",
+                style: 'crt',
+                bg: { base: '#0c200c', center: '#1a4018' },
+                grid: { color: 'rgba(50,255,50,0.08)', width: 0.7 },
+                player: '#33FF66', playerOutline: '#22AA44', thruster: '#AAFF33',
+                bullet: '#44FF77', enemyBullet: '#FF4444',
+                xp: '#88FFAA', gold: '#DDFF44',
+                enemies: {
+                    scout: '#FF5533', kamikaze: '#FF7744', spinner: '#55FF88',
+                    tank: '#CCFF55', alien: '#FF3366'
+                },
+                weapons: { laser: '#FF5533', missile: '#DDFF44', shield: '#44FFAA', lightning: '#AAFFCC', plasma: '#33FF66', drone: '#88FF33' },
+                hud: { panel: 'rgba(5,24,5,0.75)', border: 'rgba(50,255,50,0.25)', text: '#AAFFBB', dim: 'rgba(100,200,100,0.5)', accent: '#33FF66', score: '#DDFF44', hp: '#FF5533' }
+            },
+            {
+                name: "AMBER PHOSPHOR",
+                tag: "Retro ámbar", tagClass: "tag-warm",
+                notes: "Monitores ámbar de los 80. Tonos dorados cálidos, más suave para la vista que el verde. Bordes hundidos CRT + scanlines.",
+                style: 'crt',
+                bg: { base: '#1e1408', center: '#3a2810' },
+                grid: { color: 'rgba(255,180,50,0.07)', width: 0.7 },
+                player: '#FFBB44', playerOutline: '#CC8822', thruster: '#FF8800',
+                bullet: '#FFCC55', enemyBullet: '#FF4455',
+                xp: '#FFDD88', gold: '#FFE866',
+                enemies: {
+                    scout: '#FF5544', kamikaze: '#FF7733', spinner: '#FFAA44',
+                    tank: '#FFDD66', alien: '#FF3355'
+                },
+                weapons: { laser: '#FF5544', missile: '#FFE866', shield: '#FFCC44', lightning: '#FFDDAA', plasma: '#FFBB44', drone: '#FFAA22' },
+                hud: { panel: 'rgba(24,16,4,0.75)', border: 'rgba(255,180,50,0.25)', text: '#FFE8CC', dim: 'rgba(220,180,120,0.55)', accent: '#FFBB44', score: '#FFE866', hp: '#FF5544' }
+            },
+            {
+                name: "DARK CLASH",
+                tag: "Oscuro + color", tagClass: "tag-bold",
+                notes: "Fondo oscuro azulado con paleta a toda potencia. Los colores brillan como neones sobre fondo nocturno. Para quien prefiera mantener la identidad espacial.",
+                bg: { base: '#1A2540', center: '#283850' },
+                grid: { color: 'rgba(80,140,220,0.06)', width: 0.5 },
+                player: '#22AAFF', playerOutline: '#0066DD', thruster: '#FF9900',
+                bullet: '#22AAFF', enemyBullet: '#FF3355',
+                xp: '#44DD55', gold: '#FFBB00',
+                enemies: {
+                    scout: '#FF3355', kamikaze: '#FF7722', spinner: '#9966FF',
+                    tank: '#DD33BB', alien: '#44EE55'
+                },
+                weapons: { laser: '#FF3355', missile: '#FFBB00', shield: '#22CCFF', lightning: '#AA66FF', plasma: '#22AAFF', drone: '#44EE55' },
+                hud: { panel: 'rgba(12,20,40,0.85)', border: 'rgba(80,140,220,0.2)', text: '#E0E8FF', dim: 'rgba(140,170,220,0.5)', accent: '#22AAFF', score: '#FFBB00', hp: '#FF3355' }
+            }
+        ]
+    },
+    {
+        label: "Fondos originales / diferenciadores",
+        palettes: [
+            {
+                name: "SUNSET PEACH",
+                tag: "Atardecer", tagClass: "tag-warm",
+                notes: "Rosa-melocotón cálido, evoca un cielo al atardecer. El azul del jugador destaca como contraste complementario natural. Sensación acogedora y moderna.",
+                bg: { base: '#E8CCC0', center: '#FDE4D8' },
+                grid: { color: 'rgba(160,110,90,0.08)', width: 0.5 },
+                player: '#1188FF', playerOutline: '#0055DD', thruster: '#FF9900',
+                bullet: '#1188FF', enemyBullet: '#FF1133',
+                xp: '#33CC55', gold: '#FFB800',
+                enemies: {
+                    scout: '#EE1133', kamikaze: '#FF5500', spinner: '#7733FF',
+                    tank: '#CC11AA', alien: '#22CC44'
+                },
+                weapons: { laser: '#EE1133', missile: '#FFB800', shield: '#00BBFF', lightning: '#8855FF', plasma: '#1188FF', drone: '#22CC44' },
+                hud: { panel: 'rgba(255,255,255,0.78)', border: 'rgba(140,90,70,0.08)', text: '#2A2018', dim: 'rgba(120,80,60,0.45)', accent: '#1188FF', score: '#EE8800', hp: '#EE1133' }
+            },
+            {
+                name: "CHALKBOARD",
+                tag: "Pizarra", tagClass: "tag-bold",
+                notes: "Pizarra verde oscuro de colegio con elementos que parecen dibujados con tiza. Nostálgico, cálido, reconocible al instante. Los colores de tiza (blanco, rosa, amarillo, azul) dan una personalidad única.",
+                style: 'chalk',
+                bg: { base: '#2A4A2A', center: '#3A5E3A' },
+                grid: { color: 'rgba(200,220,180,0.06)', width: 0.5 },
+                player: '#FFFFFF', playerOutline: '#BBDDBB', thruster: '#FFCC44',
+                bullet: '#FFFFFF', enemyBullet: '#FF8888',
+                xp: '#AAFFAA', gold: '#FFEE77',
+                enemies: {
+                    scout: '#FF8888', kamikaze: '#FFAA77', spinner: '#88BBFF',
+                    tank: '#FFCC88', alien: '#88FF88'
+                },
+                weapons: { laser: '#FF8888', missile: '#FFEE77', shield: '#88CCFF', lightning: '#DDAAFF', plasma: '#FFFFFF', drone: '#88FF88' },
+                hud: { panel: 'rgba(30,50,30,0.7)', border: 'rgba(200,220,180,0.2)', text: '#D8E8D0', dim: 'rgba(160,180,140,0.5)', accent: '#BBDDBB', score: '#FFEE77', hp: '#FF8888' }
+            },
+            {
+                name: "WHITEBOARD",
+                tag: "Pizarra blanca", tagClass: "tag-pastel",
+                notes: "Pizarra blanca limpia tipo sala de reuniones. Elementos con colores de rotulador: rojo, azul, verde, naranja. Máximo contraste y claridad. Look minimalista y moderno.",
+                bg: { base: '#E8E8EC', center: '#F4F4F8' },
+                grid: { color: 'rgba(0,0,0,0.04)', width: 0.5 },
+                player: '#0066EE', playerOutline: '#0044AA', thruster: '#FF6600',
+                bullet: '#0066EE', enemyBullet: '#EE0022',
+                xp: '#22AA44', gold: '#FF8800',
+                enemies: {
+                    scout: '#EE0022', kamikaze: '#EE5500', spinner: '#6622CC',
+                    tank: '#AA0088', alien: '#119933'
+                },
+                weapons: { laser: '#EE0022', missile: '#FF8800', shield: '#0088DD', lightning: '#7733BB', plasma: '#0066EE', drone: '#119933' },
+                hud: { panel: 'rgba(255,255,255,0.85)', border: 'rgba(0,0,0,0.08)', text: '#222222', dim: 'rgba(100,100,110,0.5)', accent: '#0066EE', score: '#DD7700', hp: '#EE0022' }
+            },
+            {
+                name: "WARM SAND",
+                tag: "Arena cálida", tagClass: "tag-warm",
+                notes: "Fondo arena dorada. Calidez de terreno desértico con colores tan vivos como Clash. Rojo fuego, naranja intenso, verde esmeralda.",
+                bg: { base: '#D8C8A0', center: '#EAD8B8' },
+                grid: { color: 'rgba(140,120,80,0.08)', width: 0.5 },
+                player: '#0088EE', playerOutline: '#0055AA', thruster: '#FF7700',
+                bullet: '#0088EE', enemyBullet: '#FF2200',
+                xp: '#33CC44', gold: '#FFAA00',
+                enemies: {
+                    scout: '#FF2200', kamikaze: '#FF6600', spinner: '#7744EE',
+                    tank: '#CC22AA', alien: '#33BB33'
+                },
+                weapons: { laser: '#FF2200', missile: '#FFAA00', shield: '#00AAFF', lightning: '#8855EE', plasma: '#0088EE', drone: '#33BB33' },
+                hud: { panel: 'rgba(255,250,240,0.8)', border: 'rgba(0,0,0,0.07)', text: '#2A2218', dim: 'rgba(100,80,50,0.45)', accent: '#0088EE', score: '#EE8800', hp: '#FF2200' }
+            }
+        ]
+    }
+];
+
+// ==========================================
+// CRT EFFECT — bordes hundidos, solo para estilo 'crt'
+// ==========================================
+
+function applyCRT(ctx, W, H) {
+    // Scanlines
+    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    for (let y = 0; y < H; y += 2) {
+        ctx.fillRect(0, y, W, 1);
+    }
+
+    // Edge sinking — outer 12-15% of each side darkens
+    const edgeW = W * 0.14;
+    const edgeH = H * 0.11;
+    const s = 0.3;
+
+    const gT = ctx.createLinearGradient(0, 0, 0, edgeH);
+    gT.addColorStop(0, `rgba(0,0,0,${s})`);
+    gT.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gT;
+    ctx.fillRect(0, 0, W, edgeH);
+
+    const gB = ctx.createLinearGradient(0, H, 0, H - edgeH);
+    gB.addColorStop(0, `rgba(0,0,0,${s})`);
+    gB.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gB;
+    ctx.fillRect(0, H - edgeH, W, edgeH);
+
+    const gL = ctx.createLinearGradient(0, 0, edgeW, 0);
+    gL.addColorStop(0, `rgba(0,0,0,${s * 0.8})`);
+    gL.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gL;
+    ctx.fillRect(0, 0, edgeW, H);
+
+    const gR = ctx.createLinearGradient(W, 0, W - edgeW, 0);
+    gR.addColorStop(0, `rgba(0,0,0,${s * 0.8})`);
+    gR.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gR;
+    ctx.fillRect(W - edgeW, 0, edgeW, H);
+
+    // Corner darkening
+    const cr = Math.min(W, H) * 0.3;
+    for (const [cx,cy] of [[0,0],[W,0],[0,H],[W,H]]) {
+        const g = ctx.createRadialGradient(cx, cy, cr*0.3, cx, cy, cr);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(1, 'rgba(0,0,0,0.15)');
+        ctx.fillStyle = g;
+        ctx.fillRect(cx===0?0:W-cr, cy===0?0:H-cr, cr, cr);
+    }
+
+    // Glass edge glow
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(6, 6, W-12, H-12, 10);
+    ctx.stroke();
+}
+
+// ==========================================
+// CHALKBOARD EFFECT — pizarra de colegio
+// ==========================================
+
+function applyChalk(ctx, W, H) {
+    // Subtle chalk dust texture — random tiny dots
+    ctx.fillStyle = 'rgba(220,230,200,0.03)';
+    const seed = 42;
+    for (let i = 0; i < 200; i++) {
+        const dx = ((i*173 + seed*37) % 1000) / 1000 * W;
+        const dy = ((i*251 + seed*13) % 1000) / 1000 * H;
+        ctx.fillRect(dx, dy, 1, 1);
+    }
+    // Darkened edges — like a worn chalkboard frame
+    const g = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.72);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.2)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // Wooden frame border
+    ctx.strokeStyle = 'rgba(160,120,60,0.35)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(3, 3, W-6, H-6);
+    ctx.strokeStyle = 'rgba(120,90,40,0.2)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(6, 6, W-12, H-12);
+}
+
+// ==========================================
+// BLUEPRINT EFFECT — papel de plano técnico
+// ==========================================
+
+function applyBlueprint(ctx, W, H) {
+    // Soft vignette — darker edges like a printed blueprint
+    const g = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.72);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,10,30,0.2)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // Thin white border frame — like a technical drawing border
+    ctx.strokeStyle = 'rgba(100,180,255,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(8, 8, W-16, H-16);
+    ctx.strokeStyle = 'rgba(100,180,255,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(12, 12, W-24, H-24);
+
+    // Corner marks
+    const cm = 18;
+    ctx.strokeStyle = 'rgba(100,180,255,0.4)';
+    ctx.lineWidth = 1;
+    for (const [cx,cy,dx,dy] of [[8,8,1,1],[W-8,8,-1,1],[8,H-8,1,-1],[W-8,H-8,-1,-1]]) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy+dy*cm); ctx.lineTo(cx, cy); ctx.lineTo(cx+dx*cm, cy);
+        ctx.stroke();
+    }
+}
+
+// ==========================================
+// CASUAL STYLE SOFT VIGNETTE
+// ==========================================
+
+function applyCasualVignette(ctx, W, H) {
+    // Very gentle darkening at edges — just enough to frame the action
+    const g = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.35, W/2, H/2, Math.max(W,H)*0.7);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.08)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+}
+
+// ==========================================
+// SCENE RENDERER
+// ==========================================
+
+function renderScene(canvas, p) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = rect.width;
+    const H = rect.height;
+
+    const isCRT = p.style === 'crt';
+    const isBP = p.style === 'blueprint';
+    const isChalk = p.style === 'chalk';
+    // Detect light background: parse hex and check luminance
+    const hexToLum = (h) => { const r=parseInt(h.slice(1,3),16), g=parseInt(h.slice(3,5),16), b=parseInt(h.slice(5,7),16); return r*0.299+g*0.587+b*0.114; };
+    const isLight = hexToLum(p.bg.base) > 120;
+
+    // ---- BACKGROUND (same for all: radial gradient) ----
+    const bgGrad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H)*0.7);
+    bgGrad.addColorStop(0, p.bg.center);
+    bgGrad.addColorStop(1, p.bg.base);
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // ---- STARS (or reference crosses for blueprint) ----
+    const seed = p.name.charCodeAt(0);
+    if (isBP) {
+        // Blueprint: small + reference marks
+        ctx.strokeStyle = 'rgba(100,180,255,0.2)';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 15; i++) {
+            const sx = ((i*137 + seed*31) % 1000) / 1000 * W;
+            const sy = ((i*211 + seed*17) % 1000) / 1000 * H;
+            ctx.beginPath();
+            ctx.moveTo(sx-2, sy); ctx.lineTo(sx+2, sy);
+            ctx.moveTo(sx, sy-2); ctx.lineTo(sx, sy+2);
+            ctx.stroke();
+        }
+    } else {
+        ctx.fillStyle = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.2)';
+        for (let i = 0; i < 35; i++) {
+            const sx = ((i*137 + seed*31) % 1000) / 1000 * W;
+            const sy = ((i*211 + seed*17) % 1000) / 1000 * H;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 0.5, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+
+    // ---- GRID (solo en CRT, blueprint, chalk y referencia, no en fondos claros casual) ----
+    if (!isLight || isBP || isChalk) {
+        ctx.strokeStyle = p.grid.color;
+        ctx.lineWidth = p.grid.width;
+        const gs = isBP ? 30 : 38;
+        ctx.beginPath();
+        for (let x = 0; x < W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+        for (let y = 0; y < H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+        ctx.stroke();
+        // Blueprint: thicker lines every 4 cells
+        if (isBP) {
+            ctx.strokeStyle = 'rgba(100,180,255,0.25)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            for (let x = 0; x < W; x += gs*4) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+            for (let y = 0; y < H; y += gs*4) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+            ctx.stroke();
+        }
+    }
+
+    // ---- ENEMIES (same geometry for all palettes) ----
+    // Many scouts to represent visual density of actual gameplay
+    const enemyDefs = [
+        // Scouts — swarming all over
+        { type: 'scout', x: W*0.72, y: H*0.28, r: 7 },
+        { type: 'scout', x: W*0.80, y: H*0.44, r: 7 },
+        { type: 'scout', x: W*0.43, y: H*0.13, r: 7 },
+        { type: 'scout', x: W*0.55, y: H*0.32, r: 7 },
+        { type: 'scout', x: W*0.63, y: H*0.42, r: 7 },
+        { type: 'scout', x: W*0.78, y: H*0.15, r: 7 },
+        { type: 'scout', x: W*0.88, y: H*0.33, r: 7 },
+        { type: 'scout', x: W*0.50, y: H*0.55, r: 7 },
+        { type: 'scout', x: W*0.68, y: H*0.52, r: 7 },
+        { type: 'scout', x: W*0.74, y: H*0.68, r: 7 },
+        { type: 'scout', x: W*0.60, y: H*0.22, r: 7 },
+        { type: 'scout', x: W*0.82, y: H*0.58, r: 7 },
+        { type: 'scout', x: W*0.47, y: H*0.38, r: 7 },
+        { type: 'scout', x: W*0.92, y: H*0.48, r: 7 },
+        { type: 'scout', x: W*0.38, y: H*0.25, r: 7 },
+        { type: 'scout', x: W*0.70, y: H*0.78, r: 7 },
+        { type: 'scout', x: W*0.58, y: H*0.70, r: 7 },
+        { type: 'scout', x: W*0.86, y: H*0.76, r: 7 },
+        { type: 'scout', x: W*0.15, y: H*0.30, r: 7 },
+        { type: 'scout', x: W*0.22, y: H*0.18, r: 7 },
+        { type: 'scout', x: W*0.10, y: H*0.50, r: 7 },
+        { type: 'scout', x: W*0.25, y: H*0.60, r: 7 },
+        { type: 'scout', x: W*0.18, y: H*0.42, r: 7 },
+        { type: 'scout', x: W*0.33, y: H*0.68, r: 7 },
+        // Other enemy types
+        { type: 'kamikaze', x: W*0.66, y: H*0.60, r: 7 },
+        { type: 'kamikaze', x: W*0.90, y: H*0.20, r: 7 },
+        { type: 'spinner', x: W*0.85, y: H*0.66, r: 9 },
+        { type: 'tank', x: W*0.56, y: H*0.18, r: 13 },
+        { type: 'alien', x: W*0.17, y: H*0.73, r: 18 },
+    ];
+
+    for (const e of enemyDefs) {
+        const col = p.enemies[e.type];
+        // Outer circle
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r, 0, Math.PI*2);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+        // Inner circle (smaller, thinner)
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * 0.45, 0, Math.PI*2);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        if (e.type === 'spinner' || e.type === 'tank') {
+            for (let b = 0; b < 2; b++) {
+                const a = -Math.PI + b*0.5;
+                ctx.beginPath();
+                ctx.arc(e.x+Math.cos(a)*(e.r+10+b*10), e.y+Math.sin(a)*(e.r+10+b*10), 2, 0, Math.PI*2);
+                ctx.fillStyle = p.enemyBullet;
+                ctx.fill();
+            }
+        }
+    }
+
+    // ---- PLAYER (same ship for all) ----
+    const px = W*0.34, py = H*0.47;
+
+    // Thruster
+    const thrGrad = ctx.createRadialGradient(px-11, py, 0, px-11, py, 14);
+    thrGrad.addColorStop(0, p.thruster);
+    thrGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = thrGrad;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(px-25, py-14, 28, 28);
+    ctx.globalAlpha = 1;
+
+    // Ship glow (behind, like the actual game)
+    ctx.beginPath();
+    ctx.arc(px+2, py, 18, 0, Math.PI*2);
+    ctx.fillStyle = p.player;
+    ctx.globalAlpha = 0.08;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Ship body — outline only (like the actual game)
+    ctx.beginPath();
+    ctx.moveTo(px+13, py);
+    ctx.lineTo(px-7, py-8);
+    ctx.lineTo(px-3, py);
+    ctx.lineTo(px-7, py+8);
+    ctx.closePath();
+    ctx.strokeStyle = p.player;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Shield arc
+    ctx.beginPath();
+    ctx.arc(px, py, 21, -0.8, 0.8);
+    ctx.strokeStyle = p.weapons.shield;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.6;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Player bullets — small diamonds like the actual game
+    ctx.fillStyle = p.bullet;
+    for (let i = 0; i < 5; i++) {
+        const bx = px+24+i*16, by = py+Math.sin(i)*2.5;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(Math.PI/4);
+        ctx.fillRect(-1.8, -1.8, 3.6, 3.6);
+        ctx.restore();
+    }
+
+    // Missiles — small dashes
+    ctx.fillStyle = p.weapons.missile;
+    ctx.fillRect(px+28, py-18, 6, 2);
+    ctx.fillRect(px+46, py-16, 6, 2);
+
+    // Lightning
+    ctx.strokeStyle = p.weapons.lightning;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px+28, py+22);
+    ctx.lineTo(px+23, py+32);
+    ctx.lineTo(px+50, py+46);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Drone — outline circle with center dot
+    ctx.beginPath();
+    ctx.arc(px-24, py-28, 5, 0, Math.PI*2);
+    ctx.strokeStyle = p.weapons.drone;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(px-24, py-28, 1.2, 0, Math.PI*2);
+    ctx.fillStyle = p.weapons.drone;
+    ctx.fill();
+
+    // Plasma aura
+    ctx.beginPath();
+    ctx.arc(px, py, 34, 0, Math.PI*2);
+    ctx.strokeStyle = p.weapons.plasma;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // ---- HUD PANEL (bottom) ----
+    const hudY = H - 48;
+    ctx.fillStyle = p.hud.panel;
+    ctx.fillRect(8, hudY, W-16, 38);
+    ctx.strokeStyle = p.hud.border;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(8, hudY, W-16, 38);
+
+    ctx.font = 'bold 11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = p.hud.text;
+    ctx.fillText('LVL 12', 18, hudY+16);
+    ctx.fillStyle = p.hud.accent;
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.fillText('STELLAR SWARM', 18, hudY+30);
+
+    // XP bar
+    const barX = 130, barW = 75, barH = 5;
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)';
+    ctx.fillRect(barX, hudY+10, barW, barH);
+    ctx.fillStyle = p.xp;
+    ctx.fillRect(barX, hudY+10, barW*0.65, barH);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = p.hud.score;
+    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+    ctx.fillText('24,580', W-18, hudY+16);
+    ctx.fillStyle = p.hud.hp;
+    ctx.font = 'bold 11px "Segoe UI", sans-serif';
+    ctx.fillText('♥♥♥♡', W-18, hudY+30);
+
+    // ---- WEAPON BAR (top) ----
+    const wCols = [p.weapons.laser, p.weapons.missile, p.weapons.shield, p.weapons.lightning, p.weapons.plasma, p.weapons.drone];
+    const wNames = ['LAS','MIS','SHD','LIT','PLS','DRN'];
+    const wS = 20, wG = 5;
+    const wTotal = wCols.length*(wS+wG)-wG;
+    const wX0 = (W-wTotal)/2;
+    for (let i=0; i<wCols.length; i++) {
+        const wx = wX0 + i*(wS+wG) + wS/2;
+        ctx.beginPath();
+        ctx.arc(wx, 16, wS/2, 0, Math.PI*2);
+        ctx.strokeStyle = wCols[i];
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.font = '7px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = wCols[i];
+        ctx.fillText(wNames[i], wx, 19);
+    }
+
+    // ---- WAVE ALERT ----
+    ctx.font = 'bold 13px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = p.hud.hp;
+    ctx.globalAlpha = 0.85;
+    ctx.fillText('WAVE 7', W/2, 46);
+    ctx.font = '8px "Segoe UI", sans-serif';
+    ctx.fillStyle = p.hud.dim;
+    ctx.fillText('INCOMING SWARM', W/2, 58);
+    ctx.globalAlpha = 1;
+
+    // ---- POST-PROCESSING ----
+    if (isCRT) applyCRT(ctx, W, H);
+    if (isBP) applyBlueprint(ctx, W, H);
+    if (isChalk) applyChalk(ctx, W, H);
+    if (!isCRT && !isBP && !isChalk && p.style !== 'none') applyCasualVignette(ctx, W, H);
+}
+
+// ==========================================
+// SWATCHES
+// ==========================================
+
+function swatches(p) {
+    const items = [
+        [p.bg.base, 'Fondo'], [p.bg.center, 'Centro'],
+        [p.player, 'Jugador'], [p.thruster, 'Propulsor'],
+        [p.bullet, 'Balas'], [p.enemyBullet, 'Balas enem.'],
+        [p.enemies.scout, 'Scout'], [p.enemies.kamikaze, 'Kamikaze'],
+        [p.enemies.spinner, 'Spinner'], [p.enemies.tank, 'Tank'],
+        [p.enemies.alien, 'Alien'],
+        [p.weapons.laser, 'Láser'], [p.weapons.missile, 'Misil'],
+        [p.weapons.shield, 'Escudo'], [p.weapons.lightning, 'Rayo'],
+        [p.weapons.drone, 'Dron'],
+    ];
+    return items.map(([c,l]) => `<div class="swatch"><div class="swatch-color" style="background:${c}"></div><span>${l}</span></div>`).join('');
+}
+
+// ==========================================
+// BUILD
+// ==========================================
+
+const content = document.getElementById('content');
+let canvasIdx = 0;
+
+for (const section of SECTIONS) {
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = section.label;
+    content.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'palettes';
+
+    for (const p of section.palettes) {
+        const dId = `d${canvasIdx}`;
+        const mId = `m${canvasIdx}`;
+        canvasIdx++;
+        const card = document.createElement('div');
+        card.className = 'palette-card';
+        card.innerHTML = `
+            <div class="palette-header">
+                <span class="palette-name">${p.name}</span>
+                <span class="palette-tag ${p.tagClass}">${p.tag}</span>
+            </div>
+            <div class="scenes">
+                <div class="scene-wrap desktop">
+                    <div class="scene-label">Desktop</div>
+                    <canvas class="scene scene-desktop" id="${dId}"></canvas>
+                </div>
+                <div class="scene-wrap mobile">
+                    <div class="scene-label">Mobile</div>
+                    <canvas class="scene scene-mobile" id="${mId}"></canvas>
+                </div>
+            </div>
+            <div class="swatches">${swatches(p)}</div>
+            <div class="palette-notes">${p.notes}</div>
+        `;
+        grid.appendChild(card);
+    }
+
+    content.appendChild(grid);
+}
+
+function renderAll() {
+    let idx = 0;
+    for (const section of SECTIONS) {
+        for (const p of section.palettes) {
+            renderScene(document.getElementById(`d${idx}`), p);
+            renderScene(document.getElementById(`m${idx}`), p);
+            idx++;
+        }
+    }
+}
+renderAll();
+window.addEventListener('resize', renderAll);
+</script>
+</body>
+</html>

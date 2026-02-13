@@ -448,250 +448,260 @@
         // Player Rotation
         const JOYSTICK_ROTATION_THRESHOLD = 5; // degrees
         
-        // Skill Tree Definitions
-        const SKILL_TREE = {
-            // Root node - Ship Arsenal (unlocked by default)
-            'arsenal': {
-                name: 'SHIP ARSENAL',
-                description: 'Your ship\'s weapon systems',
-                prereqs: [],
-                cost: 0,
-                color: '#00DFFF',
-                icon: 'arsenal',
-                nodeType: 'hexagon'
-            },
-            // LASER CANNON branch (red/coral theme)
+        // Weapon Definitions with multi-level upgrade branches
+        const WEAPONS = {
             'laser_cannon': {
                 name: 'LASER CANNON',
-                description: 'High-powered energy weapon',
-                prereqs: ['arsenal'],
-                cost: 1,
                 color: '#FF6B5B',
                 icon: 'laser',
-                nodeType: 'rectangle'
+                description: 'Auto-fire laser cannon',
+                shopPrice: 0,
+                branches: {
+                    'rapid_fire': {
+                        name: 'Rapid Fire',
+                        icon: 'rate',
+                        levels: [
+                            { description: 'Fire rate: 0.35s → 0.28s (-20%)', effect: { fireRate: 0.28 } },
+                            { description: 'Fire rate: 0.28s → 0.22s (-21%)', effect: { fireRate: 0.22 } },
+                            { description: 'Fire rate: 0.22s → 0.16s (-27%)', effect: { fireRate: 0.16 } }
+                        ]
+                    },
+                    'beam_splitter': {
+                        name: 'Beam Splitter',
+                        icon: 'spread',
+                        levels: [
+                            { description: '3 projectiles in cone', effect: { spreadCount: 3 } },
+                            { description: '5 projectiles, wider cone', effect: { spreadCount: 5, spreadAngle: 15 } },
+                            { description: '7 projectiles, wide cone', effect: { spreadCount: 7, spreadAngle: 30 } }
+                        ]
+                    },
+                    'piercing_lens': {
+                        name: 'Piercing Lens',
+                        icon: 'beam',
+                        levels: [
+                            { description: 'Bullets pierce 1 extra enemy', effect: { pierce: 2 } },
+                            { description: 'Damage: 10 → 14 (+40%)', effect: { pierce: 2, damage: 14 } },
+                            { description: 'Unlimited pierce, Damage: 18', effect: { pierceInfinite: true, damage: 18 } }
+                        ]
+                    }
+                },
+                evolution: {
+                    name: 'NOVA BEAM',
+                    icon: 'nova',
+                    description: 'Every 5th shot fires a massive piercing cone beam',
+                    effect: { novaBeam: true }
+                }
             },
-            'rapid_fire': {
-                name: 'Rapid Fire Module',
-                description: 'Faster fire rate',
-                prereqs: ['laser_cannon'],
-                cost: 1,
-                color: '#FF6B5B',
-                icon: 'rate',
-                nodeType: 'circle'
-            },
-            'piercing_lens': {
-                name: 'Piercing Lens',
-                description: 'Laser penetrates enemies',
-                prereqs: ['laser_cannon'],
-                cost: 1,
-                color: '#FF6B5B',
-                icon: 'beam',
-                nodeType: 'circle'
-            },
-            'beam_splitter': {
-                name: 'Beam Splitter',
-                description: 'Fire 3 beams in a cone',
-                prereqs: ['laser_cannon'],
-                cost: 1,
-                color: '#FF6B5B',
-                icon: 'spread',
-                nodeType: 'circle'
-            },
-            // MISSILE LAUNCHER branch (yellow/gold theme)
             'missile_launcher': {
                 name: 'MISSILE LAUNCHER',
-                description: 'Homing missile system',
-                prereqs: ['arsenal'],
-                cost: 1,
                 color: '#FFD93D',
                 icon: 'rocket',
-                nodeType: 'rectangle'
+                description: 'Homing missile system',
+                shopPrice: 150,
+                branches: {
+                    'barrage': {
+                        name: 'Barrage',
+                        icon: 'target',
+                        levels: [
+                            { description: '3 → 4 missiles per burst', effect: { rocketBurstCount: 4 } },
+                            { description: '4 → 5 missiles per burst', effect: { rocketBurstCount: 5 } },
+                            { description: '5 → 7 missiles per burst', effect: { rocketBurstCount: 7 } }
+                        ]
+                    },
+                    'cluster_payload': {
+                        name: 'Cluster Payload',
+                        icon: 'cluster',
+                        levels: [
+                            { description: 'Explosion radius: 120 → 160px', effect: { rocketExplosionRadius: 160 } },
+                            { description: 'Explosion spawns 2 mini-missiles', effect: { rocketExplosionRadius: 160, rocketRicochetCount: 2 } },
+                            { description: 'Explosion: 30 → 45 dmg, 3 mini-missiles', effect: { rocketExplosionDamage: 45, rocketRicochetCount: 3 } }
+                        ]
+                    },
+                    'heavy_payload': {
+                        name: 'Heavy Payload',
+                        icon: 'damage',
+                        levels: [
+                            { description: 'Impact damage: 22 → 30', effect: { rocketDamage: 30 } },
+                            { description: 'Impact damage: 30 → 40', effect: { rocketDamage: 40 } },
+                            { description: 'Damage: 50 + 20% crit chance', effect: { rocketDamage: 50, rocketCritChance: 0.20 } }
+                        ]
+                    }
+                },
+                evolution: {
+                    name: 'ARMAGEDDON PROTOCOL',
+                    icon: 'armageddon',
+                    description: 'Every 8s, mega-missile with massive explosion',
+                    effect: { armageddon: true }
+                }
             },
-            'homing_guidance': {
-                name: 'Rapid Barrage',
-                description: 'Double burst (6 missiles per salvo)',
-                prereqs: ['missile_launcher'],
-                cost: 1,
-                color: '#FFD93D',
-                icon: 'target',
-                nodeType: 'circle'
-            },
-            'cluster_payload': {
-                name: 'Ricochet Warhead',
-                description: 'Spawn 2 mini missiles on hit',
-                prereqs: ['missile_launcher'],
-                cost: 1,
-                color: '#FFD93D',
-                icon: 'cluster',
-                nodeType: 'circle'
-            },
-            'armor_piercing': {
-                name: 'Heavy Payload',
-                description: '+12 missile & +8 explosion damage',
-                prereqs: ['missile_launcher'],
-                cost: 1,
-                color: '#FFD93D',
-                icon: 'damage',
-                nodeType: 'circle'
-            },
-            // ORBITAL SHIELD branch (cyan/teal theme)
             'orbital_shield': {
                 name: 'ORBITAL SHIELD',
-                description: '3 fast rotating orbs damage enemies',
-                prereqs: ['arsenal'],
-                cost: 1,
                 color: '#00DFFF',
                 icon: 'orbital',
-                nodeType: 'rectangle'
+                description: '3 orbiting damage orbs',
+                shopPrice: 150,
+                branches: {
+                    'orbital_expansion': {
+                        name: 'Orbital Expansion',
+                        icon: 'regen',
+                        levels: [
+                            { description: '3 → 4 orbs', effect: { orbCount: 4 } },
+                            { description: '4 → 5 orbs', effect: { orbCount: 5 } },
+                            { description: '5 → 7 orbs', effect: { orbCount: 7 } }
+                        ]
+                    },
+                    'shockwave': {
+                        name: 'Shockwave',
+                        icon: 'shockwave',
+                        levels: [
+                            { description: 'Orb size +30%', effect: { orbSizeMulti: 1.3 } },
+                            { description: 'Orb size +60%, light knockback', effect: { orbSizeMulti: 1.6, orbKnockback: 1 } },
+                            { description: 'Orb size +100%, strong knockback', effect: { orbSizeMulti: 2.0, orbKnockback: 2 } }
+                        ]
+                    },
+                    'energy_absorption': {
+                        name: 'Energy Absorption',
+                        icon: 'absorb',
+                        levels: [
+                            { description: 'Contact damage: 16 → 24 (+50%)', effect: { orbDamage: 24 } },
+                            { description: 'Contact damage: 24 → 32', effect: { orbDamage: 32 } },
+                            { description: 'Damage: 40 + enemies slowed 25%', effect: { orbDamage: 40, orbSlow: 0.25 } }
+                        ]
+                    }
+                },
+                evolution: {
+                    name: 'SINGULARITY CORE',
+                    icon: 'singularity',
+                    description: 'Gravity field: slow + passive damage. Kills emit pulse.',
+                    effect: { singularity: true }
+                }
             },
-            'regen_capacitors': {
-                name: 'Orbital Expansion',
-                description: '+2 orbs (5 total)',
-                prereqs: ['orbital_shield'],
-                cost: 1,
-                color: '#00DFFF',
-                icon: 'regen',
-                nodeType: 'circle'
-            },
-            'shockwave_emitter': {
-                name: 'Orbital Amplification',
-                description: 'Orbs +50% size',
-                prereqs: ['orbital_shield'],
-                cost: 1,
-                color: '#00DFFF',
-                icon: 'shockwave',
-                nodeType: 'circle'
-            },
-            'energy_absorption': {
-                name: 'Energy Absorption',
-                description: 'Orbs deal +16 damage',
-                prereqs: ['orbital_shield'],
-                cost: 1,
-                color: '#00DFFF',
-                icon: 'absorb',
-                nodeType: 'circle'
-            },
-            // LIGHTNING RAY branch (electric purple/blue theme)
             'lightning_ray': {
                 name: 'LIGHTNING RAY',
-                description: 'Chain lightning hits nearby enemies',
-                prereqs: ['arsenal'],
-                cost: 1,
                 color: '#9F7AEA',
                 icon: 'lightning',
-                nodeType: 'rectangle'
+                description: 'Chain lightning between enemies',
+                shopPrice: 200,
+                branches: {
+                    'chain_amplifier': {
+                        name: 'Chain Amplifier',
+                        icon: 'chain',
+                        levels: [
+                            { description: '6 → 8 chain bounces', effect: { lightningBounces: 8 } },
+                            { description: '8 → 10 bounces', effect: { lightningBounces: 10 } },
+                            { description: '10 → 14 bounces', effect: { lightningBounces: 14 } }
+                        ]
+                    },
+                    'rapid_discharge': {
+                        name: 'Rapid Discharge',
+                        icon: 'discharge',
+                        levels: [
+                            { description: 'Cadence: 1.2s → 1.0s', effect: { lightningCadence: 1.0 } },
+                            { description: 'Cadence: 1.0s → 0.8s', effect: { lightningCadence: 0.8 } },
+                            { description: 'Cadence: 0.8s → 0.6s', effect: { lightningCadence: 0.6 } }
+                        ]
+                    },
+                    'extended_arc': {
+                        name: 'Extended Arc',
+                        icon: 'arc',
+                        levels: [
+                            { description: 'Detection: 300px, Chain: 270px', effect: { lightningRange: 300, lightningChainRange: 270 } },
+                            { description: 'Damage: 8 → 12', effect: { lightningRange: 300, lightningChainRange: 270, lightningDamage: 12 } },
+                            { description: 'Detection: 400px, Chain: 350px, Damage: 16', effect: { lightningRange: 400, lightningChainRange: 350, lightningDamage: 16 } }
+                        ]
+                    }
+                },
+                evolution: {
+                    name: 'STORM NEXUS',
+                    icon: 'storm',
+                    description: 'Lightning leaves electric field. Enemies stunned on entry.',
+                    effect: { stormNexus: true }
+                }
             },
-            'chain_amplifier': {
-                name: 'Chain Amplifier',
-                description: '+6 chain bounces (12 total)',
-                prereqs: ['lightning_ray'],
-                cost: 1,
-                color: '#9F7AEA',
-                icon: 'chain',
-                nodeType: 'circle'
-            },
-            'rapid_discharge': {
-                name: 'Rapid Discharge',
-                description: '+50% lightning fire rate',
-                prereqs: ['lightning_ray'],
-                cost: 1,
-                color: '#9F7AEA',
-                icon: 'discharge',
-                nodeType: 'circle'
-            },
-            'extended_arc': {
-                name: 'Extended Arc',
-                description: '+50% detection & chain range',
-                prereqs: ['lightning_ray'],
-                cost: 1,
-                color: '#9F7AEA',
-                icon: 'arc',
-                nodeType: 'circle'
-            },
-            // PLASMA FIELD branch (cyan theme - same as player)
             'plasma_field': {
                 name: 'PLASMA FIELD',
-                description: 'Damaging energy field around the ship',
-                prereqs: ['arsenal'],
-                cost: 1,
                 color: '#7FDBFF',
                 icon: 'aura',
-                nodeType: 'rectangle'
+                description: 'Damage aura around the ship',
+                shopPrice: 200,
+                branches: {
+                    'field_expansion': {
+                        name: 'Field Expansion',
+                        icon: 'expand',
+                        levels: [
+                            { description: 'Radius: 100 → 130px', effect: { auraRadius: 130 } },
+                            { description: 'Radius: 130 → 170px', effect: { auraRadius: 170 } },
+                            { description: 'Radius: 170 → 220px', effect: { auraRadius: 220 } }
+                        ]
+                    },
+                    'field_intensity': {
+                        name: 'Field Intensity',
+                        icon: 'damage',
+                        levels: [
+                            { description: 'Damage: 8 → 12 per tick', effect: { auraDamage: 12 } },
+                            { description: 'Damage: 12 → 17 per tick', effect: { auraDamage: 17 } },
+                            { description: 'Damage: 24 + 20% slow in zone', effect: { auraDamage: 24, auraSlow: 0.20 } }
+                        ]
+                    },
+                    'rapid_pulse': {
+                        name: 'Rapid Pulse',
+                        icon: 'pulse',
+                        levels: [
+                            { description: 'Tick rate: 0.50s → 0.40s', effect: { auraTickRate: 0.40 } },
+                            { description: 'Tick rate: 0.40s → 0.30s', effect: { auraTickRate: 0.30 } },
+                            { description: 'Tick rate: 0.30s → 0.22s', effect: { auraTickRate: 0.22 } }
+                        ]
+                    }
+                },
+                evolution: {
+                    name: 'ANNIHILATION SPHERE',
+                    icon: 'annihilation',
+                    description: 'Kills in field create chain-reaction explosions.',
+                    effect: { annihilation: true }
+                }
             },
-            'field_expansion': {
-                name: 'Field Expansion',
-                description: '+50% field radius',
-                prereqs: ['plasma_field'],
-                cost: 1,
-                color: '#7FDBFF',
-                icon: 'expand',
-                nodeType: 'circle'
-            },
-            'field_intensity': {
-                name: 'Field Intensity',
-                description: '+8 field damage',
-                prereqs: ['plasma_field'],
-                cost: 1,
-                color: '#7FDBFF',
-                icon: 'damage',
-                nodeType: 'circle'
-            },
-            'field_pulse': {
-                name: 'Rapid Pulse',
-                description: '+50% tick rate',
-                prereqs: ['plasma_field'],
-                cost: 1,
-                color: '#7FDBFF',
-                icon: 'pulse',
-                nodeType: 'circle'
-            },
-            // ALIEN DRONE branch (green/toxic theme)
             'alien_drone': {
                 name: 'ALIEN DRONE',
-                description: 'Kamikaze drones spawn from killed enemies',
-                prereqs: ['arsenal'],
-                cost: 1,
                 color: '#39FF14',
                 icon: 'drone',
-                nodeType: 'rectangle'
-            },
-            'drone_duo': {
-                name: 'Drone Swarm',
-                description: 'Spawn 2 drones per kill',
-                prereqs: ['alien_drone'],
-                cost: 1,
-                color: '#39FF14',
-                icon: 'swarm',
-                nodeType: 'circle'
-            },
-            'drone_duration': {
-                name: 'Extended Range',
-                description: 'Drones last twice as long',
-                prereqs: ['alien_drone'],
-                cost: 1,
-                color: '#39FF14',
-                icon: 'duration',
-                nodeType: 'circle'
-            },
-            'drone_explosion': {
-                name: 'Volatile Core',
-                description: 'Drones explode on impact (AoE damage)',
-                prereqs: ['alien_drone'],
-                cost: 1,
-                color: '#39FF14',
-                icon: 'explosion',
-                nodeType: 'circle'
+                description: 'Kamikaze drones from killed enemies',
+                shopPrice: 250,
+                branches: {
+                    'drone_swarm': {
+                        name: 'Drone Swarm',
+                        icon: 'swarm',
+                        levels: [
+                            { description: '1 drone + 30% chance 2nd drone', effect: { droneExtraChance: 0.30, droneExtraCount: 1 } },
+                            { description: '1 drone + 60% chance 2nd drone', effect: { droneExtraChance: 0.60, droneExtraCount: 1 } },
+                            { description: '2 drones + 40% chance 3rd', effect: { droneBaseCount: 2, droneExtraChance: 0.40, droneExtraCount: 1 } }
+                        ]
+                    },
+                    'drone_power': {
+                        name: 'Drone Power',
+                        icon: 'duration',
+                        levels: [
+                            { description: 'Damage: 15 → 22', effect: { droneDamage: 22 } },
+                            { description: 'Damage: 30, Range: 400 → 550px', effect: { droneDamage: 30, droneRange: 550 } },
+                            { description: 'Damage: 40, Speed: +30%', effect: { droneDamage: 40, droneRange: 550, droneSpeedMulti: 1.3 } }
+                        ]
+                    },
+                    'volatile_core': {
+                        name: 'Volatile Core',
+                        icon: 'explosion',
+                        levels: [
+                            { description: '30% chance explosion (60px, 12 dmg)', effect: { droneExplosionChance: 0.30, droneExplosionRadius: 60, droneExplosionDamage: 12 } },
+                            { description: '55% chance explosion (80px, 18 dmg)', effect: { droneExplosionChance: 0.55, droneExplosionRadius: 80, droneExplosionDamage: 18 } },
+                            { description: '80% chance explosion (100px, 25 dmg)', effect: { droneExplosionChance: 0.80, droneExplosionRadius: 100, droneExplosionDamage: 25 } }
+                        ]
+                    }
+                },
+                evolution: {
+                    name: 'HIVE MIND',
+                    icon: 'hive',
+                    description: 'Drones orbit and shoot mini-lasers. Explode on expiry.',
+                    effect: { hiveMind: true }
+                }
             }
-        };
-
-        // Weapon upgrade mapping for HUD display
-        const WEAPON_UPGRADES = {
-            'laser_cannon': ['rapid_fire', 'piercing_lens', 'beam_splitter'],
-            'missile_launcher': ['homing_guidance', 'cluster_payload', 'armor_piercing'],
-            'orbital_shield': ['regen_capacitors', 'shockwave_emitter', 'energy_absorption'],
-            'lightning_ray': ['chain_amplifier', 'rapid_discharge', 'extended_arc'],
-            'plasma_field': ['field_expansion', 'field_intensity', 'field_pulse'],
-            'alien_drone': ['drone_duo', 'drone_duration', 'drone_explosion']
         };
 
         // ============================================================
@@ -702,7 +712,15 @@
         const ctx = canvas.getContext('2d');
         const container = document.getElementById('gameContainer');
         
-        let gameState = 'menu'; // menu, playing, paused, gameOver, skilltree
+        let gameState = 'menu'; // menu, playing, paused, gameOver, skilltree, tutorial, shop
+
+        // ── Audio System (disabled during development) ──
+        const AudioManager = {
+            initialized: false,
+            init() {},
+            resume() {},
+            setMusicVolume() {}
+        };
         let lastTime = 0;
         let deltaTime = 0;
         let timeScale = 1;
@@ -733,14 +751,101 @@
         const PROGRESSION_SAVE_KEY = 'StellarSwarm_progression_v1';
         const WEAPON_IDS = ['laser_cannon', 'orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone'];
 
-        function createDefaultProgression() {
-            const unlockedWeapons = {};
-            for (const wid of WEAPON_IDS) {
-                unlockedWeapons[wid] = true;
+        // Difficulty system
+        const DIFFICULTY_THRESHOLDS = [0, 5000, 15000, 40000];
+        const DIFFICULTY_NAMES = ['NORMAL', 'HARD', 'EXTREME', 'NIGHTMARE'];
+        const DIFFICULTY_COLORS = ['#4A90D9', '#9F7AEA', '#FF4444', '#39FF14'];
+        const DIFFICULTY_MULTIPLIERS = [
+            { enemyHP: 1.0, enemySpeed: 1.0, spawnRate: 1.0, crystals: 1.0, xp: 1.0, score: 1.0 },
+            { enemyHP: 1.4, enemySpeed: 1.2, spawnRate: 1.3, crystals: 1.5, xp: 1.2, score: 1.5 },
+            { enemyHP: 2.0, enemySpeed: 1.4, spawnRate: 1.6, crystals: 2.0, xp: 1.5, score: 2.5 },
+            { enemyHP: 3.0, enemySpeed: 1.6, spawnRate: 2.0, crystals: 3.0, xp: 2.0, score: 4.0 }
+        ];
+
+        function getDiffMultipliers() {
+            return DIFFICULTY_MULTIPLIERS[currentDifficulty] || DIFFICULTY_MULTIPLIERS[0];
+        }
+
+        function getUnlockedDifficulties(prog) {
+            const unlocked = [0]; // Normal always unlocked
+            for (let i = 1; i < DIFFICULTY_THRESHOLDS.length; i++) {
+                // Check if any high score exceeds the threshold for this difficulty
+                const scores = prog.highScores || {};
+                const maxScore = Math.max(scores.normal || 0, scores.hard || 0, scores.extreme || 0, scores.nightmare || 0);
+                if (maxScore >= DIFFICULTY_THRESHOLDS[i]) {
+                    unlocked.push(i);
+                }
             }
+            return unlocked;
+        }
+
+        // Shop: weapon purchase requirements (number of weapons already bought, excluding laser)
+        const WEAPON_PURCHASE_REQUIREMENTS = {
+            'laser_cannon': 0,
+            'orbital_shield': 0,
+            'missile_launcher': 0,
+            'lightning_ray': 1,
+            'plasma_field': 2,
+            'alien_drone': 3
+        };
+
+        // Permanent upgrades definition
+        const PERMANENT_UPGRADES = {
+            powerCore:        { name: 'POWER CORE',        description: '+4% damage per level',   icon: '⚡', color: '#FF6B5B', baseCost: 50,  maxLevel: 10 },
+            hullPlating:      { name: 'HULL PLATING',      description: '+1 max HP per 2 levels', icon: '🛡', color: '#00DFFF', baseCost: 40,  maxLevel: 10 },
+            engineBoost:      { name: 'ENGINE BOOST',       description: '+3% speed per level',    icon: '🚀', color: '#FFD93D', baseCost: 40,  maxLevel: 10 },
+            xpAmplifier:      { name: 'XP AMPLIFIER',      description: '+5% XP per level',       icon: '✦',  color: '#9F7AEA', baseCost: 60,  maxLevel: 10 },
+            crystalAttractor: { name: 'CRYSTAL ATTRACTOR', description: '+5% crystals per level', icon: '◆',  color: '#E0F0FF', baseCost: 80,  maxLevel: 10 }
+        };
+
+        function getUpgradeCost(upgradeKey, currentLevel) {
+            const def = PERMANENT_UPGRADES[upgradeKey];
+            if (!def || currentLevel >= def.maxLevel) return Infinity;
+            const nextLevel = currentLevel + 1;
+            return Math.round(def.baseCost * (1 + (nextLevel - 1) * 0.8));
+        }
+
+        function canBuyWeapon(weaponId, prog) {
+            if (prog.unlockedWeapons[weaponId]) return false;
+            const purchasedCount = Object.values(prog.unlockedWeapons).filter(v => v).length - 1; // -1 for free laser
+            const price = WEAPONS[weaponId].shopPrice;
+            return purchasedCount >= WEAPON_PURCHASE_REQUIREMENTS[weaponId] && (prog.crystals || 0) >= price;
+        }
+
+        function getWeaponRequirementText(weaponId, prog) {
+            const purchasedCount = Object.values(prog.unlockedWeapons).filter(v => v).length - 1;
+            const required = WEAPON_PURCHASE_REQUIREMENTS[weaponId];
+            if (purchasedCount < required) {
+                return 'Unlock ' + (required - purchasedCount) + ' more weapon' + (required - purchasedCount > 1 ? 's' : '') + ' first';
+            }
+            return null;
+        }
+
+        // Cached progression for current run (set in resetGame, avoids localStorage reads per frame)
+        let cachedProgression = null;
+
+        function createDefaultProgression() {
             return {
-                unlockedWeapons,
-                stats: { totalRuns: 0 }
+                unlockedWeapons: {
+                    laser_cannon: true,
+                    orbital_shield: false,
+                    missile_launcher: false,
+                    lightning_ray: false,
+                    plasma_field: false,
+                    alien_drone: false
+                },
+                crystals: 0,
+                permanentUpgrades: {
+                    powerCore: 0,
+                    hullPlating: 0,
+                    engineBoost: 0,
+                    xpAmplifier: 0,
+                    crystalAttractor: 0
+                },
+                highScores: { normal: 0, hard: 0, extreme: 0, nightmare: 0 },
+                currentDifficulty: 0,
+                tutorialDone: false,
+                stats: { totalRuns: 0, totalKills: 0, totalCrystalsEarned: 0 }
             };
         }
 
@@ -749,14 +854,16 @@
                 const raw = localStorage.getItem(PROGRESSION_SAVE_KEY);
                 if (raw) {
                     const data = JSON.parse(raw);
-                    if (!data.stats) data.stats = { totalRuns: 0 };
-                    if (data.stats.totalRuns === undefined) data.stats.totalRuns = 0;
-                    // Migrate old saves: unlock all weapons (boss system removed)
-                    for (const wid of WEAPON_IDS) {
-                        data.unlockedWeapons[wid] = true;
+                    // Fresh start migration: if old format (no crystals field), wipe to defaults
+                    if (data.crystals === undefined) {
+                        return createDefaultProgression();
                     }
-                    delete data.bossDefeats;
-                    if (data.stats) delete data.stats.totalBossDefeats;
+                    // Ensure all fields exist (forward compat)
+                    if (!data.stats) data.stats = { totalRuns: 0, totalKills: 0, totalCrystalsEarned: 0 };
+                    if (!data.permanentUpgrades) data.permanentUpgrades = { powerCore: 0, hullPlating: 0, engineBoost: 0, xpAmplifier: 0, crystalAttractor: 0 };
+                    if (!data.highScores) data.highScores = { normal: 0, hard: 0, extreme: 0, nightmare: 0 };
+                    if (data.currentDifficulty === undefined) data.currentDifficulty = 0;
+                    if (data.tutorialDone === undefined) data.tutorialDone = false;
                     return data;
                 }
             } catch (e) {
@@ -813,66 +920,33 @@
         let cheatCodeTimer = 0; // auto-clear buffer after inactivity
         const CHEAT_CODES = {
             'rocket': () => {
-                // Unlock missile launcher and all missile upgrades
-                if (!unlockedSkills.includes('missile_launcher')) {
-                    unlockedSkills.push('missile_launcher');
-                }
-                ['homing_guidance', 'cluster_payload', 'armor_piercing'].forEach(skill => {
-                    if (!unlockedSkills.includes(skill)) {
-                        unlockedSkills.push(skill);
-                    }
-                });
-                spawnFloatingText(player.x, player.y - 50, 'MISSILES UNLOCKED', '#FFD93D');
-                spawnFloatingText(player.x, player.y, 'MISSILES UNLOCKED', '#FFD93D');
+                if (!activeWeapons.includes('missile_launcher')) activeWeapons.push('missile_launcher');
+                ['barrage', 'cluster_payload', 'heavy_payload'].forEach(b => { upgradeLevels[b] = 3; });
+                spawnFloatingText(player.x, player.y - 50, 'MISSILES MAXED', '#FFD93D');
             },
             'orbit': () => {
-                // Unlock orbital shield and all shield upgrades
-                if (!unlockedSkills.includes('orbital_shield')) {
-                    unlockedSkills.push('orbital_shield');
-                }
-                ['regen_capacitors', 'shockwave_emitter', 'energy_absorption'].forEach(skill => {
-                    if (!unlockedSkills.includes(skill)) {
-                        unlockedSkills.push(skill);
-                    }
-                });
-                spawnFloatingText(player.x, player.y - 50, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
-                spawnFloatingText(player.x, player.y, 'ORBITAL SHIELD UNLOCKED', '#00DFFF');
+                if (!activeWeapons.includes('orbital_shield')) activeWeapons.push('orbital_shield');
+                ['orbital_expansion', 'shockwave', 'energy_absorption'].forEach(b => { upgradeLevels[b] = 3; });
+                spawnFloatingText(player.x, player.y - 50, 'ORBITAL MAXED', '#00DFFF');
             },
             'chain': () => {
-                // Unlock lightning ray and all lightning upgrades
-                if (!unlockedSkills.includes('lightning_ray')) {
-                    unlockedSkills.push('lightning_ray');
-                }
-                ['chain_amplifier', 'rapid_discharge', 'extended_arc'].forEach(skill => {
-                    if (!unlockedSkills.includes(skill)) {
-                        unlockedSkills.push(skill);
-                    }
-                });
-                spawnFloatingText(player.x, player.y - 50, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
-                spawnFloatingText(player.x, player.y, 'LIGHTNING RAY UNLOCKED', '#9F7AEA');
+                if (!activeWeapons.includes('lightning_ray')) activeWeapons.push('lightning_ray');
+                ['chain_amplifier', 'rapid_discharge', 'extended_arc'].forEach(b => { upgradeLevels[b] = 3; });
+                spawnFloatingText(player.x, player.y - 50, 'LIGHTNING MAXED', '#9F7AEA');
             },
             'drone': () => {
-                // Unlock alien drone and all drone upgrades
-                if (!unlockedSkills.includes('alien_drone')) {
-                    unlockedSkills.push('alien_drone');
-                }
-                ['drone_duo', 'drone_duration', 'drone_explosion'].forEach(skill => {
-                    if (!unlockedSkills.includes(skill)) {
-                        unlockedSkills.push(skill);
-                    }
-                });
-                spawnFloatingText(player.x, player.y - 50, 'ALIEN DRONES UNLOCKED', '#39FF14');
-                spawnFloatingText(player.x, player.y, 'ALIEN DRONES UNLOCKED', '#39FF14');
+                if (!activeWeapons.includes('alien_drone')) activeWeapons.push('alien_drone');
+                ['drone_swarm', 'drone_power', 'volatile_core'].forEach(b => { upgradeLevels[b] = 3; });
+                spawnFloatingText(player.x, player.y - 50, 'DRONES MAXED', '#39FF14');
             },
             'full': () => {
-                // Unlock ALL skills
-                Object.keys(SKILL_TREE).forEach(skill => {
-                    if (!unlockedSkills.includes(skill)) {
-                        unlockedSkills.push(skill);
+                for (const [wid, weapon] of Object.entries(WEAPONS)) {
+                    if (!activeWeapons.includes(wid)) activeWeapons.push(wid);
+                    for (const branchId of Object.keys(weapon.branches)) {
+                        upgradeLevels[branchId] = 3;
                     }
-                });
-                spawnFloatingText(player.x, player.y - 50, 'ALL ABILITIES UNLOCKED', '#FFD700');
-                spawnFloatingText(player.x, player.y, 'FULL ARSENAL', '#FFD700');
+                }
+                spawnFloatingText(player.x, player.y - 50, 'ALL WEAPONS MAXED', '#FFD700');
             },
             'reset': () => {
                 resetGame();
@@ -918,12 +992,28 @@
         let playerLevel = 1;
         let xpToNextLevel = XP_PER_LEVEL_BASE;
         
-        // Skill Tree state
+        // Upgrade state (multi-level system)
         let skillPoints = 0;
-        let unlockedSkills = ['arsenal', 'laser_cannon'];
+        let activeWeapons = ['laser_cannon']; // Weapons activated this run
+        let upgradeLevels = {}; // { branchId: level (0-3) }
+        let activeEvolutions = []; // weaponIds with evolution active
         let upgradeOptions = [];
         let upgradeSelectionActive = false;
-        
+        let crystalsThisRun = 0;
+        let tempDamageMultiplier = 1;
+        let tempDamageTimer = 0;
+        let crystalPickups = [];
+        let lastRunCrystals = null; // Breakdown for game over screen
+        // Permanent upgrade effects (set from cachedProgression in resetGame)
+        let playerMaxHP = PLAYER_MAX_HP;
+        let permDamageMulti = 1;
+        let permSpeedMulti = 1;
+        let permXPMulti = 1;
+        let permCrystalMulti = 1;
+        // Current difficulty (loaded from progression)
+        let currentDifficulty = 0;
+        let shopReturnState = 'menu'; // Where to go when leaving shop
+
         // Spawn system
         let spawnTimer = 0;
         let spawnInterval = INITIAL_SPAWN_INTERVAL_MAX;
@@ -1072,8 +1162,8 @@
         // Create object pools for all entity types (sized to support 1000+ entities)
         const pools = {
             bullet: new ObjectPool(
-                () => ({ x: 0, y: 0, vx: 0, vy: 0, life: 0, damage: 1, type: 'laser', color: '', piercing: false, hitEnemies: null, turnRate: 0 }),
-                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.life = 0; obj.hitEnemies = null; obj.piercing = false; obj.turnRate = 0; },
+                () => ({ x: 0, y: 0, vx: 0, vy: 0, life: 0, damage: 1, type: 'laser', color: '', piercing: false, pierceCount: 0, hitEnemies: null, turnRate: 0, ricochetCount: 0, critChance: 0 }),
+                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.life = 0; obj.hitEnemies = null; obj.piercing = false; obj.pierceCount = 0; obj.turnRate = 0; obj.ricochetCount = 0; obj.critChance = 0; },
                 500
             ),
 
@@ -1108,8 +1198,8 @@
             ),
 
             drone: new ObjectPool(
-                () => ({ x: 0, y: 0, vx: 0, vy: 0, angle: 0, life: 0, damage: 1, hasExplosion: false, trail: [] }),
-                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.angle = 0; obj.life = 0; obj.trail = []; },
+                () => ({ x: 0, y: 0, vx: 0, vy: 0, angle: 0, life: 0, damage: 15, explosionChance: 0, explosionRadius: 0, explosionDamage: 0, speedMulti: 1, trail: [] }),
+                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.angle = 0; obj.life = 0; obj.explosionChance = 0; obj.explosionRadius = 0; obj.explosionDamage = 0; obj.speedMulti = 1; obj.trail = []; },
                 100
             )
         };
@@ -1259,13 +1349,27 @@
             canvas.width = CANVAS_WIDTH;
             canvas.height = CANVAS_HEIGHT;
 
+            // Load saved difficulty
+            const initProg = loadProgression();
+            currentDifficulty = initProg.currentDifficulty || 0;
+
             generateBackground();
             initBackgroundCache();
             setupInput();
             setupTouchControls();
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
-            
+
+            // Pause/resume audio when tab visibility changes
+            document.addEventListener('visibilitychange', () => {
+                if (!AudioManager.initialized) return;
+                if (document.hidden) {
+                    AudioManager.ctx.suspend();
+                } else {
+                    AudioManager.ctx.resume();
+                }
+            });
+
             requestAnimationFrame(gameLoop);
         }
         
@@ -1301,6 +1405,25 @@
             }
         }
         
+        function startGame() {
+            const prog = loadProgression();
+            if (!prog.tutorialDone) {
+                gameState = 'tutorial';
+                return;
+            }
+            gameState = 'playing';
+            resetGame();
+        }
+
+        function selectTutorialWeapon(weaponId) {
+            const prog = loadProgression();
+            prog.unlockedWeapons[weaponId] = true;
+            prog.tutorialDone = true;
+            saveProgression(prog);
+            gameState = 'playing';
+            resetGame();
+        }
+
         function resetGame() {
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
@@ -1308,7 +1431,7 @@
                 vx: 0,
                 vy: 0,
                 angle: -90, // Pointing up
-                hp: PLAYER_MAX_HP,
+                hp: playerMaxHP,
                 shield: PLAYER_MAX_SHIELD,
                 shieldRegenTimer: 0,
                 shieldFlashTimer: 0,
@@ -1369,16 +1492,35 @@
             playerLevel = 1;
             xpToNextLevel = XP_PER_LEVEL_BASE;
             
-            // Skill Tree reset
+            // Upgrade system reset
             skillPoints = 0;
-            unlockedSkills = ['arsenal', 'laser_cannon'];
+            activeWeapons = ['laser_cannon'];
+            upgradeLevels = {};
+            activeEvolutions = [];
+            crystalsThisRun = 0;
+            crystalPickups = [];
+            lastRunCrystals = null;
+            tempDamageMultiplier = 1;
+            tempDamageTimer = 0;
             upgradeOptions = [];
             upgradeSelectionActive = false;
 
-            // Increment totalRuns
+            // Load and cache progression, apply permanent upgrades
             const prog = loadProgression();
             prog.stats.totalRuns++;
             saveProgression(prog);
+            cachedProgression = prog;
+            currentDifficulty = prog.currentDifficulty || 0;
+
+            // Apply permanent upgrades
+            const pu = prog.permanentUpgrades || {};
+            permDamageMulti = 1 + (pu.powerCore || 0) * 0.04;
+            playerMaxHP = PLAYER_MAX_HP + Math.floor((pu.hullPlating || 0) / 2);
+            player.hp = playerMaxHP;
+            permSpeedMulti = 1 + (pu.engineBoost || 0) * 0.03;
+            permXPMulti = 1 + (pu.xpAmplifier || 0) * 0.05;
+            permCrystalMulti = 1 + (pu.crystalAttractor || 0) * 0.05;
+
             document.getElementById('upgradePanel').classList.remove('active');
             
             spawnTimer = 0;
@@ -1407,6 +1549,8 @@
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
 
+                // Init audio on first interaction
+                AudioManager.init();
 
                 // Handle cheat codes (only when playing)
                 if (gameState === 'playing' && e.key.length === 1) {
@@ -1449,14 +1593,38 @@
 
                 if (e.code === 'Enter' || e.code === 'Space') {
                     if (gameState === 'menu') {
-                        gameState = 'playing';
-                        resetGame();
+                        startGame();
                     }
                 }
 
+                // D key cycles difficulty in menu
+                if (gameState === 'menu' && e.code === 'KeyD') {
+                    const prog = loadProgression();
+                    const unlocked = getUnlockedDifficulties(prog);
+                    const currentIdx = unlocked.indexOf(currentDifficulty);
+                    const nextIdx = (currentIdx + 1) % unlocked.length;
+                    currentDifficulty = unlocked[nextIdx];
+                    prog.currentDifficulty = currentDifficulty;
+                    saveProgression(prog);
+                }
+
+                // Tutorial: 1 = Orbital Shield, 2 = Missile Launcher
+                if (gameState === 'tutorial') {
+                    if (e.code === 'Digit1') selectTutorialWeapon('orbital_shield');
+                    else if (e.code === 'Digit2') selectTutorialWeapon('missile_launcher');
+                }
+
+                // Shop navigation
+                if (gameState === 'shop' && (e.code === 'Escape' || e.code === 'KeyS')) {
+                    gameState = shopReturnState || 'menu';
+                }
+                if ((gameState === 'menu' || gameState === 'gameOver') && e.code === 'KeyS') {
+                    shopReturnState = gameState;
+                    gameState = 'shop';
+                }
+
                 if (e.code === 'KeyR' && gameState === 'gameOver') {
-                    gameState = 'playing';
-                    resetGame();
+                    startGame();
                 }
 
                 // Toggle debug overlay with B key
@@ -1480,6 +1648,34 @@
             
             window.addEventListener('keyup', (e) => {
                 keys[e.code] = false;
+            });
+
+            // Canvas click for shop + tutorial
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = CANVAS_WIDTH / rect.width;
+                const scaleY = CANVAS_HEIGHT / rect.height;
+                const clickX = (e.clientX - rect.left) * scaleX;
+                const clickY = (e.clientY - rect.top) * scaleY;
+
+                if (gameState === 'shop') {
+                    handleShopClick(clickX, clickY);
+                } else if (gameState === 'tutorial') {
+                    // Check if click is on left or right card
+                    const cardW = 300;
+                    const gap = 60;
+                    const totalW = 2 * cardW + gap;
+                    const startX = (CANVAS_WIDTH - totalW) / 2;
+                    const cardY = 290;
+                    const cardH = 320;
+                    if (clickY >= cardY && clickY <= cardY + cardH) {
+                        if (clickX >= startX && clickX <= startX + cardW) {
+                            selectTutorialWeapon('orbital_shield');
+                        } else if (clickX >= startX + cardW + gap && clickX <= startX + totalW) {
+                            selectTutorialWeapon('missile_launcher');
+                        }
+                    }
+                }
             });
         }
         
@@ -1508,20 +1704,21 @@
             
             joystickZone.addEventListener('touchstart', (e) => {
 
+                // Init audio on first touch
+                AudioManager.init();
+
                 if (gameState === 'menu') {
-                    gameState = 'playing';
-                    resetGame();
+                    startGame();
                     return;
                 }
 
                 if (gameState === 'gameOver') {
-                    gameState = 'playing';
-                    resetGame();
+                    startGame();
                     return;
                 }
 
-                if (gameState === 'skilltree') {
-                    return; // Don't activate joystick during skill tree
+                if (gameState === 'skilltree' || gameState === 'tutorial' || gameState === 'shop') {
+                    return; // Don't activate joystick during overlays
                 }
 
                 joystickTouch = e.touches[0];
@@ -1808,8 +2005,17 @@
             updateParticles();
             updateFloatingTexts();
             updatePickups();
+            updateCrystalPickups();
             updateWeapons();
 
+            // Temp damage buff timer
+            if (tempDamageTimer > 0) {
+                tempDamageTimer -= deltaTime;
+                if (tempDamageTimer <= 0) {
+                    tempDamageMultiplier = 1;
+                    tempDamageTimer = 0;
+                }
+            }
 
             // Check collisions
             checkCollisions();
@@ -1817,8 +2023,8 @@
             // Update effects
             updateEffects();
 
-            // Survival time bonus
-            score += deltaTime;
+            // Survival time bonus (scaled by difficulty)
+            score += deltaTime * getDiffMultipliers().score;
 
             // Check milestones
             checkMilestones();
@@ -1926,11 +2132,11 @@
             let accel = 0;
             
             if (input.thrust) {
-                accel = THRUST_ACCEL;
+                accel = THRUST_ACCEL * permSpeedMulti;
                 player.thrusterScale = Math.min(1, player.thrusterScale + deltaTime / 0.08);
                 idleTimer = 0;
             } else if (input.reverse) {
-                accel = -REVERSE_ACCEL;
+                accel = -REVERSE_ACCEL * permSpeedMulti;
                 idleTimer = 0;
             }
             
@@ -1948,9 +2154,10 @@
             
             // Clamp speed
             const speed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
-            if (speed > MAX_SPEED) {
-                player.vx = (player.vx / speed) * MAX_SPEED;
-                player.vy = (player.vy / speed) * MAX_SPEED;
+            const effectiveMaxSpeed = MAX_SPEED * permSpeedMulti;
+            if (speed > effectiveMaxSpeed) {
+                player.vx = (player.vx / speed) * effectiveMaxSpeed;
+                player.vy = (player.vy / speed) * effectiveMaxSpeed;
             }
             
             // Position update
@@ -2020,115 +2227,199 @@
             }
         }
         
-        // Helper function to get computed weapon stats from skill tree
+        // Compute weapon stats from activeWeapons + upgradeLevels
         function getWeaponStats() {
-            let damage = 8; // Base damage
-            let fireRate = AUTO_FIRE_INTERVAL;
-            let pierce = false;
+            // === LASER CANNON ===
+            let hasLaser = activeWeapons.includes('laser_cannon');
+            let damage = hasLaser ? 10 : 8;
+            let fireRate = 0.35;
+            let pierce = 0;
+            let pierceInfinite = false;
             let spreadCount = 0;
-            let hasRockets = false;
-            let rocketCount = 1;
-            let rocketDamage = 8;
-            let hasLaser = false;
+            let spreadAngle = 8;
 
-            // Laser Cannon branch
-            if (unlockedSkills.includes('laser_cannon')) {
-                hasLaser = true;
-                damage += 4; // Laser cannon adds +4 damage
-            }
-            if (unlockedSkills.includes('rapid_fire')) {
-                fireRate -= 0.1; // Faster fire rate
-            }
-            if (unlockedSkills.includes('piercing_lens')) {
-                pierce = true;
-                damage += 4;
-            }
-            if (unlockedSkills.includes('beam_splitter')) {
-                spreadCount = 3;
-            }
-            fireRate = Math.max(0.1, fireRate); // Minimum fire rate
+            if (hasLaser) {
+                const rfLvl = upgradeLevels['rapid_fire'] || 0;
+                if (rfLvl >= 1) fireRate = 0.28;
+                if (rfLvl >= 2) fireRate = 0.22;
+                if (rfLvl >= 3) fireRate = 0.16;
 
-            // Missile Launcher branch
-            let rocketBurstCount = 3; // Misiles por ráfaga (3 normal, 6 con habilidad)
-            let rocketExplosionDamage = 12;
-            let rocketExplosionRadius = 80;
-            let rocketRicochet = false;
+                const bsLvl = upgradeLevels['beam_splitter'] || 0;
+                if (bsLvl >= 1) spreadCount = 3;
+                if (bsLvl >= 2) { spreadCount = 5; spreadAngle = 15; }
+                if (bsLvl >= 3) { spreadCount = 7; spreadAngle = 30; }
 
-            if (unlockedSkills.includes('missile_launcher')) {
-                hasRockets = true;
-            }
-            if (unlockedSkills.includes('homing_guidance')) {
-                rocketBurstCount = 6; // Ráfaga doble de misiles
-            }
-            if (unlockedSkills.includes('armor_piercing')) {
-                rocketDamage += 12;
-                rocketExplosionDamage += 8;
-            }
-            if (unlockedSkills.includes('cluster_payload')) {
-                rocketRicochet = true; // Spawns mini rockets on impact
+                const plLvl = upgradeLevels['piercing_lens'] || 0;
+                if (plLvl >= 1) pierce = 2;
+                if (plLvl >= 2) { pierce = 2; damage = 14; }
+                if (plLvl >= 3) { pierceInfinite = true; damage = 18; }
             }
 
-            // Lightning Ray branch
-            let hasLightning = false;
+            // === MISSILE LAUNCHER ===
+            let hasRockets = activeWeapons.includes('missile_launcher');
+            let rocketBurstCount = 3;
+            let rocketDamage = 22;
+            let rocketExplosionDamage = 30;
+            let rocketExplosionRadius = 120;
+            let rocketRicochetCount = 0;
+            let rocketCritChance = 0;
+
+            if (hasRockets) {
+                const baLvl = upgradeLevels['barrage'] || 0;
+                if (baLvl >= 1) rocketBurstCount = 4;
+                if (baLvl >= 2) rocketBurstCount = 5;
+                if (baLvl >= 3) rocketBurstCount = 7;
+
+                const cpLvl = upgradeLevels['cluster_payload'] || 0;
+                if (cpLvl >= 1) rocketExplosionRadius = 160;
+                if (cpLvl >= 2) rocketRicochetCount = 2;
+                if (cpLvl >= 3) { rocketExplosionDamage = 45; rocketRicochetCount = 3; }
+
+                const hpLvl = upgradeLevels['heavy_payload'] || 0;
+                if (hpLvl >= 1) rocketDamage = 30;
+                if (hpLvl >= 2) rocketDamage = 40;
+                if (hpLvl >= 3) { rocketDamage = 50; rocketCritChance = 0.20; }
+            }
+
+            // === ORBITAL SHIELD ===
+            let hasOrbit = activeWeapons.includes('orbital_shield');
+            let orbCount = 3;
+            let orbDamage = 16;
+            let orbSizeMulti = 1.0;
+            let orbKnockback = 0;
+            let orbSlow = 0;
+
+            if (hasOrbit) {
+                const oeLvl = upgradeLevels['orbital_expansion'] || 0;
+                if (oeLvl >= 1) orbCount = 4;
+                if (oeLvl >= 2) orbCount = 5;
+                if (oeLvl >= 3) orbCount = 7;
+
+                const swLvl = upgradeLevels['shockwave'] || 0;
+                if (swLvl >= 1) orbSizeMulti = 1.3;
+                if (swLvl >= 2) { orbSizeMulti = 1.6; orbKnockback = 1; }
+                if (swLvl >= 3) { orbSizeMulti = 2.0; orbKnockback = 2; }
+
+                const eaLvl = upgradeLevels['energy_absorption'] || 0;
+                if (eaLvl >= 1) orbDamage = 24;
+                if (eaLvl >= 2) orbDamage = 32;
+                if (eaLvl >= 3) { orbDamage = 40; orbSlow = 0.25; }
+            }
+
+            // === LIGHTNING RAY ===
+            let hasLightning = activeWeapons.includes('lightning_ray');
             let lightningBounces = 6;
             let lightningCadence = 1.2;
             let lightningRange = 225;
-            let lightningChainRange = 350;
-            let lightningDamage = 16;
+            let lightningChainRange = 200;
+            let lightningDamage = 8;
 
-            if (unlockedSkills.includes('lightning_ray')) {
-                hasLightning = true;
-            }
-            if (unlockedSkills.includes('chain_amplifier')) {
-                lightningBounces = 12;
-            }
-            if (unlockedSkills.includes('rapid_discharge')) {
-                lightningCadence = 0.8;
-            }
-            if (unlockedSkills.includes('extended_arc')) {
-                lightningRange = 650;
-                lightningChainRange = 500;
-            }
+            if (hasLightning) {
+                const caLvl = upgradeLevels['chain_amplifier'] || 0;
+                if (caLvl >= 1) lightningBounces = 8;
+                if (caLvl >= 2) lightningBounces = 10;
+                if (caLvl >= 3) lightningBounces = 14;
 
-            // Garlic Aura branch
-            let hasAura = false;
-            let auraRadius = AURA_BASE_RADIUS;
-            let auraDamage = AURA_BASE_DAMAGE;
-            let auraTickRate = AURA_BASE_TICK_RATE;
+                const rdLvl = upgradeLevels['rapid_discharge'] || 0;
+                if (rdLvl >= 1) lightningCadence = 1.0;
+                if (rdLvl >= 2) lightningCadence = 0.8;
+                if (rdLvl >= 3) lightningCadence = 0.6;
 
-            if (unlockedSkills.includes('plasma_field')) {
-                hasAura = true;
-            }
-            if (unlockedSkills.includes('field_expansion')) {
-                auraRadius *= 1.5;
-            }
-            if (unlockedSkills.includes('field_intensity')) {
-                auraDamage += 8;
-            }
-            if (unlockedSkills.includes('field_pulse')) {
-                auraTickRate *= 0.67;
+                const exLvl = upgradeLevels['extended_arc'] || 0;
+                if (exLvl >= 1) { lightningRange = 300; lightningChainRange = 270; }
+                if (exLvl >= 2) { lightningDamage = 12; }
+                if (exLvl >= 3) { lightningRange = 400; lightningChainRange = 350; lightningDamage = 16; }
             }
 
-            // Alien Drone branch
-            let hasDrones = false;
-            let droneCount = 1;
-            let droneLifetime = 1.5; // Base lifetime in seconds
-            let droneHasExplosion = false;
+            // === PLASMA FIELD ===
+            let hasAura = activeWeapons.includes('plasma_field');
+            let auraRadius = 100;
+            let auraDamage = 4;
+            let auraTickRate = 0.50;
+            let auraSlow = 0;
 
-            if (unlockedSkills.includes('alien_drone')) {
-                hasDrones = true;
-            }
-            if (unlockedSkills.includes('drone_duo')) {
-                droneCount = 2;
-            }
-            if (unlockedSkills.includes('drone_duration')) {
-                droneLifetime = 3; // Extended lifetime
-            }
-            if (unlockedSkills.includes('drone_explosion')) {
-                droneHasExplosion = true;
+            if (hasAura) {
+                const feLvl = upgradeLevels['field_expansion'] || 0;
+                if (feLvl >= 1) auraRadius = 130;
+                if (feLvl >= 2) auraRadius = 170;
+                if (feLvl >= 3) auraRadius = 220;
+
+                const fiLvl = upgradeLevels['field_intensity'] || 0;
+                if (fiLvl >= 1) auraDamage = 12;
+                if (fiLvl >= 2) auraDamage = 17;
+                if (fiLvl >= 3) { auraDamage = 24; auraSlow = 0.20; }
+
+                const rpLvl = upgradeLevels['rapid_pulse'] || 0;
+                if (rpLvl >= 1) auraTickRate = 0.40;
+                if (rpLvl >= 2) auraTickRate = 0.30;
+                if (rpLvl >= 3) auraTickRate = 0.22;
             }
 
-            return { damage, fireRate, pierce, spreadCount, hasRockets, rocketCount, rocketDamage, hasLaser, rocketBurstCount, rocketExplosionDamage, rocketExplosionRadius, rocketRicochet, hasLightning, lightningBounces, lightningCadence, lightningRange, lightningChainRange, lightningDamage, hasAura, auraRadius, auraDamage, auraTickRate, hasDrones, droneCount, droneLifetime, droneHasExplosion };
+            // === ALIEN DRONE ===
+            let hasDrones = activeWeapons.includes('alien_drone');
+            let droneBaseCount = 1;
+            let droneExtraChance = 0;
+            let droneExtraCount = 0;
+            let droneDamage = 15;
+            let droneRange = 400;
+            let droneSpeedMulti = 1.0;
+            let droneLifetime = 1.5;
+            let droneExplosionChance = 0;
+            let droneExplosionRadius = 0;
+            let droneExplosionDamage = 0;
+
+            if (hasDrones) {
+                const dsLvl = upgradeLevels['drone_swarm'] || 0;
+                if (dsLvl >= 1) { droneExtraChance = 0.30; droneExtraCount = 1; }
+                if (dsLvl >= 2) { droneExtraChance = 0.60; droneExtraCount = 1; }
+                if (dsLvl >= 3) { droneBaseCount = 2; droneExtraChance = 0.40; droneExtraCount = 1; }
+
+                const dpLvl = upgradeLevels['drone_power'] || 0;
+                if (dpLvl >= 1) droneDamage = 22;
+                if (dpLvl >= 2) { droneDamage = 30; droneRange = 550; }
+                if (dpLvl >= 3) { droneDamage = 40; droneRange = 550; droneSpeedMulti = 1.3; }
+
+                const vcLvl = upgradeLevels['volatile_core'] || 0;
+                if (vcLvl >= 1) { droneExplosionChance = 0.30; droneExplosionRadius = 60; droneExplosionDamage = 12; }
+                if (vcLvl >= 2) { droneExplosionChance = 0.55; droneExplosionRadius = 80; droneExplosionDamage = 18; }
+                if (vcLvl >= 3) { droneExplosionChance = 0.80; droneExplosionRadius = 100; droneExplosionDamage = 25; }
+            }
+
+            // Temp damage buff (from bonus_damage) + permanent Power Core
+            const finalDamageMulti = (tempDamageMultiplier || 1) * permDamageMulti;
+
+            return {
+                // Laser
+                hasLaser, damage: Math.round(damage * finalDamageMulti), fireRate, pierce, pierceInfinite, spreadCount, spreadAngle,
+                // Missiles
+                hasRockets, rocketBurstCount, rocketDamage: Math.round(rocketDamage * finalDamageMulti),
+                rocketExplosionDamage: Math.round(rocketExplosionDamage * finalDamageMulti),
+                rocketExplosionRadius, rocketRicochetCount, rocketCritChance,
+                // Orbital
+                hasOrbit, orbCount, orbDamage: Math.round(orbDamage * finalDamageMulti),
+                orbSizeMulti, orbKnockback, orbSlow,
+                // Lightning
+                hasLightning, lightningBounces, lightningCadence,
+                lightningRange, lightningChainRange,
+                lightningDamage: Math.round(lightningDamage * finalDamageMulti),
+                // Plasma
+                hasAura, auraRadius, auraDamage: Math.round(auraDamage * finalDamageMulti),
+                auraTickRate, auraSlow,
+                // Drones
+                hasDrones, droneBaseCount, droneExtraChance, droneExtraCount,
+                droneDamage: Math.round(droneDamage * finalDamageMulti), droneRange,
+                droneSpeedMulti, droneLifetime, droneExplosionChance,
+                droneExplosionRadius, droneExplosionDamage: Math.round(droneExplosionDamage * finalDamageMulti),
+                // Evolutions
+                hasNovaBeam: activeEvolutions.includes('laser_cannon'),
+                hasArmageddon: activeEvolutions.includes('missile_launcher'),
+                hasSingularity: activeEvolutions.includes('orbital_shield'),
+                hasStormNexus: activeEvolutions.includes('lightning_ray'),
+                hasAnnihilation: activeEvolutions.includes('plasma_field'),
+                hasHiveMind: activeEvolutions.includes('alien_drone'),
+                // Final multiplier
+                damageMultiplier: finalDamageMulti
+            };
         }
 
         function hasEnemyInAimCone() {
@@ -2153,6 +2444,7 @@
             return false;
         }
 
+        // TODO: EVOLUTION - Nova Beam: every 5th shot, fire a massive cone beam
         function fireBullet() {
             const playerRad = player.angle * Math.PI / 180;
             const noseOffset = PLAYER_SIZE / 2 - PLAYER_PIVOT_OFFSET;
@@ -2206,8 +2498,9 @@
             }
             
             // Fire main weapon (LASER or BEAM if pierce unlocked)
-            if (stats.pierce) {
-                // Pierce/Beam shot - replaces normal laser
+            const hasPierce = stats.pierce > 0 || stats.pierceInfinite;
+            if (hasPierce) {
+                // Pierce/Beam shot
                 const bullet = pools.bullet.acquire();
                 bullet.x = noseX;
                 bullet.y = noseY;
@@ -2218,6 +2511,7 @@
                 bullet.type = 'beam';
                 bullet.color = COLORS.BULLET;
                 bullet.piercing = true;
+                bullet.pierceCount = stats.pierceInfinite ? 9999 : stats.pierce;
                 bullet.hitEnemies = new Set();
                 bullets.push(bullet);
             } else {
@@ -2230,22 +2524,21 @@
                 bullet.life = BULLET_LIFETIME;
                 bullet.damage = stats.damage;
                 bullet.type = 'laser';
-                bullet.color = SKILL_TREE['laser_cannon'].color;
+                bullet.color = WEAPONS['laser_cannon'].color;
                 bullet.piercing = false;
                 bullets.push(bullet);
             }
 
             // Fire SPREAD if unlocked (additional bullets in cone, excluding center)
             if (stats.spreadCount > 0) {
-                const spreadAngle = 8 + (stats.spreadCount - 3) * 3; // degrees (reduced angle)
-                const mainColor = SKILL_TREE['laser_cannon'].color;
+                const sAngle = stats.spreadAngle;
+                const mainColor = WEAPONS['laser_cannon'].color;
 
                 for (let i = 0; i < stats.spreadCount; i++) {
-                    // Skip the middle bullet (already fired by main weapon)
                     const middleIndex = (stats.spreadCount - 1) / 2;
                     if (i === middleIndex) continue;
 
-                    const offset = ((i / (stats.spreadCount - 1)) - 0.5) * 2 * (spreadAngle * Math.PI / 180);
+                    const offset = ((i / (stats.spreadCount - 1)) - 0.5) * 2 * (sAngle * Math.PI / 180);
                     const angle = targetRad + offset;
                     const spreadBullet = pools.bullet.acquire();
                     spreadBullet.x = noseX;
@@ -2256,10 +2549,9 @@
                     spreadBullet.damage = stats.damage;
                     spreadBullet.type = 'laser';
                     spreadBullet.color = mainColor;
-                    spreadBullet.piercing = stats.pierce;
-
-                    // Add hitEnemies array if piercing
-                    if (stats.pierce) {
+                    spreadBullet.piercing = hasPierce;
+                    if (hasPierce) {
+                        spreadBullet.pierceCount = stats.pierceInfinite ? 9999 : stats.pierce;
                         spreadBullet.hitEnemies = new Set();
                     }
 
@@ -2269,6 +2561,7 @@
         }
 
         // Fire rockets in burst (360º enemy detection)
+        // TODO: EVOLUTION - Armageddon Protocol: every 8s, fire a mega-missile with massive explosion
         function fireRocket(nearbyEnemies, stats) {
             // Find closest enemy to aim at
             let closestEnemy = null;
@@ -2347,7 +2640,8 @@
                     rocket.damage = stats.rocketDamage;
                     rocket.explosionDamage = stats.rocketExplosionDamage;
                     rocket.explosionRadius = stats.rocketExplosionRadius;
-                    rocket.hasRicochet = stats.rocketRicochet;
+                    rocket.ricochetCount = stats.rocketRicochetCount;
+                    rocket.critChance = stats.rocketCritChance;
                     rocket.type = 'rocket';
                     rocket.color = COLORS.PLAYER;
                     rocket.piercing = false;
@@ -2358,6 +2652,7 @@
             }
         }
 
+        // TODO: EVOLUTION - Storm Nexus: residual electric field between hit enemies
         function fireLightning(nearbyEnemies, stats) {
             // Find closest enemy to start the chain
             let closestEnemy = null;
@@ -2421,8 +2716,8 @@
 
                     // Visual feedback
                     spawnFloatingText(target.x, target.y - config.radius,
-                        stats.lightningDamage.toString(), SKILL_TREE['lightning_ray'].color);
-                    spawnRing(target.x, target.y, SKILL_TREE['lightning_ray'].color);
+                        stats.lightningDamage.toString(), WEAPONS['lightning_ray'].color);
+                    spawnRing(target.x, target.y, WEAPONS['lightning_ray'].color);
 
                     if (target.hp <= 0) {
                         enemiesToKill.push(target);
@@ -2482,7 +2777,7 @@
                     points: zigzagPoints,
                     life: 0.2,
                     maxLife: 0.2,
-                    color: SKILL_TREE['lightning_ray'].color
+                    color: WEAPONS['lightning_ray'].color
                 });
             }
         }
@@ -2491,22 +2786,27 @@
             const stats = getWeaponStats();
             if (!stats.hasDrones) return;
 
-            for (let i = 0; i < stats.droneCount; i++) {
+            // Calculate actual drone count (base + extra chance)
+            let count = stats.droneBaseCount;
+            if (Math.random() < stats.droneExtraChance) count += stats.droneExtraCount;
+
+            for (let i = 0; i < count; i++) {
                 const drone = pools.drone.acquire();
 
-                // Spawn at enemy death position with slight offset for multiple drones
-                const angleOffset = stats.droneCount > 1 ? (i / stats.droneCount) * Math.PI * 2 : 0;
+                const angleOffset = count > 1 ? (i / count) * Math.PI * 2 : 0;
                 drone.x = x + Math.cos(angleOffset) * 10;
                 drone.y = y + Math.sin(angleOffset) * 10;
 
-                // Initial velocity pointing outward briefly
                 drone.vx = Math.cos(angleOffset) * 100;
                 drone.vy = Math.sin(angleOffset) * 100;
                 drone.angle = angleOffset * 180 / Math.PI;
 
                 drone.life = stats.droneLifetime;
-                drone.damage = DRONE_BASE_DAMAGE;
-                drone.hasExplosion = stats.droneHasExplosion;
+                drone.damage = stats.droneDamage;
+                drone.explosionChance = stats.droneExplosionChance;
+                drone.explosionRadius = stats.droneExplosionRadius;
+                drone.explosionDamage = stats.droneExplosionDamage;
+                drone.speedMulti = stats.droneSpeedMulti;
                 drone.trail = [];
                 drone.color = COLORS.PLAYER;
 
@@ -2675,6 +2975,7 @@
         // ALIEN DRONES
         // ============================================================
 
+        // TODO: EVOLUTION - Hive Mind: orbital drones with mini-lasers
         function updateDrones() {
             const droneColor = COLORS.PLAYER;
 
@@ -2709,8 +3010,9 @@
                     const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
                     const newAngle = currentAngle + turn;
 
-                    d.vx = Math.cos(newAngle) * DRONE_SPEED;
-                    d.vy = Math.sin(newAngle) * DRONE_SPEED;
+                    const droneSpeed = DRONE_SPEED * (d.speedMulti || 1);
+                    d.vx = Math.cos(newAngle) * droneSpeed;
+                    d.vy = Math.sin(newAngle) * droneSpeed;
                     d.angle = newAngle * 180 / Math.PI;
                 }
 
@@ -2737,21 +3039,20 @@
                     }
                 }
                 if (hitEnemy) {
-                    // Explosion AoE damage
-                    if (d.hasExplosion) {
+                    // Explosion AoE damage (probability-based)
+                    if (d.explosionChance > 0 && Math.random() < d.explosionChance) {
                         spawnRing(d.x, d.y, droneColor, 30);
 
-                        // Find all enemies in explosion radius
                         for (const e of enemies) {
-                            if (e === hitEnemy) continue; // Already damaged
+                            if (e === hitEnemy) continue;
                             const edx = e.x - d.x;
                             const edy = e.y - d.y;
                             const eDist = Math.sqrt(edx * edx + edy * edy);
 
-                            if (eDist < DRONE_EXPLOSION_RADIUS) {
+                            if (eDist < d.explosionRadius) {
                                 const eConfig = ENEMY_TYPES[e.type];
-                                e.hp -= DRONE_EXPLOSION_DAMAGE;
-                                spawnFloatingText(e.x, e.y - eConfig.radius, DRONE_EXPLOSION_DAMAGE.toString(), droneColor);
+                                e.hp -= d.explosionDamage;
+                                spawnFloatingText(e.x, e.y - eConfig.radius, d.explosionDamage.toString(), droneColor);
 
                                 if (e.hp <= 0) {
                                     const idx = enemies.indexOf(e);
@@ -2760,7 +3061,6 @@
                             }
                         }
                     } else {
-                        // Small impact effect
                         spawnRing(d.x, d.y, droneColor);
                     }
 
@@ -2805,7 +3105,8 @@
 
             if (spawnTimer <= 0 && enemies.length < maxEnemies) {
                 spawnEnemy();
-                spawnTimer = spawnInterval + Math.random() * (spawnInterval * 0.5);
+                const spawnRateMult = getDiffMultipliers().spawnRate;
+                spawnTimer = (spawnInterval + Math.random() * (spawnInterval * 0.5)) / spawnRateMult;
             }
 
             // Wave system - starts aggressively from level 2
@@ -2861,9 +3162,10 @@
             const baseCount = 15 + Math.floor(playerLevel * 4);
             const count = Math.min(baseCount, 60); // Cap at 60 per wave
 
-            // Scale enemy HP based on player level (+25% per level)
+            // Scale enemy HP based on player level (+25% per level) and difficulty
             const config = ENEMY_TYPES['SCOUT'];
-            const hpMultiplier = 1 + (playerLevel - 1) * 0.25;
+            const waveDiffMult = getDiffMultipliers();
+            const hpMultiplier = (1 + (playerLevel - 1) * 0.25) * waveDiffMult.enemyHP;
             const scaledHp = Math.ceil(config.hp * hpMultiplier);
 
             const spawnPositions = [];
@@ -3076,8 +3378,8 @@
                 const enemy = pools.enemy.acquire();
                 enemy.x = pos.x;
                 enemy.y = pos.y;
-                enemy.vx = Math.cos(angleToPlayer) * config.speed * 0.5;
-                enemy.vy = Math.sin(angleToPlayer) * config.speed * 0.5;
+                enemy.vx = Math.cos(angleToPlayer) * config.speed * 0.5 * waveDiffMult.enemySpeed;
+                enemy.vy = Math.sin(angleToPlayer) * config.speed * 0.5 * waveDiffMult.enemySpeed;
                 enemy.angle = angleToPlayer * 180 / Math.PI;
                 enemy.type = 'SCOUT';
                 enemy.hp = scaledHp;
@@ -3131,15 +3433,17 @@
             const config = ENEMY_TYPES[type];
             const angleToPlayer = Math.atan2(player.y - y, player.x - x);
             
-            // Scale enemy HP based on player level (+40% per level)
-            const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
+            // Scale enemy HP based on player level (+40% per level) and difficulty
+            const diffMult = getDiffMultipliers();
+            const hpMultiplier = (1 + (playerLevel - 1) * 0.40) * diffMult.enemyHP;
             const scaledHp = Math.ceil(config.hp * hpMultiplier);
+            const speedMult = diffMult.enemySpeed;
 
             const enemy = pools.enemy.acquire();
             enemy.x = x;
             enemy.y = y;
-            enemy.vx = Math.cos(angleToPlayer) * config.speed * 0.5;
-            enemy.vy = Math.sin(angleToPlayer) * config.speed * 0.5;
+            enemy.vx = Math.cos(angleToPlayer) * config.speed * 0.5 * speedMult;
+            enemy.vy = Math.sin(angleToPlayer) * config.speed * 0.5 * speedMult;
             enemy.angle = angleToPlayer * 180 / Math.PI;
             enemy.type = type;
             enemy.hp = scaledHp;
@@ -3157,8 +3461,7 @@
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 const config = ENEMY_TYPES[e.type];
-                // Speed scaling removed - constant speed
-                const speed = config.speed;
+                const speed = config.speed * getDiffMultipliers().enemySpeed;
 
                 // Seek player with limited turn rate
                 const dx = player.x - e.x;
@@ -3298,8 +3601,8 @@
             // Increment kill counter
             totalKills++;
 
-            // Add score
-            score += config.points;
+            // Add score (scaled by difficulty)
+            score += config.points * getDiffMultipliers().score;
 
             // Spawn explosion ring
             spawnRing(enemy.x, enemy.y, config.color, 40);
@@ -3364,6 +3667,14 @@
 
             // Spawn alien drones if skill unlocked
             spawnAlienDrone(enemy.x, enemy.y);
+
+            // Drop crystal (tanks always, 5% others)
+            if (enemy.type === 'TANK' || Math.random() < 0.05) {
+                crystalPickups.push({
+                    x: enemy.x, y: enemy.y,
+                    size: 8, lifetime: 15, magnetRange: 150
+                });
+            }
 
             pools.enemy.release(enemy);
             fastRemove(enemies, index);
@@ -3442,15 +3753,15 @@
                 
                 if (dist < PLAYER_COLLISION_RADIUS + 15) {
                     if (p.type === 'health') {
-                        if (player.hp < PLAYER_MAX_HP) {
+                        if (player.hp < playerMaxHP) {
                             player.hp++;
                             spawnFloatingText(p.x, p.y, '+1 Hull', COLORS.POWERUP);
                         } else {
-                            score += 50;
+                            score += 50 * getDiffMultipliers().score;
                             spawnFloatingText(p.x, p.y, '+50', COLORS.GOLD);
                         }
                     } else {
-                        score += 20;
+                        score += 20 * getDiffMultipliers().score;
                         spawnFloatingText(p.x, p.y, '+20', COLORS.GOLD);
                     }
 
@@ -3477,11 +3788,71 @@
         }
 
         // ============================================================
+        // CRYSTAL PICKUPS
+        // ============================================================
+
+        function updateCrystalPickups() {
+            if (!player) return;
+            for (let i = crystalPickups.length - 1; i >= 0; i--) {
+                const c = crystalPickups[i];
+                c.lifetime -= deltaTime;
+                if (c.lifetime <= 0) {
+                    crystalPickups.splice(i, 1);
+                    continue;
+                }
+
+                const dx = player.x - c.x;
+                const dy = player.y - c.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Magnetism
+                if (dist < c.magnetRange && dist > 0) {
+                    const speed = 300 * (1 - dist / c.magnetRange);
+                    c.x += (dx / dist) * speed * deltaTime;
+                    c.y += (dy / dist) * speed * deltaTime;
+                }
+
+                // Collect
+                if (dist < 25) {
+                    crystalsThisRun++;
+                    spawnFloatingText(c.x, c.y, '+1', '#E0F0FF');
+                    crystalPickups.splice(i, 1);
+                }
+            }
+        }
+
+        function renderCrystalPickups() {
+            for (const c of crystalPickups) {
+                ctx.save();
+                ctx.translate(c.x, c.y);
+                ctx.globalAlpha = Math.min(1, c.lifetime * 2);
+
+                // Diamond shape
+                ctx.fillStyle = '#E0F0FF';
+                ctx.beginPath();
+                ctx.moveTo(0, -6);
+                ctx.lineTo(5, 0);
+                ctx.lineTo(0, 6);
+                ctx.lineTo(-5, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // Glow outline
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha *= 0.5;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        // ============================================================
         // XP & LEVEL SYSTEM
         // ============================================================
 
         function collectXP(amount) {
-            playerXP += amount;
+            playerXP += Math.round(amount * permXPMulti * getDiffMultipliers().xp);
 
             let levelsGained = 0;
             while (playerXP >= xpToNextLevel) {
@@ -3515,44 +3886,94 @@
             }
         }
         
-        // Check if a skill can be unlocked
-        function canUnlockSkill(skillId) {
-            if (unlockedSkills.includes(skillId)) return false;
-            if (skillPoints < SKILL_TREE[skillId].cost) return false;
+        // Get all available upgrade options for the level-up panel
+        function getAvailableUpgrades() {
+            const available = [];
+            const prog = cachedProgression || loadProgression();
 
-            const skill = SKILL_TREE[skillId];
-            for (const prereq of skill.prereqs) {
-                if (!unlockedSkills.includes(prereq)) return false;
+            for (const [weaponId, weapon] of Object.entries(WEAPONS)) {
+                // Weapon must be unlocked in shop
+                if (!prog.unlockedWeapons[weaponId]) continue;
+
+                // Option: Activate the weapon (if not yet active this run)
+                if (!activeWeapons.includes(weaponId)) {
+                    available.push({
+                        type: 'weapon_activation',
+                        id: weaponId,
+                        name: weapon.name,
+                        description: weapon.description,
+                        color: weapon.color,
+                        icon: weapon.icon
+                    });
+                    continue; // Don't offer upgrades for inactive weapons
+                }
+
+                // Option: Level up a branch
+                for (const [branchId, branch] of Object.entries(weapon.branches)) {
+                    const currentLevel = upgradeLevels[branchId] || 0;
+                    if (currentLevel < 3) {
+                        const nextLevel = branch.levels[currentLevel];
+                        available.push({
+                            type: 'upgrade',
+                            id: branchId,
+                            weaponId: weaponId,
+                            name: branch.name + ' ' + ['I', 'II', 'III'][currentLevel],
+                            description: nextLevel.description,
+                            color: weapon.color,
+                            icon: branch.icon,
+                            level: currentLevel + 1
+                        });
+                    }
+                }
+
+                // Option: Evolution (all 3 branches at level III)
+                if (!activeEvolutions.includes(weaponId)) {
+                    const branchIds = Object.keys(weapon.branches);
+                    const allMaxed = branchIds.every(bid => (upgradeLevels[bid] || 0) >= 3);
+                    if (allMaxed) {
+                        available.push({
+                            type: 'evolution',
+                            id: weaponId + '_evolution',
+                            weaponId: weaponId,
+                            name: weapon.evolution.name,
+                            description: weapon.evolution.description,
+                            color: weapon.color,
+                            icon: weapon.evolution.icon,
+                            isEvolution: true
+                        });
+                    }
+                }
+            }
+
+            // If no upgrades left, offer bonuses
+            if (available.length === 0) {
+                available.push(
+                    { type: 'bonus', id: 'bonus_crystals', name: '+50 Crystals', description: 'Bonus persistent currency', color: '#E0F0FF', icon: 'crystal' },
+                    { type: 'bonus', id: 'bonus_heal', name: 'Full Heal', description: 'Restore all HP', color: '#39FF14', icon: 'heal' },
+                    { type: 'bonus', id: 'bonus_damage', name: 'Damage x1.5', description: 'Increased damage for 30 seconds', color: '#FF6B5B', icon: 'damage' }
+                );
+            }
+
+            return available;
+        }
+
+        // Check if all upgrades have been obtained
+        function allSkillsUnlocked() {
+            const prog = cachedProgression || loadProgression();
+            for (const [weaponId, weapon] of Object.entries(WEAPONS)) {
+                if (!prog.unlockedWeapons[weaponId]) continue;
+                if (!activeWeapons.includes(weaponId)) return false;
+                for (const branchId of Object.keys(weapon.branches)) {
+                    if ((upgradeLevels[branchId] || 0) < 3) return false;
+                }
+                if (!activeEvolutions.includes(weaponId)) return false;
             }
             return true;
         }
-        
-        // Get list of available (unlockable) skills
-        function getAvailableSkills() {
-            const available = [];
-            for (const skillId of Object.keys(SKILL_TREE)) {
-                if (canUnlockSkill(skillId)) {
-                    available.push(skillId);
-                }
-            }
-            return available;
-        }
-        
-        // Check if all skills have been unlocked
-        function allSkillsUnlocked() {
-            // Count total unlockable skills (excluding the base 'arsenal' and 'laser_cannon' skills)
-            const totalSkills = Object.keys(SKILL_TREE).filter(skillId => 
-                skillId !== 'arsenal' && skillId !== 'laser_cannon'
-            ).length;
-            const unlockedCount = unlockedSkills.filter(skillId => 
-                skillId !== 'arsenal' && skillId !== 'laser_cannon'
-            ).length;
-            return unlockedCount >= totalSkills;
-        }
-        
-        // Generate 3 random upgrade options from available skills
+
+        // Generate 3 random upgrade options
         function generateUpgradeOptions() {
-            const available = getAvailableSkills();
+            const available = getAvailableUpgrades();
             if (available.length <= 3) return [...available];
             const shuffled = [...available].sort(() => Math.random() - 0.5);
             return shuffled.slice(0, 3);
@@ -3794,6 +4215,29 @@
                 }
                 ctx.closePath();
                 ctx.stroke();
+            } else if (icon === 'crystal') {
+                // Diamond shape for crystal bonus
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 8);
+                ctx.lineTo(cx + 6, cy);
+                ctx.lineTo(cx, cy + 8);
+                ctx.lineTo(cx - 6, cy);
+                ctx.closePath();
+                ctx.fill();
+            } else if (icon === 'heal') {
+                // Plus/cross for heal
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 7);
+                ctx.lineTo(cx, cy + 7);
+                ctx.moveTo(cx - 7, cy);
+                ctx.lineTo(cx + 7, cy);
+                ctx.stroke();
+            } else {
+                // Fallback: simple circle
+                ctx.beginPath();
+                ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                ctx.stroke();
             }
         }
 
@@ -3818,30 +4262,47 @@
             const cardsContainer = document.getElementById('upgradeCards');
             cardsContainer.innerHTML = '';
 
-            upgradeOptions.forEach((skillId, index) => {
-                const skill = SKILL_TREE[skillId];
+            upgradeOptions.forEach((option, index) => {
                 const card = document.createElement('div');
                 card.className = 'upgrade-card';
-                card.style.setProperty('--skill-color', skill.color);
-                card.style.setProperty('--skill-color-glow', skill.color + '40');
+                const color = option.color;
+                card.style.setProperty('--skill-color', color);
+                card.style.setProperty('--skill-color-glow', color + '40');
+
+                // Evolution cards get special gold border
+                if (option.isEvolution) {
+                    card.style.borderColor = '#FFD700';
+                    card.style.setProperty('--skill-color', '#FFD700');
+                    card.style.setProperty('--skill-color-glow', '#FFD70060');
+                }
 
                 const isMobile = window.matchMedia('(pointer: coarse)').matches;
                 const keyHint = isMobile ? '' : `<div class="upgrade-key">${index + 1}</div>`;
 
+                // Level badge for upgrades
+                let levelBadge = '';
+                if (option.type === 'upgrade' && option.level) {
+                    levelBadge = `<span style="color:${color};font-size:11px;opacity:0.7;margin-left:6px;">LVL ${option.level}/3</span>`;
+                } else if (option.type === 'weapon_activation') {
+                    levelBadge = `<span style="color:#FFD700;font-size:11px;margin-left:6px;">NEW</span>`;
+                } else if (option.isEvolution) {
+                    levelBadge = `<span style="color:#FFD700;font-size:11px;margin-left:6px;">EVOLUTION</span>`;
+                }
+
                 card.innerHTML = `
-                    <div class="upgrade-icon" style="background: ${skill.color}15; border: 2px solid ${skill.color};">
-                        <canvas class="skill-icon-canvas" width="40" height="40" data-icon="${skill.icon}" data-color="${skill.color}"></canvas>
+                    <div class="upgrade-icon" style="background: ${color}15; border: 2px solid ${option.isEvolution ? '#FFD700' : color};">
+                        <canvas class="skill-icon-canvas" width="40" height="40" data-icon="${option.icon}" data-color="${color}"></canvas>
                     </div>
                     <div class="upgrade-info">
-                        <div class="upgrade-name" style="color: ${skill.color};">${skill.name}</div>
-                        <div class="upgrade-desc">${skill.description}</div>
+                        <div class="upgrade-name" style="color: ${option.isEvolution ? '#FFD700' : color};">${option.name}${levelBadge}</div>
+                        <div class="upgrade-desc">${option.description}</div>
                     </div>
                     ${keyHint}
                 `;
 
                 card.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    selectUpgrade(skillId);
+                    selectUpgrade(option);
                 });
 
                 cardsContainer.appendChild(card);
@@ -3858,15 +4319,28 @@
         }
 
         // Select an upgrade option
-        function selectUpgrade(skillId) {
+        function selectUpgrade(option) {
             if (!upgradeSelectionActive) return;
-            if (!canUnlockSkill(skillId)) return;
 
-            const skill = SKILL_TREE[skillId];
-            skillPoints -= skill.cost;
-            unlockedSkills.push(skillId);
+            if (option.type === 'weapon_activation') {
+                activeWeapons.push(option.id);
+            } else if (option.type === 'upgrade') {
+                upgradeLevels[option.id] = (upgradeLevels[option.id] || 0) + 1;
+            } else if (option.type === 'evolution') {
+                activeEvolutions.push(option.weaponId);
+            } else if (option.type === 'bonus') {
+                if (option.id === 'bonus_crystals') {
+                    crystalsThisRun += 50;
+                } else if (option.id === 'bonus_heal') {
+                    player.hp = playerMaxHP;
+                } else if (option.id === 'bonus_damage') {
+                    tempDamageMultiplier = 1.5;
+                    tempDamageTimer = 30;
+                }
+            }
 
-            spawnFloatingText(player.x, player.y - 40, skill.name + '!', skill.color);
+            skillPoints--;
+            spawnFloatingText(player.x, player.y - 40, option.name + '!', option.color || '#FFFFFF');
 
             // Celebration particles
             for (let i = 0; i < 15; i++) {
@@ -3877,7 +4351,7 @@
                     vy: Math.sin(angle) * (80 + Math.random() * 60),
                     life: 0.5, maxLife: 0.5,
                     size: 4 + Math.random() * 4,
-                    color: skill.color,
+                    color: option.color || '#FFFFFF',
                     type: 'levelup'
                 });
             }
@@ -3909,11 +4383,11 @@
         
         function updateWeapons() {
             // Orbital shields
-            if (unlockedSkills.includes('orbital_shield')) {
+            if (activeWeapons.includes('orbital_shield')) {
                 updateOrbitals();
             }
             // Plasma Field
-            if (unlockedSkills.includes('plasma_field')) {
+            if (activeWeapons.includes('plasma_field')) {
                 updateAura();
             }
             // Lightning effects
@@ -3931,19 +4405,17 @@
             }
         }
 
+        // TODO: EVOLUTION - Singularity Core: continuous gravitational field pulling enemies
         function updateOrbitals() {
-            let orbitalCount = 3; // Base count from orbital_shield
-            if (unlockedSkills.includes('regen_capacitors')) orbitalCount += 2; // Orbital Expansion adds 2 (total 5)
-            const orbitalRadius = ORBITAL_RADIUS; // Radio centralizado
-            let orbitalSpeed = ORBITAL_SPEED; // Velocidad centralizada
+            const stats = getWeaponStats();
+            let orbitalCount = stats.orbCount;
+            const orbitalRadius = ORBITAL_RADIUS;
+            let orbitalSpeed = ORBITAL_SPEED;
 
             // Handle orbital count changes with equidistant positioning
             if (orbitals.length !== orbitalCount) {
-                // Preserve the first orbital's angle to maintain rotation continuity
                 const baseAngle = orbitals.length > 0 ? orbitals[0].angle : 0;
                 const angleIncrement = Math.PI * 2 / orbitalCount;
-
-                // Recalculate all orbitals with new equidistant positions
                 orbitals = [];
                 for (let i = 0; i < orbitalCount; i++) {
                     orbitals.push({
@@ -3953,19 +4425,19 @@
                 }
             }
 
+            const orbitalSizeForCollision = ORBITAL_SIZE * stats.orbSizeMulti;
+
             // Update orbital positions and check collisions
             for (let i = 0; i < orbitals.length; i++) {
                 const orb = orbitals[i];
                 orb.angle += orbitalSpeed * deltaTime;
-                if (!orb.hitEnemies) orb.hitEnemies = {}; // Track cooldown per enemy
+                if (!orb.hitEnemies) orb.hitEnemies = {};
 
                 const orbX = player.x + Math.cos(orb.angle) * orbitalRadius;
                 const orbY = player.y + Math.sin(orb.angle) * orbitalRadius;
 
-                // Check collision with nearby enemies (using spatial grid)
-                const nearbyEnemies = spatialGrid.queryRadius(orbX, orbY, 50);
+                const nearbyEnemies = spatialGrid.queryRadius(orbX, orbY, orbitalSizeForCollision + 30);
                 for (const e of nearbyEnemies) {
-                    // Per-enemy cooldown check
                     if (orb.hitEnemies[e.id] && orb.hitEnemies[e.id] > 0) {
                         orb.hitEnemies[e.id] -= deltaTime;
                         continue;
@@ -3975,29 +4447,33 @@
                     const dx = orbX - e.x;
                     const dy = orbY - e.y;
                     const distSq = dx * dx + dy * dy;
-                    const collisionDist = config.radius + ORBITAL_SIZE;
+                    const collisionDist = config.radius + orbitalSizeForCollision;
 
                     if (distSq < collisionDist * collisionDist) {
-                        let orbitalDamage = 16; // Base damage
-                        if (unlockedSkills.includes('energy_absorption')) orbitalDamage += 16; // Energy Absorption boost
-                        e.hp -= orbitalDamage;
-                        orb.hitEnemies[e.id] = 0.15; // Cooldown per enemy (can hit same enemy again after 0.15s)
+                        e.hp -= stats.orbDamage;
+                        orb.hitEnemies[e.id] = 0.15;
 
-                        // Show damage floating text
-                        spawnFloatingText(e.x, e.y - config.radius, orbitalDamage.toString(), SKILL_TREE['orbital_shield'].color);
+                        spawnFloatingText(e.x, e.y - config.radius, stats.orbDamage.toString(), WEAPONS['orbital_shield'].color);
                         spawnRing(e.x, e.y, config.color);
+
+                        // Knockback
+                        if (stats.orbKnockback > 0) {
+                            const dist = Math.sqrt(distSq) || 1;
+                            const kbForce = stats.orbKnockback * 80;
+                            e.vx += (dx / dist) * kbForce;
+                            e.vy += (dy / dist) * kbForce;
+                        }
 
                         if (e.hp <= 0) {
                             const enemyIndex = enemies.indexOf(e);
                             if (enemyIndex !== -1) killEnemy(e, enemyIndex);
                         }
-                        // No break - can hit multiple enemies per frame
                     }
                 }
-
             }
         }
 
+        // TODO: EVOLUTION - Annihilation Sphere: chain mini-explosions on kills within aura
         function updateAura() {
             const stats = getWeaponStats();
             if (!stats.hasAura || !player) return;
@@ -4027,8 +4503,8 @@
                     e.hp -= stats.auraDamage;
 
                     // Visual feedback
-                    spawnFloatingText(e.x, e.y - config.radius, stats.auraDamage.toString(), SKILL_TREE['plasma_field'].color);
-                    spawnRing(e.x, e.y, SKILL_TREE['plasma_field'].color);
+                    spawnFloatingText(e.x, e.y - config.radius, stats.auraDamage.toString(), WEAPONS['plasma_field'].color);
+                    spawnRing(e.x, e.y, WEAPONS['plasma_field'].color);
 
                     // Check for death
                     if (e.hp <= 0) {
@@ -4080,11 +4556,11 @@
             }
 
             // Ricochet: spawn mini rockets
-            if (b.hasRicochet && b.type === 'rocket') {
+            if (b.ricochetCount > 0 && b.type === 'rocket') {
                 const ricochetTargets = spatialGrid.queryRadius(explosionX, explosionY, 400);
                 let targetsFound = 0;
                 for (const target of ricochetTargets) {
-                    if (targetsFound >= 2) break;
+                    if (targetsFound >= b.ricochetCount) break;
                     if (target.hp <= 0) continue;
 
                     const angle = Math.atan2(target.y - explosionY, target.x - explosionX);
@@ -4099,7 +4575,7 @@
                     miniRocket.damage = Math.ceil(b.damage * 0.5);
                     miniRocket.explosionDamage = 0;
                     miniRocket.explosionRadius = 0;
-                    miniRocket.hasRicochet = false;
+                    miniRocket.ricochetCount = 0;
                     miniRocket.type = 'mini_rocket';
                     miniRocket.color = COLORS.PLAYER;
                     miniRocket.piercing = false;
@@ -4183,11 +4659,18 @@
                             continue;
                         }
 
-                        const damage = b.damage || 1;
+                        let damage = b.damage || 1;
+                        // Crit chance (rockets)
+                        let isCrit = false;
+                        if (b.critChance && Math.random() < b.critChance) {
+                            damage = Math.round(damage * 2);
+                            isCrit = true;
+                        }
                         e.hp -= damage;
 
                         // Show damage floating text
-                        spawnFloatingText(e.x, e.y - config.radius, damage.toString(), b.color || COLORS.BULLET);
+                        const dmgText = isCrit ? damage + '!' : damage.toString();
+                        spawnFloatingText(e.x, e.y - config.radius, dmgText, isCrit ? '#FFD700' : (b.color || COLORS.BULLET));
 
                         // Hit effect
                         spawnRing(b.x, b.y, config.color);
@@ -4203,6 +4686,11 @@
                         if (b.piercing) {
                             if (!b.hitEnemies) b.hitEnemies = new Set();
                             b.hitEnemies.add(e);
+                            // Check pierce count limit
+                            if (b.pierceCount && b.hitEnemies.size >= b.pierceCount) {
+                                bulletDestroyed = true;
+                                break;
+                            }
                         } else {
                             bulletDestroyed = true;
                             break;
@@ -4313,7 +4801,7 @@
         }
         
         function triggerNearMiss() {
-            score += NEAR_MISS_POINTS;
+            score += NEAR_MISS_POINTS * getDiffMultipliers().score;
 
             spawnFloatingText(player.x + (Math.random() - 0.5) * 30, player.y - 30, '+' + NEAR_MISS_POINTS, COLORS.PLAYER);
             triggerSlowmo(SLOWMO_DURATION);
@@ -4346,6 +4834,51 @@
             } catch (e) {
                 console.warn('Could not save high score to localStorage:', e);
             }
+
+            // Crystal breakdown
+            const killBonus = Math.floor(totalKills / 50);
+            const scoreBonus = Math.floor(score / 1000);
+            const baseCrystals = crystalsThisRun + killBonus + scoreBonus;
+            const totalCrystals = Math.round(baseCrystals * permCrystalMulti * getDiffMultipliers().crystals);
+            lastRunCrystals = {
+                picked: crystalsThisRun,
+                killBonus: killBonus,
+                scoreBonus: scoreBonus,
+                crystalMulti: permCrystalMulti,
+                total: totalCrystals
+            };
+
+            // Save crystals, stats, and difficulty high scores to progression
+            let newDifficultyUnlocked = false;
+            try {
+                const prog = loadProgression();
+                prog.crystals = (prog.crystals || 0) + totalCrystals;
+                prog.stats.totalKills = (prog.stats.totalKills || 0) + totalKills;
+                prog.stats.totalCrystalsEarned = (prog.stats.totalCrystalsEarned || 0) + totalCrystals;
+
+                // Update per-difficulty high score
+                const diffKey = ['normal', 'hard', 'extreme', 'nightmare'][currentDifficulty] || 'normal';
+                if (!prog.highScores) prog.highScores = { normal: 0, hard: 0, extreme: 0, nightmare: 0 };
+                if (Math.floor(score) > (prog.highScores[diffKey] || 0)) {
+                    prog.highScores[diffKey] = Math.floor(score);
+                }
+
+                // Check if new difficulty unlocked
+                const maxScore = Math.max(prog.highScores.normal || 0, prog.highScores.hard || 0, prog.highScores.extreme || 0, prog.highScores.nightmare || 0);
+                for (let d = 1; d < DIFFICULTY_THRESHOLDS.length; d++) {
+                    if (maxScore >= DIFFICULTY_THRESHOLDS[d]) {
+                        const wasUnlocked = getUnlockedDifficulties(cachedProgression || createDefaultProgression()).includes(d);
+                        if (!wasUnlocked) newDifficultyUnlocked = true;
+                    }
+                }
+
+                saveProgression(prog);
+            } catch (e) {
+                console.warn('Could not save crystals:', e);
+            }
+
+            // Store for game over display
+            lastRunCrystals.newDifficultyUnlocked = newDifficultyUnlocked;
 
             // Death explosion
             spawnDeathExplosion();
@@ -4568,6 +5101,7 @@
             // Game entities (all rendered in world coordinates)
             if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver') {
                 renderPickups();
+                renderCrystalPickups();
                 renderEnemies();
                 renderBullets();
                 renderDrones();
@@ -4794,10 +5328,10 @@
         }
 
         function renderAura() {
-            if (!unlockedSkills.includes('plasma_field') || !player) return;
+            if (!activeWeapons.includes('plasma_field') || !player) return;
 
             const stats = getWeaponStats();
-            const auraColor = SKILL_TREE['plasma_field'].color;
+            const auraColor = WEAPONS['plasma_field'].color;
             const pulseOffset = Math.sin(auraState.pulseAnimation) * 5;
             const currentRadius = stats.auraRadius + pulseOffset;
 
@@ -4830,11 +5364,11 @@
         }
 
         function renderOrbitals() {
-            if (!unlockedSkills.includes('orbital_shield') || !player) return;
+            if (!activeWeapons.includes('orbital_shield') || !player) return;
 
+            const stats = getWeaponStats();
             const orbitalRadius = ORBITAL_RADIUS;
-            let orbitalSize = ORBITAL_SIZE; // Base size
-            if (unlockedSkills.includes('shockwave_emitter')) orbitalSize *= 1.5; // +50% size boost
+            let orbitalSize = ORBITAL_SIZE * stats.orbSizeMulti;
 
             // Outline style for orbitals (no glow for performance)
             ctx.strokeStyle = COLORS.PLAYER;
@@ -5483,6 +6017,10 @@
             } else if (gameState === 'gameOver') {
                 renderHUD();
                 renderGameOver();
+            } else if (gameState === 'tutorial') {
+                renderTutorial();
+            } else if (gameState === 'shop') {
+                renderShop();
             }
         }
         
@@ -5518,9 +6056,51 @@
             ctx.globalAlpha = pulse;
             ctx.fillText('Press ENTER or TAP to Start', CANVAS_WIDTH / 2, 280);
             ctx.globalAlpha = 1;
-            
+
+            // Difficulty selector
+            const prog = loadProgression();
+            const unlocked = getUnlockedDifficulties(prog);
+            ctx.font = '14px "Segoe UI", sans-serif';
+            const diffTotalW = unlocked.length * 100 + (unlocked.length - 1) * 10;
+            const diffStartX = (CANVAS_WIDTH - diffTotalW) / 2;
+            for (let i = 0; i < unlocked.length; i++) {
+                const d = unlocked[i];
+                const dx = diffStartX + i * 110;
+                const isSelected = d === currentDifficulty;
+                // Button background
+                ctx.fillStyle = isSelected ? DIFFICULTY_COLORS[d] : 'rgba(255,255,255,0.1)';
+                ctx.beginPath();
+                ctx.roundRect(dx, 300, 100, 28, 4);
+                ctx.fill();
+                if (isSelected) {
+                    ctx.strokeStyle = '#FFF';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+                // Text
+                ctx.textAlign = 'center';
+                ctx.fillStyle = isSelected ? '#000' : DIFFICULTY_COLORS[d];
+                ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                ctx.fillText(DIFFICULTY_NAMES[d], dx + 50, 318);
+            }
+
+            // Difficulty switch hint
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.globalAlpha = 0.6;
+            ctx.textAlign = 'center';
+            ctx.fillText('[D] Change difficulty', CANVAS_WIDTH / 2, 345);
+            ctx.globalAlpha = 1;
+
+            // Shop hint + crystal balance
+            ctx.font = '18px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#E0F0FF';
+            ctx.globalAlpha = 0.8;
+            ctx.fillText('[S] SHOP  \u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, 375);
+            ctx.globalAlpha = 1;
+
             // Controls
-            renderControlsHelp(340);
+            renderControlsHelp(410);
 
             // Arsenal gallery
             renderArsenalGallery();
@@ -5651,6 +6231,14 @@
             if (!player) return;
 
             const HUD_PADDING = 16;
+
+            // Difficulty badge (top-center, only if not Normal)
+            if (currentDifficulty > 0) {
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 11px "Segoe UI", sans-serif';
+                ctx.fillStyle = DIFFICULTY_COLORS[currentDifficulty];
+                ctx.fillText(DIFFICULTY_NAMES[currentDifficulty], CANVAS_WIDTH / 2, 18);
+            }
 
             // ═══════════════════════════════════════
             // KILLS & SCORE (top-left)
@@ -5783,9 +6371,9 @@
             ctx.textAlign = 'right';
             const shipScale = 0.4;
             const shipSpacing = 26;
-            const hullStartX = vitalsX - (PLAYER_MAX_HP * shipSpacing) + 10;
+            const hullStartX = vitalsX - (playerMaxHP * shipSpacing) + 10;
 
-            for (let i = 0; i < PLAYER_MAX_HP; i++) {
+            for (let i = 0; i < playerMaxHP; i++) {
                 const shipX = hullStartX + i * shipSpacing;
                 const shipY = 28;
                 const isActive = i < player.hp;
@@ -5955,14 +6543,14 @@
             ];
 
             // Only show active (unlocked) weapons
-            const activeWeapons = allWeapons.filter(w => unlockedSkills.includes(w.id));
+            const hudWeapons = allWeapons.filter(w => activeWeapons.includes(w.id));
             const weaponIconSize = 12;
             const weaponSpacing = 32;
-            const weaponsStartX = vitalsX - (activeWeapons.length * weaponSpacing) + weaponSpacing / 2;
+            const weaponsStartX = vitalsX - (hudWeapons.length * weaponSpacing) + weaponSpacing / 2;
             const weaponsY = 85;
 
-            for (let i = 0; i < activeWeapons.length; i++) {
-                const weapon = activeWeapons[i];
+            for (let i = 0; i < hudWeapons.length; i++) {
+                const weapon = hudWeapons[i];
                 const iconX = weaponsStartX + i * weaponSpacing;
                 const iconY = weaponsY;
 
@@ -6047,25 +6635,30 @@
                 }
                 ctx.restore();
 
-                // Upgrade dots below icon
-                const upgrades = WEAPON_UPGRADES[weapon.id] || [];
-                const dotSpacing = 6;
-                const dotY = iconY + weaponIconSize + 7;
-                const dotsStartX = iconX - ((upgrades.length - 1) * dotSpacing) / 2;
+                // Upgrade dots below icon (3 branches x 3 levels = 9 dots, grouped)
+                const weaponDef = WEAPONS[weapon.id];
+                if (weaponDef) {
+                    const branchIds = Object.keys(weaponDef.branches);
+                    const totalDots = branchIds.length * 3;
+                    const dotSpacing = 5;
+                    const dotY = iconY + weaponIconSize + 7;
+                    const dotsStartX = iconX - ((totalDots - 1) * dotSpacing) / 2;
+                    let dotIdx = 0;
 
-                for (let j = 0; j < upgrades.length; j++) {
-                    const dotX = dotsStartX + j * dotSpacing;
-                    const isUpgraded = unlockedSkills.includes(upgrades[j]);
-
-                    ctx.beginPath();
-                    ctx.arc(dotX, dotY, 2.5, 0, Math.PI * 2);
-
-                    if (isUpgraded) {
-                        ctx.fillStyle = weapon.color;
-                        ctx.fill();
-                    } else {
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                        ctx.fill();
+                    for (const branchId of branchIds) {
+                        const lvl = upgradeLevels[branchId] || 0;
+                        for (let lv = 0; lv < 3; lv++) {
+                            const dotX = dotsStartX + dotIdx * dotSpacing;
+                            ctx.beginPath();
+                            ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+                            if (lv < lvl) {
+                                ctx.fillStyle = weapon.color;
+                            } else {
+                                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                            }
+                            ctx.fill();
+                            dotIdx++;
+                        }
                     }
                 }
             }
@@ -6080,7 +6673,327 @@
                 ctx.fillText('SKILL POINTS: ' + skillPoints + ' (Press TAB)', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 55);
             }
 
+            // Crystal counter (top-right area)
+            if (crystalsThisRun > 0) {
+                ctx.fillStyle = '#E0F0FF';
+                ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText('\u25C6 ' + crystalsThisRun, CANVAS_WIDTH - 15, 60);
+            }
+
         }
+        // ============================================================
+        // TUTORIAL SCREEN
+        // ============================================================
+        function renderTutorial() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.textAlign = 'center';
+
+            // Title
+            ctx.font = 'bold 42px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_PRIMARY;
+            ctx.fillText('CHOOSE YOUR SECOND WEAPON', CANVAS_WIDTH / 2, 200);
+
+            ctx.font = '18px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.fillText('You already have the Laser Cannon. Pick a free companion weapon to start with.', CANVAS_WIDTH / 2, 240);
+
+            // Two weapon cards
+            const weapons = [
+                { id: 'orbital_shield', key: '1' },
+                { id: 'missile_launcher', key: '2' }
+            ];
+
+            const cardW = 300;
+            const cardH = 320;
+            const gap = 60;
+            const totalW = weapons.length * cardW + (weapons.length - 1) * gap;
+            const startX = (CANVAS_WIDTH - totalW) / 2;
+            const cardY = 290;
+
+            for (let i = 0; i < weapons.length; i++) {
+                const w = WEAPONS[weapons[i].id];
+                const x = startX + i * (cardW + gap);
+                const cx = x + cardW / 2;
+
+                // Card background
+                ctx.fillStyle = 'rgba(20, 25, 40, 0.9)';
+                ctx.strokeStyle = w.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.roundRect(x, cardY, cardW, cardH, 12);
+                ctx.fill();
+                ctx.stroke();
+
+                // Key badge
+                ctx.fillStyle = w.color;
+                ctx.font = 'bold 28px "Segoe UI", sans-serif';
+                ctx.fillText('[' + weapons[i].key + ']', cx, cardY + 45);
+
+                // Weapon name
+                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.fillStyle = w.color;
+                ctx.fillText(w.name, cx, cardY + 85);
+
+                // Description
+                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_SECONDARY;
+                ctx.fillText(w.description, cx, cardY + 115);
+
+                // Branch preview
+                ctx.font = '14px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                let by = cardY + 155;
+                for (const [, branch] of Object.entries(w.branches)) {
+                    ctx.fillText('• ' + branch.name, cx, by);
+                    by += 22;
+                }
+
+                // FREE tag
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#39FF14';
+                ctx.fillText('FREE', cx, cardY + cardH - 20);
+            }
+
+            // Tap instruction for mobile
+            ctx.font = '16px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.fillText('Press 1 or 2 to choose', CANVAS_WIDTH / 2, cardY + cardH + 40);
+        }
+
+        // ============================================================
+        // SHOP SCREEN
+        // ============================================================
+        let shopScroll = 0;
+        let shopHover = -1; // Index of hovered item for click handling
+
+        function renderShop() {
+            ctx.fillStyle = 'rgba(5, 8, 18, 0.95)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.textAlign = 'center';
+
+            const prog = loadProgression();
+
+            // Header
+            ctx.font = 'bold 42px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_PRIMARY;
+            ctx.fillText('SHOP', CANVAS_WIDTH / 2, 60);
+
+            // Crystal balance
+            ctx.font = 'bold 22px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#E0F0FF';
+            ctx.fillText('\u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, 95);
+
+            // === WEAPONS SECTION ===
+            ctx.font = 'bold 20px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_CYAN;
+            ctx.textAlign = 'left';
+            ctx.fillText('WEAPONS', 80, 140);
+
+            const weaponIds = WEAPON_IDS;
+            const wCardW = 260;
+            const wCardH = 100;
+            const wGap = 16;
+            const wTotalW = 3 * wCardW + 2 * wGap;
+            const wStartX = (CANVAS_WIDTH - wTotalW) / 2;
+            let shopButtons = []; // Collect clickable regions
+
+            for (let i = 0; i < weaponIds.length; i++) {
+                const wid = weaponIds[i];
+                const w = WEAPONS[wid];
+                const col = i % 3;
+                const row = Math.floor(i / 3);
+                const x = wStartX + col * (wCardW + wGap);
+                const y = 160 + row * (wCardH + wGap);
+                const isUnlocked = !!prog.unlockedWeapons[wid];
+                const canBuy = !isUnlocked && canBuyWeapon(wid, prog);
+                const reqText = !isUnlocked ? getWeaponRequirementText(wid, prog) : null;
+
+                // Card background
+                ctx.fillStyle = isUnlocked ? 'rgba(20, 40, 30, 0.8)' : 'rgba(20, 25, 40, 0.8)';
+                ctx.strokeStyle = isUnlocked ? 'rgba(57, 255, 20, 0.4)' : (canBuy ? w.color : 'rgba(255,255,255,0.15)');
+                ctx.lineWidth = isUnlocked ? 2 : 1;
+                ctx.beginPath();
+                ctx.roundRect(x, y, wCardW, wCardH, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                // Weapon name
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.fillStyle = isUnlocked ? '#39FF14' : (canBuy ? w.color : 'rgba(255,255,255,0.4)');
+                ctx.fillText(w.name, x + 15, y + 28);
+
+                // Description
+                ctx.font = '12px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillText(w.description, x + 15, y + 48);
+
+                if (isUnlocked) {
+                    // Checkmark
+                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    ctx.fillStyle = '#39FF14';
+                    ctx.fillText('OWNED', x + 15, y + 75);
+                } else if (canBuy) {
+                    // Price + buy button
+                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    ctx.fillStyle = '#E0F0FF';
+                    ctx.fillText('\u25C6 ' + w.shopPrice, x + 15, y + 75);
+
+                    // Buy button
+                    const btnX = x + wCardW - 75;
+                    const btnY = y + 60;
+                    const btnW = 60;
+                    const btnH = 26;
+                    ctx.fillStyle = w.color;
+                    ctx.beginPath();
+                    ctx.roundRect(btnX, btnY, btnW, btnH, 4);
+                    ctx.fill();
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('BUY', btnX + btnW / 2, btnY + 18);
+                    ctx.textAlign = 'left';
+
+                    shopButtons.push({ type: 'weapon', id: wid, x: btnX, y: btnY, w: btnW, h: btnH });
+                } else if (reqText) {
+                    // Locked requirement
+                    ctx.font = '12px "Segoe UI", sans-serif';
+                    ctx.fillStyle = 'rgba(255,100,100,0.6)';
+                    ctx.fillText(reqText, x + 15, y + 75);
+                } else {
+                    // Not enough crystals
+                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    ctx.fillStyle = 'rgba(224, 240, 255, 0.4)';
+                    ctx.fillText('\u25C6 ' + w.shopPrice, x + 15, y + 75);
+                }
+            }
+
+            // === PERMANENT UPGRADES SECTION ===
+            const puStartY = 160 + 2 * (wCardH + wGap) + 30;
+            ctx.font = 'bold 20px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_CYAN;
+            ctx.textAlign = 'left';
+            ctx.fillText('PERMANENT UPGRADES', 80, puStartY);
+
+            const puKeys = Object.keys(PERMANENT_UPGRADES);
+            const puCardW = (CANVAS_WIDTH - 160 - (puKeys.length - 1) * 12) / puKeys.length;
+            const puCardH = 200;
+            const puY = puStartY + 20;
+
+            for (let i = 0; i < puKeys.length; i++) {
+                const key = puKeys[i];
+                const def = PERMANENT_UPGRADES[key];
+                const level = (prog.permanentUpgrades && prog.permanentUpgrades[key]) || 0;
+                const cost = getUpgradeCost(key, level);
+                const canAfford = (prog.crystals || 0) >= cost && level < def.maxLevel;
+                const isMaxed = level >= def.maxLevel;
+                const x = 80 + i * (puCardW + 12);
+
+                // Card
+                ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
+                ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.roundRect(x, puY, puCardW, puCardH, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                // Name
+                ctx.textAlign = 'center';
+                const cx = x + puCardW / 2;
+                ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                ctx.fillStyle = def.color;
+                ctx.fillText(def.name, cx, puY + 25);
+
+                // Description
+                ctx.font = '11px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillText(def.description, cx, puY + 45);
+
+                // Progress bar (10 segments)
+                const barW = puCardW - 30;
+                const barX = x + 15;
+                const barY = puY + 60;
+                const segW = (barW - 9) / 10; // 9 gaps of 1px
+                for (let s = 0; s < 10; s++) {
+                    const sx = barX + s * (segW + 1);
+                    ctx.fillStyle = s < level ? def.color : 'rgba(255,255,255,0.1)';
+                    ctx.fillRect(sx, barY, segW, 12);
+                }
+
+                // Level text
+                ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_SECONDARY;
+                ctx.fillText(level + '/' + def.maxLevel, cx, barY + 32);
+
+                // Cost or MAX
+                if (isMaxed) {
+                    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                    ctx.fillStyle = '#39FF14';
+                    ctx.fillText('MAX', cx, puY + puCardH - 35);
+                } else {
+                    ctx.font = '13px "Segoe UI", sans-serif';
+                    ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
+                    ctx.fillText('\u25C6 ' + cost, cx, puY + puCardH - 50);
+
+                    if (canAfford) {
+                        const btnW = 70;
+                        const btnH = 26;
+                        const btnX = cx - btnW / 2;
+                        const btnY = puY + puCardH - 38;
+                        ctx.fillStyle = def.color;
+                        ctx.beginPath();
+                        ctx.roundRect(btnX, btnY, btnW, btnH, 4);
+                        ctx.fill();
+                        ctx.fillStyle = '#000';
+                        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                        ctx.fillText('BUY', cx, btnY + 18);
+
+                        shopButtons.push({ type: 'upgrade', id: key, x: btnX, y: btnY, w: btnW, h: btnH });
+                    }
+                }
+            }
+
+            // Store buttons for click handling
+            currentShopButtons = shopButtons;
+
+            // Back instruction
+            ctx.textAlign = 'center';
+            ctx.font = '16px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.fillText('Press ESC or S to go back', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
+        }
+
+        let currentShopButtons = [];
+
+        function handleShopClick(clickX, clickY) {
+            for (const btn of currentShopButtons) {
+                if (clickX >= btn.x && clickX <= btn.x + btn.w &&
+                    clickY >= btn.y && clickY <= btn.y + btn.h) {
+                    const prog = loadProgression();
+                    if (btn.type === 'weapon') {
+                        if (canBuyWeapon(btn.id, prog)) {
+                            prog.crystals -= WEAPONS[btn.id].shopPrice;
+                            prog.unlockedWeapons[btn.id] = true;
+                            saveProgression(prog);
+                        }
+                    } else if (btn.type === 'upgrade') {
+                        const level = (prog.permanentUpgrades[btn.id]) || 0;
+                        const cost = getUpgradeCost(btn.id, level);
+                        if ((prog.crystals || 0) >= cost && level < PERMANENT_UPGRADES[btn.id].maxLevel) {
+                            prog.crystals -= cost;
+                            prog.permanentUpgrades[btn.id] = level + 1;
+                            saveProgression(prog);
+                        }
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
         function renderPauseOverlay() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -6128,20 +7041,85 @@
                 ctx.fillText('BEST: ' + highScore, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
             }
             
+            // Difficulty badge
+            if (currentDifficulty > 0) {
+                ctx.font = 'bold 14px "Segoe UI", sans-serif';
+                ctx.fillStyle = DIFFICULTY_COLORS[currentDifficulty];
+                ctx.fillText(DIFFICULTY_NAMES[currentDifficulty], CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 42);
+            }
+
+            // New difficulty unlocked
+            if (lastRunCrystals && lastRunCrystals.newDifficultyUnlocked) {
+                ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#39FF14';
+                ctx.shadowColor = '#39FF14';
+                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 8 : 0;
+                ctx.fillText('NEW DIFFICULTY UNLOCKED!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 42 + (currentDifficulty > 0 ? 20 : 0));
+                ctx.shadowBlur = 0;
+            }
+
             // Time survived
             const minutes = Math.floor(gameTime / 60);
             const seconds = Math.floor(gameTime % 60);
             ctx.font = '18px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_SECONDARY;
             ctx.fillText('Time: ' + minutes + 'm ' + seconds + 's', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 55);
-            
-            // Retry prompt
-            ctx.font = 'bold 22px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_PRIMARY;
-            const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
-            ctx.globalAlpha = pulse;
-            ctx.fillText('Press R or TAP to Retry', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
-            ctx.globalAlpha = 1;
+
+            // Crystal breakdown
+            if (lastRunCrystals) {
+                const cx = CANVAS_WIDTH / 2;
+                let cy = CANVAS_HEIGHT / 2 + 95;
+
+                // Crystal section header
+                ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#E0F0FF';
+                ctx.fillText('◆ CRYSTALS EARNED', cx, cy);
+                cy += 28;
+
+                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(224, 240, 255, 0.7)';
+                if (lastRunCrystals.picked > 0) {
+                    ctx.fillText('Collected: ' + lastRunCrystals.picked, cx, cy);
+                    cy += 22;
+                }
+                if (lastRunCrystals.killBonus > 0) {
+                    ctx.fillText('Kill bonus (' + totalKills + '/50): +' + lastRunCrystals.killBonus, cx, cy);
+                    cy += 22;
+                }
+                if (lastRunCrystals.scoreBonus > 0) {
+                    ctx.fillText('Score bonus (' + Math.floor(score) + '/1000): +' + lastRunCrystals.scoreBonus, cx, cy);
+                    cy += 22;
+                }
+                if (lastRunCrystals.crystalMulti > 1) {
+                    ctx.fillText('Crystal Attractor: x' + lastRunCrystals.crystalMulti.toFixed(2), cx, cy);
+                    cy += 22;
+                }
+
+                // Total
+                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#E0F0FF';
+                ctx.shadowColor = '#E0F0FF';
+                ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 8 : 0;
+                ctx.fillText('TOTAL: ◆ ' + lastRunCrystals.total, cx, cy + 5);
+                ctx.shadowBlur = 0;
+                cy += 35;
+
+                // Retry prompt
+                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_PRIMARY;
+                const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+                ctx.globalAlpha = pulse;
+                ctx.fillText('Press R or TAP to Retry    [S] SHOP', cx, cy + 5);
+                ctx.globalAlpha = 1;
+            } else {
+                // Retry prompt (fallback)
+                ctx.font = 'bold 22px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_PRIMARY;
+                const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+                ctx.globalAlpha = pulse;
+                ctx.fillText('Press R or TAP to Retry    [S] SHOP', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
+                ctx.globalAlpha = 1;
+            }
         }
         
         // ============================================================
