@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellar Swarm — Entity Catalog</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: linear-gradient(180deg, #0a1628, #020610);
+    color: #E8F0FF;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+}
+h1 {
+    text-align: center;
+    color: #7FDBFF;
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    font-size: 26px;
+    font-weight: 300;
+    margin-bottom: 8px;
+    text-shadow: 0 0 30px rgba(127,219,255,0.3);
+}
+.subtitle {
+    text-align: center;
+    color: rgba(200,215,240,0.4);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 50px;
+}
+h2 {
+    color: #FFDD57;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-size: 13px;
+    font-weight: 400;
+    border-bottom: 1px solid rgba(255,221,87,0.15);
+    padding-bottom: 10px;
+    margin: 50px 0 20px;
+}
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+.section-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.entity-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(5,12,30,0.5);
+    border: 1px solid rgba(127,219,255,0.08);
+    border-radius: 8px;
+    padding: 16px 14px 12px;
+}
+.entity-card canvas {
+    display: block;
+}
+.entity-name {
+    color: rgba(200,215,240,0.5);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 10px;
+    text-align: center;
+}
+.color-palette {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.color-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 2px 6px 2px 3px;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.color-chip:hover {
+    background: rgba(255,255,255,0.08);
+}
+.color-chip:active {
+    background: rgba(255,255,255,0.15);
+}
+.color-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+}
+.color-hex {
+    color: rgba(200,215,240,0.35);
+    font-size: 9px;
+    font-family: monospace;
+    letter-spacing: 0.5px;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.copy-toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(5,12,30,0.9);
+    border: 1px solid rgba(127,219,255,0.25);
+    color: #7FDBFF;
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 8px 20px;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 100;
+}
+.copy-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+</style>
+</head>
+<body>
+<div class="container" id="root">
+    <h1>Stellar Swarm</h1>
+    <div class="subtitle">Entity Catalog</div>
+</div>
+<div class="copy-toast" id="copyToast"></div>
+<script>
+(function() {
+    // === CONSTANTS (from game) ===
+    const COLORS = {
+        PLAYER: '#7FDBFF',
+        BULLET: '#7FDBFF',
+        ENEMY_BULLET: '#FF6B6B',
+        POWERUP: '#00FFAA',
+        GOLD: '#FFDD57'
+    };
+    const ENEMY_TYPES = {
+        SCOUT:    { radius: 10, color: '#FF6B6B', outline: '#C04848' },
+        KAMIKAZE: { radius: 10, color: '#FF9A6B', outline: '#D86A3A' },
+        SPINNER:  { radius: 14, color: '#3A9AD9', outline: '#1E6F9A' },
+        TANK:     { radius: 22, color: '#C792FF', outline: '#8A5DBF' },
+        ALIEN:    { radius: 34, color: '#39FF14', outline: '#1A5C1A' }
+    };
+    const WEAPON_COLORS = {
+        phase_shard: '#00FFD0',
+        void_blade: '#FF44CC',
+        warp_snare: '#FFB020',
+        plasma_field: '#7FDBFF'
+    };
+    const ORBITAL_SIZE = 26;
+    const DRONE_SIZE = 5;
+    const HIVE_DRONE_SIZE = 7;
+
+    // === UTILITY ===
+    function setupCanvas(canvas, w, h) {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return ctx;
+    }
+
+    function drawHexagon(ctx, x, y, r, startAngle) {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + (startAngle || 0);
+            const px = x + Math.cos(a) * r;
+            const py = y + Math.sin(a) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+    }
+
+    // === DRAW FUNCTIONS ===
+    // Each: (ctx, cx, cy, scale, time)
+
+    function drawPlayer(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        // Thruster flame
+        ctx.fillStyle = COLORS.PLAYER;
+        ctx.globalAlpha = 0.8;
+        const flameLen = 15 + Math.sin(t * 6) * 10;
+        ctx.beginPath();
+        ctx.moveTo(-12, -6);
+        ctx.lineTo(-12 - flameLen, 0);
+        ctx.lineTo(-12, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Ship body
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = COLORS.PLAYER;
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.moveTo(22, 0);
+        ctx.lineTo(-12, -16);
+        ctx.lineTo(-10, 0);
+        ctx.lineTo(-12, 16);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawScout(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.SCOUT;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawKamikaze(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.KAMIKAZE;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(c.radius, 0);
+        ctx.lineTo(-c.radius, -c.radius * 0.7);
+        ctx.lineTo(-c.radius * 0.5, 0);
+        ctx.lineTo(-c.radius, c.radius * 0.7);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawSpinner(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.SPINNER;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 3;
+        drawHexagon(ctx, 0, 0, c.radius, -Math.PI / 6);
+        ctx.stroke();
+        // Animated rim arc
+        ctx.lineWidth = 2;
+        const rimAngle = t * 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius - 5, rimAngle, rimAngle + Math.PI * 0.5);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawTank(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.TANK;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawAlien(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.ALIEN;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        // Outer circle
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // Inner hexagon (rotating)
+        ctx.strokeStyle = c.outline;
+        ctx.lineWidth = 2;
+        drawHexagon(ctx, 0, 0, c.radius * 0.6, t * 2);
+        ctx.stroke();
+        // Pulsing core
+        ctx.fillStyle = c.color;
+        ctx.globalAlpha = 0.3 + Math.sin(t * 5) * 0.15;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawLaser(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.BULLET;
+        ctx.shadowColor = COLORS.BULLET;
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(-12, 0);
+        ctx.lineTo(12, 0);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawSpread(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.GOLD;
+        ctx.shadowColor = COLORS.GOLD;
+        ctx.shadowBlur = 6;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-5, 0);
+        ctx.lineTo(5, 0);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawRocket(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.shadowColor = COLORS.PLAYER;
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(-6, -5);
+        ctx.lineTo(-4, 0);
+        ctx.lineTo(-6, 5);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawMiniRocket(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s * 0.6, s * 0.6);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.shadowColor = COLORS.PLAYER;
+        ctx.shadowBlur = 6;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-5, -4);
+        ctx.lineTo(-3, 0);
+        ctx.lineTo(-5, 4);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawArmageddonRocket(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s * 2, s * 2);
+        // Outer
+        ctx.strokeStyle = '#FF6B00';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(-6, -5);
+        ctx.lineTo(-4, 0);
+        ctx.lineTo(-6, 5);
+        ctx.closePath();
+        ctx.stroke();
+        // Inner detail
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-2, -3);
+        ctx.lineTo(-1, 0);
+        ctx.lineTo(-2, 3);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawPhaseShard(ctx, cx, cy, s, t) {
+        const color = WEAPON_COLORS.phase_shard;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.rotate(t * 8);
+        // Outer diamond
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -7); ctx.lineTo(5, 0); ctx.lineTo(0, 7); ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.stroke();
+        // Inner detail
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#AAFFEE';
+        ctx.beginPath();
+        ctx.moveTo(0, -3); ctx.lineTo(2, 0); ctx.lineTo(0, 3); ctx.lineTo(-2, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawEntropyShard(ctx, cx, cy, s, t) {
+        const color = WEAPON_COLORS.phase_shard;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.rotate(t * 4);
+        // Outer diamond
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, -12); ctx.lineTo(8, 0); ctx.lineTo(0, 12); ctx.lineTo(-8, 0);
+        ctx.closePath();
+        ctx.stroke();
+        // Cross-hatch
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#AAFFEE';
+        ctx.beginPath();
+        ctx.moveTo(-5, 0); ctx.lineTo(5, 0);
+        ctx.moveTo(0, -7); ctx.lineTo(0, 7);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawEnemyBullet(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.ENEMY_BULLET;
+        ctx.shadowColor = COLORS.ENEMY_BULLET;
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawHiveDrone(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.lineWidth = 1.5;
+        // Outer hex
+        drawHexagon(ctx, 0, 0, HIVE_DRONE_SIZE, -Math.PI / 2);
+        ctx.stroke();
+        // Inner hex
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.5;
+        drawHexagon(ctx, 0, 0, HIVE_DRONE_SIZE * 0.5, -Math.PI / 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Center dot
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawKamikazeDrone(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.fillStyle = COLORS.PLAYER;
+        ctx.lineWidth = 1.5;
+        // Filled hex
+        ctx.globalAlpha = 0.4;
+        drawHexagon(ctx, 0, 0, DRONE_SIZE, -Math.PI / 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        drawHexagon(ctx, 0, 0, DRONE_SIZE, -Math.PI / 2);
+        ctx.stroke();
+        // Center dot
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawOrbital(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, ORBITAL_SIZE, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawLightning(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        // Generate zigzag points
+        const points = [];
+        const len = 80;
+        const segs = 10;
+        for (let i = 0; i <= segs; i++) {
+            const x = -len / 2 + (i / segs) * len;
+            const jitter = (i === 0 || i === segs) ? 0 : (Math.sin(t * 15 + i * 2.3) * 8 + Math.cos(t * 11 + i * 5.1) * 4);
+            points.push({ x, y: jitter });
+        }
+        // 3 layers
+        const layers = [
+            { color: `rgba(99, 179, 237, 0.5)`, width: 6 },
+            { color: `rgba(159, 122, 234, 0.8)`, width: 3 },
+            { color: `rgba(255, 255, 255, 1)`, width: 1.5 }
+        ];
+        for (const layer of layers) {
+            ctx.strokeStyle = layer.color;
+            ctx.lineWidth = layer.width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    function drawNovaBeam(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const len = 80;
+        const layers = [
+            { color: `rgba(255, 215, 0, 0.3)`, width: 24 },
+            { color: `rgba(255, 228, 181, 0.7)`, width: 12 },
+            { color: `rgba(255, 255, 255, 1)`, width: 4 }
+        ];
+        for (const layer of layers) {
+            ctx.strokeStyle = layer.color;
+            ctx.lineWidth = layer.width;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.moveTo(-len / 2, 0);
+            ctx.lineTo(len / 2, 0);
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawPlasmaAura(ctx, cx, cy, s, t) {
+        const auraColor = WEAPON_COLORS.plasma_field;
+        const r = 40;
+        const pulse = Math.sin(t * 2) * 3;
+        const currentR = r + pulse;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        // Outer ring
+        ctx.strokeStyle = auraColor;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.6;
+        ctx.shadowColor = auraColor;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(0, 0, currentR, 0, Math.PI * 2);
+        ctx.stroke();
+        // Fill
+        ctx.globalAlpha = 0.1;
+        ctx.fillStyle = auraColor;
+        ctx.fill();
+        // Inner ring
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(0, 0, currentR * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawSlashEffect(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const radius = 35;
+        const arc = Math.PI / 3; // ~60 degrees each side = 120 sweep
+        const angle = t * 1.5;
+        // Outer arc
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = WEAPON_COLORS.void_blade;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, angle - arc, angle + arc);
+        ctx.stroke();
+        // Inner flash
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.85, angle - arc * 0.8, angle + arc * 0.8);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawRiftZone(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const radius = 35;
+        const arc = Math.PI / 3;
+        const angle = t * 0.5;
+        // Dashed arc
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = WEAPON_COLORS.void_blade;
+        ctx.setLineDash([8, 6]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, angle - arc, angle + arc);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Filled pie
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = WEAPON_COLORS.void_blade;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, angle - arc, angle + arc);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawWarpSnare(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const radius = 30;
+        const color = WEAPON_COLORS.warp_snare;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 8]);
+        // Outer
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // Inner
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Subtle fill
+        ctx.globalAlpha = 0.04 + Math.sin(t * 3) * 0.02;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawTemporalCage(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const radius = 30;
+        const color = WEAPON_COLORS.warp_snare;
+        // Outer hex (rotating)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        drawHexagon(ctx, 0, 0, radius, t * 0.3);
+        ctx.stroke();
+        // Inner hex (counter-rotating)
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 1.5;
+        drawHexagon(ctx, 0, 0, radius * 0.5, -t * 0.5);
+        ctx.stroke();
+        // Fill
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = color;
+        drawHexagon(ctx, 0, 0, radius, t * 0.3);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawFusionBeam(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.lineCap = 'round';
+
+        // Origin circle (around player center)
+        const circlePulse = 0.3 + Math.sin(t * 3) * 0.1;
+        ctx.strokeStyle = '#00FFCC';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = circlePulse + 0.15;
+        ctx.beginPath();
+        ctx.arc(-30, 0, 18, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Beam from circle edge to target
+        const beamStartX = -30 + 18; // circle edge
+        const pulse = 1 + Math.sin(t * 8) * 0.15;
+        const width = 6 * pulse;
+
+        // Main beam
+        ctx.strokeStyle = '#00FFCC';
+        ctx.lineWidth = width;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(beamStartX, 0);
+        ctx.lineTo(50, 0);
+        ctx.stroke();
+
+        // Inner white core
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = width * 0.4;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(beamStartX, 0);
+        ctx.lineTo(50, 0);
+        ctx.stroke();
+
+        // Impact point
+        const flashSize = 4 + Math.sin(t * 10) * 2;
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#00FFCC';
+        ctx.beginPath();
+        ctx.arc(50, 0, flashSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function drawSentryTurret(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+
+        // Range circle (faint)
+        ctx.strokeStyle = '#FF8C00';
+        ctx.globalAlpha = 0.08;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, 40, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Hexagonal base
+        ctx.fillStyle = '#1a1a2e';
+        drawHexagon(ctx, 0, 0, 24, -Math.PI / 2);
+        ctx.fill();
+        ctx.strokeStyle = '#FF8C00';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Cannon (rotated)
+        const angle = Math.sin(t * 1.5) * 0.5;
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.fillStyle = '#FF8C00';
+        ctx.fillRect(4, -3, 20, 6);
+        ctx.restore();
+
+        // Center dot
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#FF8C00';
+        ctx.fill();
+
+        // Life bar
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-20, 30, 40, 3);
+        ctx.fillStyle = '#39FF14';
+        ctx.fillRect(-20, 30, 30, 3);
+
+        ctx.restore();
+    }
+
+    function drawSentryTurretShielded(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+
+        // Shield circle
+        const shieldAlpha = 0.2 + Math.sin(t * 3) * 0.05;
+        ctx.strokeStyle = '#FF8C00';
+        ctx.globalAlpha = shieldAlpha;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 30, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Hexagonal base
+        ctx.fillStyle = '#1a1a2e';
+        drawHexagon(ctx, 0, 0, 24, -Math.PI / 2);
+        ctx.fill();
+        ctx.strokeStyle = '#FF8C00';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Cannon
+        ctx.fillStyle = '#FF8C00';
+        ctx.fillRect(4, -3, 20, 6);
+
+        // Center dot
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function drawTurretBullet(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.fillStyle = '#FF8C00';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawTurretRocket(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        ctx.strokeStyle = '#FF8C00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-5, -4);
+        ctx.lineTo(-3, 0);
+        ctx.lineTo(-5, 4);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawCombatStationBeam(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+
+        // Two turret bases
+        const x1 = -25, x2 = 25;
+        ctx.fillStyle = '#1a1a2e';
+        drawHexagon(ctx, x1, 0, 14, -Math.PI / 2);
+        ctx.fill();
+        ctx.strokeStyle = '#FF8C00';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        drawHexagon(ctx, x2, 0, 14, -Math.PI / 2);
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fill();
+        ctx.stroke();
+
+        // Center dots
+        ctx.fillStyle = '#FF8C00';
+        ctx.beginPath();
+        ctx.arc(x1, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x2, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Beam between turrets
+        const pulseAlpha = 0.2 + 0.1 * Math.sin(t * 4);
+        ctx.strokeStyle = '#FF8C00';
+        ctx.globalAlpha = pulseAlpha;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, 0);
+        ctx.lineTo(x2, 0);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
+    }
+
+    function drawHealthPickup(ctx, cx, cy, s, t) {
+        const bob = Math.sin(t * 4) * 3;
+        const pulse = 1 + Math.sin(t * 6) * 0.1;
+        ctx.save();
+        ctx.translate(cx, cy + bob * s);
+        ctx.scale(s * pulse, s * pulse);
+        ctx.strokeStyle = COLORS.POWERUP;
+        ctx.shadowColor = COLORS.POWERUP;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(-8, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawCrystalPickup(ctx, cx, cy, s, t) {
+        const bob = Math.sin(t * 4) * 3;
+        const pulse = 1 + Math.sin(t * 6) * 0.1;
+        ctx.save();
+        ctx.translate(cx, cy + bob * s);
+        ctx.scale(s * pulse, s * pulse);
+        ctx.strokeStyle = COLORS.GOLD;
+        ctx.shadowColor = COLORS.GOLD;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(-8, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawExpandingRing(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const maxR = 30;
+        const cycle = t % 2;
+        const progress = cycle / 2;
+        const r = progress * maxR;
+        const alpha = 1 - progress;
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.lineWidth = 3 * alpha;
+        ctx.shadowColor = COLORS.PLAYER;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    function drawShockwave(ctx, cx, cy, s, t) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        const maxR = 30;
+        const cycle = t % 1.5;
+        const progress = cycle / 1.5;
+        const r = progress * maxR;
+        const alpha = 1 - progress;
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = COLORS.ENEMY_BULLET;
+        ctx.lineWidth = 3 * alpha;
+        ctx.shadowColor = COLORS.ENEMY_BULLET;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    // === ENTITY CATALOG ===
+    const CATALOG = [
+        { category: 'Player', entries: [
+            { name: 'Player Ship', w: 160, h: 120, scale: 2.5, draw: drawPlayer, animated: true, colors: ['#7FDBFF'] },
+        ]},
+        { category: 'Enemies', entries: [
+            { name: 'Scout', w: 100, h: 100, scale: 2.5, draw: drawScout, animated: false, colors: ['#FF6B6B'] },
+            { name: 'Kamikaze', w: 100, h: 100, scale: 2.5, draw: drawKamikaze, animated: false, colors: ['#FF9A6B'] },
+            { name: 'Spinner', w: 110, h: 110, scale: 2.2, draw: drawSpinner, animated: true, colors: ['#3A9AD9'] },
+            { name: 'Tank', w: 140, h: 140, scale: 2, draw: drawTank, animated: false, colors: ['#C792FF'] },
+            { name: 'Alien', w: 180, h: 180, scale: 1.8, draw: drawAlien, animated: true, colors: ['#39FF14', '#1A5C1A'] },
+        ]},
+        { category: 'Projectiles', entries: [
+            { name: 'Laser', w: 100, h: 60, scale: 2.5, draw: drawLaser, animated: false, colors: ['#7FDBFF'] },
+            { name: 'Spread Shot', w: 80, h: 60, scale: 3, draw: drawSpread, animated: false, colors: ['#FFDD57'] },
+            { name: 'Rocket', w: 100, h: 70, scale: 2.5, draw: drawRocket, animated: false, colors: ['#7FDBFF'] },
+            { name: 'Mini Rocket', w: 80, h: 60, scale: 3, draw: drawMiniRocket, animated: false, colors: ['#7FDBFF'] },
+            { name: 'Armageddon Rocket', w: 140, h: 90, scale: 1.5, draw: drawArmageddonRocket, animated: false, colors: ['#FF6B00', '#FFD700'] },
+            { name: 'Phase Shard', w: 90, h: 90, scale: 3, draw: drawPhaseShard, animated: true, colors: ['#00FFD0', '#AAFFEE'] },
+            { name: 'Entropy Shard', w: 110, h: 110, scale: 2.5, draw: drawEntropyShard, animated: true, colors: ['#00FFD0', '#AAFFEE'] },
+            { name: 'Enemy Bullet', w: 80, h: 60, scale: 3, draw: drawEnemyBullet, animated: false, colors: ['#FF6B6B'] },
+            { name: 'Turret Bullet', w: 80, h: 60, scale: 3, draw: drawTurretBullet, animated: false, colors: ['#FF8C00'] },
+            { name: 'Turret Rocket', w: 80, h: 60, scale: 3, draw: drawTurretRocket, animated: false, colors: ['#FF8C00'] },
+        ]},
+        { category: 'Drones', entries: [
+            { name: 'Hive Drone', w: 80, h: 80, scale: 4, draw: drawHiveDrone, animated: false, colors: ['#7FDBFF'] },
+            { name: 'Kamikaze Drone', w: 80, h: 80, scale: 4, draw: drawKamikazeDrone, animated: false, colors: ['#7FDBFF'] },
+        ]},
+        { category: 'Orbitals', entries: [
+            { name: 'Orbital Shield', w: 140, h: 140, scale: 2, draw: drawOrbital, animated: false, colors: ['#7FDBFF'] },
+        ]},
+        { category: 'Weapon Effects', entries: [
+            { name: 'Lightning Ray', w: 240, h: 80, scale: 1.2, draw: drawLightning, animated: true, colors: ['#63B3ED', '#9F7AEA', '#FFFFFF'] },
+            { name: 'Nova Beam', w: 240, h: 80, scale: 1.2, draw: drawNovaBeam, animated: false, colors: ['#FFD700', '#FFE4B5', '#FFFFFF'] },
+            { name: 'Plasma Aura', w: 180, h: 180, scale: 1.5, draw: drawPlasmaAura, animated: true, colors: ['#7FDBFF'] },
+            { name: 'Slash Effect', w: 160, h: 160, scale: 1.5, draw: drawSlashEffect, animated: true, colors: ['#FF44CC'] },
+            { name: 'Rift Zone', w: 160, h: 160, scale: 1.5, draw: drawRiftZone, animated: true, colors: ['#FF44CC'] },
+            { name: 'Warp Snare', w: 160, h: 160, scale: 1.5, draw: drawWarpSnare, animated: true, colors: ['#FFB020'] },
+            { name: 'Temporal Cage', w: 160, h: 160, scale: 1.5, draw: drawTemporalCage, animated: true, colors: ['#FFB020'] },
+            { name: 'Fusion Beam', w: 240, h: 80, scale: 1.2, draw: drawFusionBeam, animated: true, colors: ['#00FFCC', '#FFFFFF'] },
+        ]},
+        { category: 'Sentry Turrets', entries: [
+            { name: 'Sentry Turret', w: 140, h: 140, scale: 1.5, draw: drawSentryTurret, animated: true, colors: ['#FF8C00', '#1a1a2e'] },
+            { name: 'Shielded Turret', w: 140, h: 140, scale: 1.5, draw: drawSentryTurretShielded, animated: true, colors: ['#FF8C00'] },
+            { name: 'Combat Station', w: 200, h: 120, scale: 1.5, draw: drawCombatStationBeam, animated: true, colors: ['#FF8C00'] },
+        ]},
+        { category: 'Pickups', entries: [
+            { name: 'Health', w: 100, h: 100, scale: 2.5, draw: drawHealthPickup, animated: true, colors: ['#00FFAA'] },
+            { name: 'Crystal', w: 100, h: 100, scale: 2.5, draw: drawCrystalPickup, animated: true, colors: ['#FFDD57'] },
+        ]},
+        { category: 'Particles', entries: [
+            { name: 'Expanding Ring', w: 140, h: 140, scale: 1.5, draw: drawExpandingRing, animated: true, colors: ['#7FDBFF'] },
+            { name: 'Shockwave', w: 140, h: 140, scale: 1.5, draw: drawShockwave, animated: true, colors: ['#FF6B6B'] },
+        ]},
+        { category: 'Shop Upgrade Icons', entries: [
+            { name: 'Power Core', w: 80, h: 80, scale: 1, draw: (ctx, cx, cy, s) => {
+                ctx.strokeStyle = '#FF6B5B'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.beginPath(); ctx.moveTo(cx + 20*0.15, cy - 20); ctx.lineTo(cx - 20*0.25, cy - 20*0.1);
+                ctx.lineTo(cx + 20*0.15, cy + 20*0.1); ctx.lineTo(cx - 20*0.15, cy + 20); ctx.stroke();
+            }, colors: ['#FF6B5B'] },
+            { name: 'Hull Plating', w: 80, h: 80, scale: 1, draw: (ctx, cx, cy, s) => {
+                ctx.strokeStyle = '#00DFFF'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                for (let ring = 0; ring < 2; ring++) {
+                    const r = ring === 0 ? 18 : 10;
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) { const a = (i/6)*Math.PI*2 - Math.PI/2;
+                        if (i===0) ctx.moveTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); else ctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); }
+                    ctx.closePath(); ctx.stroke();
+                }
+            }, colors: ['#00DFFF'] },
+            { name: 'Engine Boost', w: 80, h: 80, scale: 1, draw: (ctx, cx, cy, s) => {
+                ctx.strokeStyle = '#FFD93D'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                for (let j = 0; j < 2; j++) { const oy = j * 11 - 4;
+                    ctx.beginPath(); ctx.moveTo(cx-10, cy+oy+8); ctx.lineTo(cx, cy+oy); ctx.lineTo(cx+10, cy+oy+8); ctx.stroke(); }
+            }, colors: ['#FFD93D'] },
+            { name: 'XP Amplifier', w: 80, h: 80, scale: 1, draw: (ctx, cx, cy, s) => {
+                ctx.strokeStyle = '#9F7AEA'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.beginPath();
+                for (let i = 0; i < 8; i++) { const a = (i/8)*Math.PI*2 - Math.PI/2; const r = i%2===0 ? 18 : 7;
+                    if (i===0) ctx.moveTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); else ctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); }
+                ctx.closePath(); ctx.stroke();
+            }, colors: ['#9F7AEA'] },
+            { name: 'Crystal Attractor', w: 80, h: 80, scale: 1, draw: (ctx, cx, cy, s) => {
+                ctx.strokeStyle = '#E0F0FF'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                for (let ring = 0; ring < 2; ring++) { const r = ring === 0 ? 18 : 9;
+                    ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r*0.6, cy); ctx.lineTo(cx, cy+r); ctx.lineTo(cx-r*0.6, cy);
+                    ctx.closePath(); ctx.stroke(); }
+            }, colors: ['#E0F0FF'] },
+        ]},
+    ];
+
+    // === BUILD DOM ===
+    const root = document.getElementById('root');
+    const animatedCards = [];
+
+    for (const section of CATALOG) {
+        const h2 = document.createElement('h2');
+        h2.textContent = section.category;
+        root.appendChild(h2);
+
+        const grid = document.createElement('div');
+        grid.className = 'section-grid';
+        root.appendChild(grid);
+
+        for (const entry of section.entries) {
+            const card = document.createElement('div');
+            card.className = 'entity-card';
+
+            const canvas = document.createElement('canvas');
+            const ctx = setupCanvas(canvas, entry.w, entry.h);
+            card.appendChild(canvas);
+
+            const label = document.createElement('span');
+            label.className = 'entity-name';
+            label.textContent = entry.name;
+            card.appendChild(label);
+
+            // Color palette
+            if (entry.colors && entry.colors.length > 0) {
+                const palette = document.createElement('div');
+                palette.className = 'color-palette';
+                for (const hex of entry.colors) {
+                    const chip = document.createElement('div');
+                    chip.className = 'color-chip';
+                    chip.dataset.color = hex;
+                    chip.addEventListener('click', () => copyColor(hex));
+                    const swatch = document.createElement('div');
+                    swatch.className = 'color-swatch';
+                    swatch.style.backgroundColor = hex;
+                    chip.appendChild(swatch);
+                    const hexLabel = document.createElement('span');
+                    hexLabel.className = 'color-hex';
+                    hexLabel.textContent = hex;
+                    chip.appendChild(hexLabel);
+                    palette.appendChild(chip);
+                }
+                card.appendChild(palette);
+            }
+
+            grid.appendChild(card);
+
+            const cx = entry.w / 2;
+            const cy = entry.h / 2;
+
+            if (entry.animated) {
+                animatedCards.push({ ctx, canvas, cx, cy, w: entry.w, h: entry.h, scale: entry.scale, draw: entry.draw });
+            } else {
+                // Draw once
+                entry.draw(ctx, cx, cy, entry.scale, 0);
+            }
+        }
+    }
+
+    // === COPY TO CLIPBOARD ===
+    let toastTimeout = null;
+    function copyColor(hex) {
+        navigator.clipboard.writeText(hex).then(() => {
+            const toast = document.getElementById('copyToast');
+            toast.textContent = 'Copied ' + hex;
+            toast.classList.add('visible');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toast.classList.remove('visible'), 1500);
+        });
+    }
+
+    // === ANIMATION LOOP ===
+    const startTime = performance.now();
+
+    function animate() {
+        const t = (performance.now() - startTime) / 1000;
+        for (const card of animatedCards) {
+            card.ctx.clearRect(0, 0, card.w, card.h);
+            card.draw(card.ctx, card.cx, card.cy, card.scale, t);
+        }
+        requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+
+})();
+</script>
+</body>
+</html>
