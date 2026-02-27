@@ -1,0 +1,35 @@
+{
+  "packageId": "com.fafimba.stellarswarm",
+  "host": "fafimba.github.io",
+  "name": "Stellar Swarm",
+  "launcherName": "Stellar Swarm",
+  "display": "fullscreen",
+  "themeColor": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#000000",
+  "enableNotifications": false,
+  "startUrl": "/SpaceGameVibe/index.html",
+  "iconUrl": "https://fafimba.github.io/SpaceGameVibe/icons/icon-512.png",
+  "maskableIconUrl": "https://fafimba.github.io/SpaceGameVibe/icons/icon-512.png",
+  "shortcuts": [],
+  "signing": {
+    "file": "./stellar-swarm-release.keystore",
+    "alias": "stellarswarm"
+  },
+  "generatorApp": "bubblewrap-cli",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependency": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://fafimba.github.io/SpaceGameVibe/",
+  "minSdkVersion": 19,
+  "orientation": "portrait",
+  "fingerprints": []
+}

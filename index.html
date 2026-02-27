@@ -6,6 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="manifest.json">
     <title>Stellar Swarm</title>
     <style>
         * {
@@ -10247,6 +10249,12 @@
         init();
         
     })();
+    </script>
+    <script>
+        // Register Service Worker for PWA/TWA offline support
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
     </script>
 </body>
 </html>
