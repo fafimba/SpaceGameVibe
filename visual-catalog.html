@@ -781,7 +781,7 @@ h2 {
         ctx.scale(s, s);
 
         // Range circle (faint)
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.globalAlpha = 0.08;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -793,7 +793,7 @@ h2 {
         ctx.fillStyle = '#1a1a2e';
         drawHexagon(ctx, 0, 0, 24, -Math.PI / 2);
         ctx.fill();
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.lineWidth = 2;
         ctx.stroke();
 
@@ -801,14 +801,14 @@ h2 {
         const angle = Math.sin(t * 1.5) * 0.5;
         ctx.save();
         ctx.rotate(angle);
-        ctx.fillStyle = '#FF8C00';
+        ctx.fillStyle = '#7FDBFF';
         ctx.fillRect(4, -3, 20, 6);
         ctx.restore();
 
         // Center dot
         ctx.beginPath();
         ctx.arc(0, 0, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#FF8C00';
+        ctx.fillStyle = '#7FDBFF';
         ctx.fill();
 
         // Life bar
@@ -827,7 +827,7 @@ h2 {
 
         // Shield circle
         const shieldAlpha = 0.2 + Math.sin(t * 3) * 0.05;
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.globalAlpha = shieldAlpha;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -839,12 +839,12 @@ h2 {
         ctx.fillStyle = '#1a1a2e';
         drawHexagon(ctx, 0, 0, 24, -Math.PI / 2);
         ctx.fill();
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.lineWidth = 2;
         ctx.stroke();
 
         // Cannon
-        ctx.fillStyle = '#FF8C00';
+        ctx.fillStyle = '#7FDBFF';
         ctx.fillRect(4, -3, 20, 6);
 
         // Center dot
@@ -859,9 +859,9 @@ h2 {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(s, s);
-        ctx.fillStyle = '#FF8C00';
+        ctx.fillStyle = '#7FDBFF';
         ctx.beginPath();
-        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
     }
@@ -870,7 +870,7 @@ h2 {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(s, s);
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(8, 0);
@@ -892,7 +892,7 @@ h2 {
         ctx.fillStyle = '#1a1a2e';
         drawHexagon(ctx, x1, 0, 14, -Math.PI / 2);
         ctx.fill();
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.lineWidth = 1.5;
         ctx.stroke();
         drawHexagon(ctx, x2, 0, 14, -Math.PI / 2);
@@ -901,7 +901,7 @@ h2 {
         ctx.stroke();
 
         // Center dots
-        ctx.fillStyle = '#FF8C00';
+        ctx.fillStyle = '#7FDBFF';
         ctx.beginPath();
         ctx.arc(x1, 0, 4, 0, Math.PI * 2);
         ctx.fill();
@@ -911,7 +911,7 @@ h2 {
 
         // Beam between turrets
         const pulseAlpha = 0.2 + 0.1 * Math.sin(t * 4);
-        ctx.strokeStyle = '#FF8C00';
+        ctx.strokeStyle = '#7FDBFF';
         ctx.globalAlpha = pulseAlpha;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1028,8 +1028,8 @@ h2 {
             { name: 'Phase Shard', w: 90, h: 90, scale: 3, draw: drawPhaseShard, animated: true, colors: ['#00FFD0', '#AAFFEE'] },
             { name: 'Entropy Shard', w: 110, h: 110, scale: 2.5, draw: drawEntropyShard, animated: true, colors: ['#00FFD0', '#AAFFEE'] },
             { name: 'Enemy Bullet', w: 80, h: 60, scale: 3, draw: drawEnemyBullet, animated: false, colors: ['#FF6B6B'] },
-            { name: 'Turret Bullet', w: 80, h: 60, scale: 3, draw: drawTurretBullet, animated: false, colors: ['#FF8C00'] },
-            { name: 'Turret Rocket', w: 80, h: 60, scale: 3, draw: drawTurretRocket, animated: false, colors: ['#FF8C00'] },
+            { name: 'Turret Bullet', w: 80, h: 60, scale: 3, draw: drawTurretBullet, animated: false, colors: ['#7FDBFF'] },
+            { name: 'Turret Rocket', w: 80, h: 60, scale: 3, draw: drawTurretRocket, animated: false, colors: ['#7FDBFF'] },
         ]},
         { category: 'Drones', entries: [
             { name: 'Hive Drone', w: 80, h: 80, scale: 4, draw: drawHiveDrone, animated: false, colors: ['#7FDBFF'] },
@@ -1049,9 +1049,8 @@ h2 {
             { name: 'Fusion Beam', w: 240, h: 80, scale: 1.2, draw: drawFusionBeam, animated: true, colors: ['#00FFCC', '#FFFFFF'] },
         ]},
         { category: 'Sentry Turrets', entries: [
-            { name: 'Sentry Turret', w: 140, h: 140, scale: 1.5, draw: drawSentryTurret, animated: true, colors: ['#FF8C00', '#1a1a2e'] },
-            { name: 'Shielded Turret', w: 140, h: 140, scale: 1.5, draw: drawSentryTurretShielded, animated: true, colors: ['#FF8C00'] },
-            { name: 'Combat Station', w: 200, h: 120, scale: 1.5, draw: drawCombatStationBeam, animated: true, colors: ['#FF8C00'] },
+            { name: 'Sentry Turret', w: 140, h: 140, scale: 1.5, draw: drawSentryTurret, animated: true, colors: ['#7FDBFF', '#1a1a2e'] },
+            { name: 'Combat Station', w: 200, h: 120, scale: 1.5, draw: drawCombatStationBeam, animated: true, colors: ['#7FDBFF'] },
         ]},
         { category: 'Pickups', entries: [
             { name: 'Health', w: 100, h: 100, scale: 2.5, draw: drawHealthPickup, animated: true, colors: ['#00FFAA'] },

@@ -502,16 +502,15 @@
         
         // Enemies
         const ENEMY_TYPES = {
-            SCOUT: { radius: 10, speed: 120, turnRate: 90, hp: 4, points: 10, color: '#FF6B6B', outline: '#C04848' },
-            KAMIKAZE: { radius: 10, speed: 180, turnRate: 60, hp: 4, points: 25, color: '#FF9A6B', outline: '#D86A3A' },
-            SPINNER: { radius: 14, speed: 90, turnRate: 60, hp: 4, points: 40, color: '#3A9AD9', outline: '#1E6F9A', fireRate: 1.2 },
-            TANK: { radius: 22, speed: 70, turnRate: 45, hp: 12, points: 75, color: '#C792FF', outline: '#8A5DBF' },
-            ALIEN: { radius: 34, speed: 55, turnRate: 35, hp: 60, points: 0, color: '#39FF14', outline: '#1A5C1A' }
+            SCOUT: { radius: 10, speed: 120, turnRate: 90, hp: 6, points: 10, color: '#FF6B6B', outline: '#C04848' },
+            KAMIKAZE: { radius: 10, speed: 350, turnRate: 120, hp: 5, points: 25, color: '#FF9A6B', outline: '#D86A3A' },
+            TANK: { radius: 22, speed: 70, turnRate: 45, hp: 25, points: 75, color: '#C792FF', outline: '#8A5DBF' },
+            ALIEN: { radius: 34, speed: 55, turnRate: 35, hp: 120, points: 0, color: '#39FF14', outline: '#1A5C1A' }
         };
         
-        const INITIAL_SPAWN_INTERVAL_MIN = 0.15;
-        const INITIAL_SPAWN_INTERVAL_MAX = 0.35;
-        const MIN_SPAWN_INTERVAL = 0.03;
+        const INITIAL_SPAWN_INTERVAL_MIN = 0.6;
+        const INITIAL_SPAWN_INTERVAL_MAX = 1.0;
+        const MIN_SPAWN_INTERVAL = 0.15;
         const SPAWN_DECAY_RATE = 0.05;
         const SPAWN_DECAY_INTERVAL = 10;
         const MAX_ENEMIES = 500;
@@ -579,8 +578,8 @@
         const SHIELD_ARC_FLASH_DURATION = 0.12;
 
         // XP & Level System
-        const XP_PER_LEVEL_BASE = 25;
-        const XP_PER_LEVEL_GROWTH = 1.4;
+        const XP_PER_LEVEL_BASE = 80;
+        const XP_PER_LEVEL_GROWTH = 1.28;
 
         // Touch Controls
         const JOYSTICK_MAX_DISTANCE = 38;
@@ -596,23 +595,12 @@
         const ENEMY_SPAWN_OFFSET_RANGE = 30;
         const ENEMY_SEPARATION_PADDING = 8;
 
-        // Wave System - Vampire Survivor style
+        // Wave System - Vampire Survivors style (dense clusters around player)
         const WAVE_INTERVAL_BASE = 2.5;       // Base seconds between waves (gets faster with level)
         const WAVE_INTERVAL_VARIANCE = 1.5;   // Random variance in seconds
-        const WAVE_SPAWN_DISTANCE = 850;      // Distance from player
-        const WAVE_PATTERNS = [
-            'arc',           // Enemies in an arc around player
-            'side',          // All enemies from one side
-            'pincer',        // Enemies from two opposite sides
-            'circle',        // Hexagonal staggered pattern (3 inner, 3 outer)
-            'line',          // Horizontal or vertical line
-            'cluster',       // Tight cluster from one direction
-            'spiral',        // Spiral pattern converging on player
-            'corners',       // From all 4 corners
-            'rush',          // Dense column rushing from one direction
-            'scatter',       // Random positions all around
-            'v_formation'    // V-shape formation
-        ];
+        const WAVE_SPAWN_DIST_MIN = 1000;     // Just outside screen edge
+        const WAVE_SPAWN_DIST_MAX = 1200;     // Max spawn distance
+        const WAVE_CLUSTER_RADIUS = 60;       // How tight each cluster is (px)
 
         // Sector System - Infinite World
         const SECTOR_WIDTH = 3840;      // 2x viewport width
@@ -769,22 +757,22 @@
             },
             'void_blade': {
                 name: 'VOID BLADE',
-                color: '#FF44CC',
+                color: '#5CE0D6',
                 icon: 'blade',
-                description: 'Directional melee arc attack',
+                description: 'Forward cone blast with knockback',
                 shopPrice: 0,
                 isStartingWeapon: true,
                 levels: [
-                    { description: 'Interval: 0.8s → 0.6s' },
-                    { description: 'Radius: 170px, arc: 140°' },
-                    { description: 'Damage: 35, knockback: 180' },
-                    { description: '0.5s, double slash' },
-                    { description: 'Radius: 210px, arc: 160°' },
-                    { description: '50 dmg, +15% vuln 2s' },
-                    { description: '0.4s, triple sweep' },
-                    { description: '260px, 200°, edge falloff' },
-                    { description: '70 dmg, +25% vuln, kill shockwave' },
-                    { description: 'DIMENSIONAL RIFT: Every 6s, slash leaves persistent damage zone', icon: 'rift', isEvolution: true }
+                    { description: 'Interval: 0.90s → 0.75s' },
+                    { description: 'Radius: 530px, arc: 100°' },
+                    { description: 'Damage: 45, knockback: 280' },
+                    { description: '0.62s, double blast' },
+                    { description: 'Radius: 640px, arc: 110°' },
+                    { description: '60 dmg, +15% vuln 2s' },
+                    { description: '0.50s, triple fan' },
+                    { description: '770px, 130°, edge falloff' },
+                    { description: '85 dmg, +25% vuln, kill shockwave' },
+                    { description: 'DIMENSIONAL RIFT: Every 6s, blast leaves persistent damage zone', icon: 'rift', isEvolution: true }
                 ]
             },
             'warp_snare': {
@@ -828,7 +816,7 @@
             },
             'gravity_mines': {
                 name: 'GRAVITY MINES',
-                color: '#FF6EC7',
+                color: '#7FDBFF',
                 icon: 'mine',
                 description: 'Deploy mines that attract and detonate enemies',
                 shopPrice: 200,
@@ -847,20 +835,20 @@
             },
             'sentry_turret': {
                 name: 'SENTRY TURRET',
-                color: '#FF8C00',
+                color: '#7FDBFF',
                 icon: 'turret',
                 description: 'Deploys auto-firing sentry turrets',
                 shopPrice: 250,
                 levels: [
-                    { description: 'Max: 2 turrets, deploy: 7s' },
+                    { description: 'Deploy: 350px, life: 12s' },
                     { description: 'Range: 400px, life: 14s' },
-                    { description: 'Damage: 13, fire rate: 0.4s' },
-                    { description: 'Max: 3, deploy: 5.5s' },
-                    { description: 'Range: 500px, turret shield: 30 HP' },
-                    { description: 'Damage: 18, rate: 0.35s, pierce 1' },
-                    { description: 'Max: 5, deploy: 4s, life: 12s' },
-                    { description: 'Range: 600px, shield: 60 HP (5/s regen), 15% slow' },
-                    { description: 'Damage: 24, rate: 0.3s, every 5th shot: mini-rocket' },
+                    { description: 'Damage: 3, fire rate: 80ms' },
+                    { description: 'Deploy: 280px, life: 16s' },
+                    { description: 'Range: 500px, 10% slow aura' },
+                    { description: 'Damage: 4, rate: 70ms, pierce 1' },
+                    { description: 'Deploy: 200px, life: 18s' },
+                    { description: 'Range: 600px, 15% slow aura' },
+                    { description: 'Damage: 5, rate: 60ms, every 8th shot: mini-rocket' },
                     { description: 'COMBAT STATION: Turrets link with laser beams. +30% fire rate per nearby turret.', icon: 'station', isEvolution: true }
                 ]
             }
@@ -952,7 +940,7 @@
                     xpAmplifier: 0,
                     crystalAttractor: 0
                 },
-                tutorialDone: false,
+                tutorialDone: true,
                 stats: { totalRuns: 0, totalKills: 0, totalCrystalsEarned: 0 }
             };
         }
@@ -1060,10 +1048,10 @@
                 upgradeLevels['alien_drone'] = 10;
                 spawnFloatingText(player.x, player.y - 50, 'HIVE MIND UNLOCKED', '#39FF14');
             },
-            'mine': () => {
+            'mines': () => {
                 if (!activeWeapons.includes('gravity_mines')) activeWeapons.push('gravity_mines');
                 upgradeLevels['gravity_mines'] = 10;
-                spawnFloatingText(player.x, player.y - 50, 'BLACK HOLE UNLOCKED', '#FF6EC7');
+                spawnFloatingText(player.x, player.y - 50, 'BLACK HOLE UNLOCKED', COLORS.PLAYER);
             },
             'full': () => {
                 for (const wid of Object.keys(WEAPONS)) {
@@ -1075,6 +1063,12 @@
             'reset': () => {
                 resetGame();
                 spawnFloatingText(player.x, player.y - 50, 'GAME RESET', '#FF6B6B');
+            },
+            'wipe': () => {
+                const fresh = createDefaultProgression();
+                saveProgression(fresh);
+                cachedProgression = fresh;
+                spawnFloatingText(player.x, player.y - 50, 'SHOP PROGRESS WIPED', '#FF6B6B');
             },
         };
         
@@ -1118,6 +1112,7 @@
         let riftTimer = 0;
         // Warp Snare state
         let snareDeployTimer = 0;
+        let snareDeployAngle = 0;
         let temporalCageTimer = 0;
         // Gravity Mines state
         let mines = [];
@@ -1126,7 +1121,8 @@
         let blackHoleCooldown = 0;
         // Sentry Turret state
         let turrets = [];
-        let turretDeployTimer = 0;
+        let lastTurretX = 0;
+        let lastTurretY = 0;
         let combatStationDmgTimer = 0;
 
         // Camera system
@@ -1176,7 +1172,6 @@
 
         // Wave system
         let waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
-        let lastWavePattern = null;
 
         // Effects
         let shakeIntensity = 0;
@@ -1340,7 +1335,7 @@
 
             enemy: new ObjectPool(
                 () => ({ x: 0, y: 0, vx: 0, vy: 0, angle: 0, type: '', hp: 1, maxHp: 1, fireTimer: 0, burstCooldown: 0, spawnTime: 0, offScreenTime: 0, nearMissTriggered: false }),
-                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.hp = 1; obj.nearMissTriggered = false; obj.offScreenTime = 0; },
+                (obj) => { obj.x = 0; obj.y = 0; obj.vx = 0; obj.vy = 0; obj.hp = 1; obj.nearMissTriggered = false; obj.offScreenTime = 0; if (obj.trail) obj.trail.length = 0; },
                 400
             ),
 
@@ -1387,8 +1382,8 @@
             ),
 
             turret: new ObjectPool(
-                () => ({ x: 0, y: 0, life: 0, maxLife: 10, fireTimer: 0, angle: 0, shotCount: 0, shieldCurrent: 0, targetEnemy: null }),
-                (obj) => { obj.x = 0; obj.y = 0; obj.life = 0; obj.fireTimer = 0; obj.angle = 0; obj.shotCount = 0; obj.shieldCurrent = 0; obj.targetEnemy = null; },
+                () => ({ x: 0, y: 0, life: 0, maxLife: 10, fireTimer: 0, angle: 0, shotCount: 0, targetEnemy: null }),
+                (obj) => { obj.x = 0; obj.y = 0; obj.life = 0; obj.fireTimer = 0; obj.angle = 0; obj.shotCount = 0; obj.targetEnemy = null; },
                 10
             )
         };
@@ -1531,6 +1526,21 @@
             cachedVignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
             cachedVignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
         }
+
+        // Pre-rendered muzzle flash glow sprite (avoids per-frame shadowBlur)
+        const turretMuzzleSprite = document.createElement('canvas');
+        turretMuzzleSprite.width = 64;
+        turretMuzzleSprite.height = 64;
+        (function() {
+            const mCtx = turretMuzzleSprite.getContext('2d');
+            const grad = mCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.2, 'rgba(200, 240, 255, 0.8)');
+            grad.addColorStop(0.5, 'rgba(127, 219, 255, 0.3)');
+            grad.addColorStop(1, 'rgba(127, 219, 255, 0)');
+            mCtx.fillStyle = grad;
+            mCtx.fillRect(0, 0, 64, 64);
+        })();
 
         const MENU_ENTRY_DURATION = 1.2; // seconds for ship to fly in
         const MENU_UI_FADE_START = 0.4; // normalized time (0-1) when UI starts fading in
@@ -1724,11 +1734,6 @@
             // Ignore if already in exit transition
             if (menuAnimPhase === 'exit') return;
 
-            const prog = loadProgression();
-            if (!prog.tutorialDone) {
-                gameState = 'tutorial';
-                return;
-            }
             selectedStartingWeapon = STARTING_WEAPON_IDS[menuWeaponIndex] || 'laser_cannon';
             // Start exit transition instead of jumping to gameplay
             menuAnimPhase = 'exit';
@@ -1846,10 +1851,12 @@
             bladeTimer = 0;
             riftTimer = 0;
             snareDeployTimer = 0;
+            snareDeployAngle = 0;
             temporalCageTimer = 0;
             mineDeployTimer = 0;
             blackHoleCooldown = 0;
-            turretDeployTimer = 0;
+            lastTurretX = player.x;
+            lastTurretY = player.y;
             combatStationDmgTimer = 0;
             upgradeOptions = [];
             upgradeSelectionActive = false;
@@ -1875,7 +1882,6 @@
             lastSpawnDecayTime = 0;
             waveNumber = 0;
             waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
-            lastWavePattern = null;
 
             shakeIntensity = 0;
             shakeDuration = 0;
@@ -2285,6 +2291,8 @@
                 t.x += offsetX;
                 t.y += offsetY;
             }
+            lastTurretX += offsetX;
+            lastTurretY += offsetY;
 
             // Transport siphon beam origins
             for (const sb of beamState.siphonBeams) {
@@ -2808,13 +2816,13 @@
                 if (lvl >= 9) { shardDamage = 45; shardCritChance = 0.25; shardCritSplit = true; }
             }
 
-            // === VOID BLADE === (Lv1-3: speed/area/damage, ...)
+            // === VOID BLADE === (forward shotgun blast)
             let hasBlade = activeWeapons.includes('void_blade');
-            let bladeInterval = 0.8;
-            let bladeDamage = 22;
-            let bladeRadius = 130;
-            let bladeArc = 120;
-            let bladeKnockback = 100;
+            let bladeInterval = 0.90;
+            let bladeDamage = 30;
+            let bladeRadius = 420;
+            let bladeArc = 90;
+            let bladeKnockback = 200;
             let bladeMultiSlash = 1;
             let bladeSlashRotation = 0;
             let bladeFalloff = 1.0;
@@ -2824,23 +2832,24 @@
 
             if (hasBlade) {
                 const lvl = upgradeLevels['void_blade'] || 0;
-                if (lvl >= 1) bladeInterval = 0.6;
-                if (lvl >= 2) { bladeRadius = 170; bladeArc = 140; }
-                if (lvl >= 3) { bladeDamage = 35; bladeKnockback = 180; }
-                if (lvl >= 4) { bladeInterval = 0.5; bladeMultiSlash = 2; }
-                if (lvl >= 5) { bladeRadius = 210; bladeArc = 160; }
-                if (lvl >= 6) { bladeDamage = 50; bladeVulnerability = 0.15; bladeVulnDuration = 2.0; }
-                if (lvl >= 7) { bladeInterval = 0.4; bladeMultiSlash = 3; bladeSlashRotation = 40; }
-                if (lvl >= 8) { bladeRadius = 260; bladeArc = 200; bladeFalloff = 0.70; }
-                if (lvl >= 9) { bladeDamage = 70; bladeVulnerability = 0.25; bladeVulnDuration = 3.0; bladeKillShockwave = true; }
+                if (lvl >= 1) bladeInterval = 0.75;
+                if (lvl >= 2) { bladeRadius = 530; bladeArc = 100; }
+                if (lvl >= 3) { bladeDamage = 45; bladeKnockback = 280; }
+                if (lvl >= 4) { bladeInterval = 0.62; bladeMultiSlash = 2; }
+                if (lvl >= 5) { bladeRadius = 640; bladeArc = 110; }
+                if (lvl >= 6) { bladeDamage = 60; bladeVulnerability = 0.15; bladeVulnDuration = 2.0; }
+                if (lvl >= 7) { bladeInterval = 0.50; bladeMultiSlash = 3; bladeSlashRotation = 30; }
+                if (lvl >= 8) { bladeRadius = 770; bladeArc = 130; bladeFalloff = 0.70; }
+                if (lvl >= 9) { bladeDamage = 85; bladeVulnerability = 0.25; bladeVulnDuration = 3.0; bladeKillShockwave = true; }
             }
 
             // === WARP SNARE === (Lv1-3: count/radius/dps, ...)
             let hasSnare = activeWeapons.includes('warp_snare');
-            let snareMaxCount = 3;
-            let snareDeployInterval = 3.0;
-            let snareLifetime = 6;
-            let snareRadius = 80;
+            let snareMaxCount = 4;
+            let snareDeployInterval = 1.4;
+            let snarePerDeploy = 2;
+            let snareLifetime = 4;
+            let snareRadius = 120;
             let snareDPS = 6;
             let snareSlow = 0.30;
             let snareTickRate = 0.5;
@@ -2853,15 +2862,15 @@
 
             if (hasSnare) {
                 const lvl = upgradeLevels['warp_snare'] || 0;
-                if (lvl >= 1) { snareMaxCount = 4; snareDeployInterval = 2.5; snareLifetime = 7; }
-                if (lvl >= 2) { snareRadius = 110; snareSlow = 0.40; }
-                if (lvl >= 3) { snareDPS = 10; snareTickRate = 0.4; }
-                if (lvl >= 4) { snareMaxCount = 6; snareDeployInterval = 2.0; snareLifetime = 8; }
-                if (lvl >= 5) { snareRadius = 140; snareSlow = 0.50; snareVulnerability = 0.10; }
-                if (lvl >= 6) { snareDPS = 16; snarePermaSlow = 0.20; }
-                if (lvl >= 7) { snareMaxCount = 9; snareDeployInterval = 1.5; snareLifetime = 10; snareStackSlow = true; }
-                if (lvl >= 8) { snareRadius = 180; snareSlow = 0.60; snareVulnerability = 0.20; snareRootDuration = 0.5; }
-                if (lvl >= 9) { snareDPS = 24; snareKillRefresh = true; snareDeathBurst = true; }
+                if (lvl >= 1) { snareMaxCount = 6; snareDeployInterval = 1.2; snareLifetime = 4.5; }
+                if (lvl >= 2) { snareRadius = 165; snareSlow = 0.40; }
+                if (lvl >= 3) { snareDPS = 10; snareTickRate = 0.4; snarePerDeploy = 3; }
+                if (lvl >= 4) { snareMaxCount = 8; snareDeployInterval = 1.0; snareLifetime = 5; }
+                if (lvl >= 5) { snareRadius = 210; snareSlow = 0.50; snareVulnerability = 0.10; }
+                if (lvl >= 6) { snareDPS = 16; snarePermaSlow = 0.20; snarePerDeploy = 4; }
+                if (lvl >= 7) { snareMaxCount = 12; snareDeployInterval = 0.8; snareLifetime = 5.5; snareStackSlow = true; }
+                if (lvl >= 8) { snareRadius = 270; snareSlow = 0.60; snareVulnerability = 0.20; snareRootDuration = 0.5; }
+                if (lvl >= 9) { snareDPS = 24; snareKillRefresh = true; snareDeathBurst = true; snarePerDeploy = 5; }
             }
 
             // === FUSION BEAM === (Lv1-3: targets/ramp/range, ...)
@@ -2921,18 +2930,15 @@
                 if (lvl >= 9) { mineDamage = 65; mineExplosionRadius = 150; mineRadiationDPS = 14; mineRadiationDuration = 4.0; mineChainDetonate = 200; }
             }
 
-            // === SENTRY TURRET === (Lv1-3: count/range/damage, ...)
+            // === SENTRY TURRET === (machine gun turrets, distance-based deploy, no HP/shield)
             let hasTurrets = activeWeapons.includes('sentry_turret');
-            let turretCooldown = 8;
-            let turretMaxCount = 1;
+            let turretDeployDistance = 400;
             let turretLifetime = 10;
-            let turretFireRate = 0.5;
-            let turretDamage = 8;
+            let turretFireRate = 0.10;
+            let turretDamage = 2;
             let turretRange = 300;
             let turretBulletSpeed = 1500;
             let turretPierce = 0;
-            let turretShieldHP = 0;
-            let turretShieldRegen = 0;
             let turretSlow = 0;
             let turretRocketEvery = 0;
             let turretRocketDamage = 0;
@@ -2940,15 +2946,15 @@
 
             if (hasTurrets) {
                 const lvl = upgradeLevels['sentry_turret'] || 0;
-                if (lvl >= 1) { turretMaxCount = 2; turretCooldown = 7; }
-                if (lvl >= 2) { turretRange = 400; turretLifetime = Math.max(turretLifetime, 14); }
-                if (lvl >= 3) { turretDamage = 13; turretFireRate = 0.4; }
-                if (lvl >= 4) { turretMaxCount = 3; turretCooldown = 5.5; }
-                if (lvl >= 5) { turretRange = 500; turretShieldHP = 30; }
-                if (lvl >= 6) { turretDamage = 18; turretFireRate = 0.35; turretPierce = 1; }
-                if (lvl >= 7) { turretMaxCount = 5; turretCooldown = 4; turretLifetime = 12; }
-                if (lvl >= 8) { turretRange = 600; turretShieldHP = 60; turretShieldRegen = 5; turretSlow = 0.15; }
-                if (lvl >= 9) { turretDamage = 24; turretFireRate = 0.3; turretRocketEvery = 5; turretRocketDamage = 15; turretRocketRadius = 60; }
+                if (lvl >= 1) { turretDeployDistance = 350; turretLifetime = 12; }
+                if (lvl >= 2) { turretRange = 400; turretLifetime = 14; }
+                if (lvl >= 3) { turretDamage = 3; turretFireRate = 0.08; }
+                if (lvl >= 4) { turretDeployDistance = 280; turretLifetime = 16; }
+                if (lvl >= 5) { turretRange = 500; turretSlow = 0.10; }
+                if (lvl >= 6) { turretDamage = 4; turretFireRate = 0.07; turretPierce = 1; }
+                if (lvl >= 7) { turretDeployDistance = 200; turretLifetime = 18; }
+                if (lvl >= 8) { turretRange = 600; turretSlow = 0.15; }
+                if (lvl >= 9) { turretDamage = 5; turretFireRate = 0.06; turretRocketEvery = 8; turretRocketDamage = 15; turretRocketRadius = 60; }
             }
 
             // Temp damage buff (from bonus_damage) + permanent Power Core
@@ -2985,7 +2991,7 @@
                 bladeRadius, bladeArc, bladeKnockback, bladeMultiSlash,
                 bladeSlashRotation, bladeFalloff, bladeVulnerability, bladeVulnDuration, bladeKillShockwave,
                 // Warp Snare
-                hasSnare, snareMaxCount, snareDeployInterval, snareLifetime,
+                hasSnare, snareMaxCount, snareDeployInterval, snarePerDeploy, snareLifetime,
                 snareRadius, snareDPS: Math.round(snareDPS * finalDamageMulti),
                 snareSlow, snareTickRate, snareVulnerability, snareRootDuration,
                 snarePermaSlow, snareKillRefresh, snareDeathBurst, snareStackSlow,
@@ -3014,10 +3020,9 @@
                 mineRadiationDuration, mineChainDetonate,
                 hasBlackHole: hasMines && (upgradeLevels['gravity_mines'] || 0) >= 10,
                 // Sentry Turret
-                hasTurrets, turretCooldown, turretMaxCount, turretLifetime,
+                hasTurrets, turretDeployDistance, turretLifetime,
                 turretFireRate, turretDamage: Math.round(turretDamage * finalDamageMulti),
-                turretRange, turretBulletSpeed, turretPierce,
-                turretShieldHP, turretShieldRegen, turretSlow,
+                turretRange, turretBulletSpeed, turretPierce, turretSlow,
                 turretRocketEvery, turretRocketDamage: Math.round(turretRocketDamage * finalDamageMulti),
                 turretRocketRadius,
                 hasCombatStation: hasTurrets && (upgradeLevels['sentry_turret'] || 0) >= 10,
@@ -3921,249 +3926,47 @@
             }
         }
 
-        function getWaveSubtitle(pattern) {
-            const subtitles = {
-                'arc': 'ARC FORMATION',
-                'side': 'FLANK ATTACK',
-                'pincer': 'PINCER INCOMING',
-                'circle': 'SURROUNDED',
-                'line': 'LINE ASSAULT',
-                'cluster': 'CLUSTER SWARM',
-                'spiral': 'SPIRAL CONVERGENCE',
-                'corners': 'CORNER AMBUSH',
-                'rush': 'ENEMY RUSH',
-                'scatter': 'SCATTER ASSAULT',
-                'v_formation': 'V-FORMATION'
-            };
-            return subtitles[pattern] || 'HOSTILES INCOMING';
-        }
-
         function spawnWave() {
             if (!player) return;
-
-            // Pick a random pattern different from the last one
-            let pattern;
-            do {
-                pattern = WAVE_PATTERNS[Math.floor(Math.random() * WAVE_PATTERNS.length)];
-            } while (pattern === lastWavePattern && WAVE_PATTERNS.length > 1);
-            lastWavePattern = pattern;
 
             // Trigger wave alert
             waveAlertActive = true;
             waveAlertTimer = 0;
             waveAlertNumber = waveNumber;
-            waveAlertSubtitle = getWaveSubtitle(pattern);
+            waveAlertSubtitle = 'HOSTILES INCOMING';
 
             // Scale wave size with level (more enemies at higher levels)
-            const baseCount = 15 + Math.floor(playerLevel * 4);
-            const count = Math.min(baseCount, 60); // Cap at 60 per wave
+            const baseCount = 20 + Math.floor(playerLevel * 4);
+            const count = Math.min(baseCount, 80);
 
-            // Scale enemy HP based on player level (+25% per level) and difficulty
-            const config = ENEMY_TYPES['SCOUT'];
+            // HP scaling for wave enemies
             const waveDiffMult = getDiffMultipliers();
-            const hpMultiplier = (1 + (playerLevel - 1) * 0.25) * waveDiffMult.enemyHP;
-            const scaledHp = Math.ceil(config.hp * hpMultiplier);
+            const hpMultiplier = Math.pow(1.12, playerLevel - 1) * waveDiffMult.enemyHP;
+
+            // Generate 3-6 clusters around the player, just outside screen
+            const numClusters = 3 + Math.floor(Math.random() * 4);
+            const enemiesPerCluster = Math.floor(count / numClusters);
+            const remainder = count - enemiesPerCluster * numClusters;
 
             const spawnPositions = [];
 
-            switch (pattern) {
-                case 'arc': {
-                    // Arc around player (original pattern but smaller)
-                    const centerAngle = Math.random() * 360;
-                    const arcDegrees = 90 + Math.random() * 60; // 90-150 degree arc
-                    for (let i = 0; i < count; i++) {
-                        const angle = (centerAngle - arcDegrees/2 + (arcDegrees / (count - 1)) * i) * Math.PI / 180;
-                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 100;
-                        spawnPositions.push({
-                            x: player.x + Math.cos(angle) * dist,
-                            y: player.y + Math.sin(angle) * dist
-                        });
-                    }
-                    break;
-                }
-                case 'side': {
-                    // All from one side in a wall
-                    const side = Math.floor(Math.random() * 4); // 0=left, 1=right, 2=top, 3=bottom
-                    for (let i = 0; i < count; i++) {
-                        let x, y;
-                        const spread = (i - count/2) * 25;
-                        if (side === 0) { // Left
-                            x = player.x - WAVE_SPAWN_DISTANCE;
-                            y = player.y + spread;
-                        } else if (side === 1) { // Right
-                            x = player.x + WAVE_SPAWN_DISTANCE;
-                            y = player.y + spread;
-                        } else if (side === 2) { // Top
-                            x = player.x + spread;
-                            y = player.y - WAVE_SPAWN_DISTANCE;
-                        } else { // Bottom
-                            x = player.x + spread;
-                            y = player.y + WAVE_SPAWN_DISTANCE;
-                        }
-                        spawnPositions.push({ x, y });
-                    }
-                    break;
-                }
-                case 'pincer': {
-                    // From two opposite sides
-                    const horizontal = Math.random() > 0.5;
-                    const halfCount = Math.floor(count / 2);
-                    for (let i = 0; i < halfCount; i++) {
-                        const spread = (i - halfCount/2) * 30;
-                        if (horizontal) {
-                            spawnPositions.push({ x: player.x - WAVE_SPAWN_DISTANCE, y: player.y + spread });
-                            spawnPositions.push({ x: player.x + WAVE_SPAWN_DISTANCE, y: player.y + spread });
-                        } else {
-                            spawnPositions.push({ x: player.x + spread, y: player.y - WAVE_SPAWN_DISTANCE });
-                            spawnPositions.push({ x: player.x + spread, y: player.y + WAVE_SPAWN_DISTANCE });
-                        }
-                    }
-                    break;
-                }
-                case 'circle': {
-                    // Hexagonal staggered pattern (3 inner, 3 outer)
-                    // Replaces the unfair "full circle" trap with escape routes
-                    const baseAngle = Math.random() * Math.PI * 2;
-                    // Screen half-width is 960, so 1100 ensures they are off-screen
-                    const innerDist = 1100; 
-                    const outerDist = 1500;
+            for (let c = 0; c < numClusters; c++) {
+                const clusterAngle = Math.random() * Math.PI * 2;
+                const clusterDist = WAVE_SPAWN_DIST_MIN + Math.random() * (WAVE_SPAWN_DIST_MAX - WAVE_SPAWN_DIST_MIN);
 
-                    for (let i = 0; i < count; i++) {
-                        // Distribute among 6 clusters
-                        const clusterIdx = i % 6;
-                        
-                        // Even indices (0, 2, 4) are inner (closest)
-                        // Odd indices (1, 3, 5) are outer (furthest, filling gaps)
-                        const isInner = clusterIdx % 2 === 0;
-                        
-                        // 6 points of hexagon: 0, 60, 120, 180, 240, 300 degrees
-                        const angleStep = Math.PI / 3; 
-                        const clusterAngle = baseAngle + (clusterIdx * angleStep);
+                const cx = player.x + Math.cos(clusterAngle) * clusterDist;
+                const cy = player.y + Math.sin(clusterAngle) * clusterDist;
 
-                        // Random spread within the cluster
-                        const spreadAngle = (Math.random() - 0.5) * 0.4; // ~20 degree spread
-                        const finalAngle = clusterAngle + spreadAngle;
+                // Extra enemies from remainder go to first clusters
+                const clusterCount = enemiesPerCluster + (c < remainder ? 1 : 0);
 
-                        const baseDist = isInner ? innerDist : outerDist;
-                        const distVariation = Math.random() * 150; // Depth variation
-                        const dist = baseDist + distVariation;
-
-                        spawnPositions.push({
-                            x: player.x + Math.cos(finalAngle) * dist,
-                            y: player.y + Math.sin(finalAngle) * dist
-                        });
-                    }
-                    break;
-                }
-                case 'line': {
-                    // Diagonal line sweeping towards player
-                    const angle = Math.random() * 360 * Math.PI / 180;
-                    const perpAngle = angle + Math.PI / 2;
-                    for (let i = 0; i < count; i++) {
-                        const offset = (i - count/2) * 35;
-                        spawnPositions.push({
-                            x: player.x + Math.cos(angle) * WAVE_SPAWN_DISTANCE + Math.cos(perpAngle) * offset,
-                            y: player.y + Math.sin(angle) * WAVE_SPAWN_DISTANCE + Math.sin(perpAngle) * offset
-                        });
-                    }
-                    break;
-                }
-                case 'cluster': {
-                    // Tight cluster from one direction
-                    const angle = Math.random() * 360 * Math.PI / 180;
-                    for (let i = 0; i < count; i++) {
-                        const offsetAngle = angle + (Math.random() - 0.5) * 0.5;
-                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 150;
-                        spawnPositions.push({
-                            x: player.x + Math.cos(offsetAngle) * dist,
-                            y: player.y + Math.sin(offsetAngle) * dist
-                        });
-                    }
-                    break;
-                }
-                case 'spiral': {
-                    // Spiral pattern
-                    const startAngle = Math.random() * 360;
-                    for (let i = 0; i < count; i++) {
-                        const angle = (startAngle + i * 25) * Math.PI / 180;
-                        const dist = WAVE_SPAWN_DISTANCE + i * 15;
-                        spawnPositions.push({
-                            x: player.x + Math.cos(angle) * dist,
-                            y: player.y + Math.sin(angle) * dist
-                        });
-                    }
-                    break;
-                }
-                case 'corners': {
-                    // From all 4 corners
-                    const perCorner = Math.floor(count / 4);
-                    const corners = [
-                        { dx: -1, dy: -1 },
-                        { dx: 1, dy: -1 },
-                        { dx: -1, dy: 1 },
-                        { dx: 1, dy: 1 }
-                    ];
-                    for (const corner of corners) {
-                        for (let i = 0; i < perCorner; i++) {
-                            const spreadX = (Math.random() - 0.5) * 200;
-                            const spreadY = (Math.random() - 0.5) * 200;
-                            spawnPositions.push({
-                                x: player.x + corner.dx * WAVE_SPAWN_DISTANCE * 0.7 + spreadX,
-                                y: player.y + corner.dy * WAVE_SPAWN_DISTANCE * 0.7 + spreadY
-                            });
-                        }
-                    }
-                    break;
-                }
-                case 'rush': {
-                    // Dense column rushing from one direction
-                    const rushAngle = Math.random() * 360 * Math.PI / 180;
-                    const perpAngle = rushAngle + Math.PI / 2;
-                    const rows = 4;
-                    const perRow = Math.ceil(count / rows);
-                    for (let row = 0; row < rows; row++) {
-                        for (let i = 0; i < perRow; i++) {
-                            const offset = (i - perRow/2) * 20;
-                            const rowDist = row * 40;
-                            spawnPositions.push({
-                                x: player.x + Math.cos(rushAngle) * (WAVE_SPAWN_DISTANCE + rowDist) + Math.cos(perpAngle) * offset,
-                                y: player.y + Math.sin(rushAngle) * (WAVE_SPAWN_DISTANCE + rowDist) + Math.sin(perpAngle) * offset
-                            });
-                        }
-                    }
-                    break;
-                }
-                case 'scatter': {
-                    // Random positions all around (chaotic)
-                    for (let i = 0; i < count; i++) {
-                        const angle = Math.random() * Math.PI * 2;
-                        const dist = WAVE_SPAWN_DISTANCE + Math.random() * 300 - 150;
-                        spawnPositions.push({
-                            x: player.x + Math.cos(angle) * dist,
-                            y: player.y + Math.sin(angle) * dist
-                        });
-                    }
-                    break;
-                }
-                case 'v_formation': {
-                    // V-shape formation flying towards player
-                    const vAngle = Math.random() * 360 * Math.PI / 180;
-                    const halfCount = Math.floor(count / 2);
-                    for (let i = 0; i < halfCount; i++) {
-                        const offset = i * 30;
-                        const depth = i * 25;
-                        // Left wing of V
-                        spawnPositions.push({
-                            x: player.x + Math.cos(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.cos(vAngle + Math.PI/2) * offset,
-                            y: player.y + Math.sin(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.sin(vAngle + Math.PI/2) * offset
-                        });
-                        // Right wing of V
-                        spawnPositions.push({
-                            x: player.x + Math.cos(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.cos(vAngle - Math.PI/2) * offset,
-                            y: player.y + Math.sin(vAngle) * (WAVE_SPAWN_DISTANCE + depth) + Math.sin(vAngle - Math.PI/2) * offset
-                        });
-                    }
-                    break;
+                for (let i = 0; i < clusterCount; i++) {
+                    const offsetAngle = Math.random() * Math.PI * 2;
+                    const offsetDist = Math.random() * WAVE_CLUSTER_RADIUS;
+                    spawnPositions.push({
+                        x: cx + Math.cos(offsetAngle) * offsetDist,
+                        y: cy + Math.sin(offsetAngle) * offsetDist
+                    });
                 }
             }
 
@@ -4172,20 +3975,23 @@
             if (spawnRoom <= 0) return;
             if (spawnPositions.length > spawnRoom) spawnPositions.length = spawnRoom;
 
-            // Spawn all enemies in the wave
+            // Spawn all enemies in the wave with mixed types
             for (const pos of spawnPositions) {
                 const angleToPlayer = Math.atan2(player.y - pos.y, player.x - pos.x);
+                const enemyType = getSpawnType();
+                const typeConfig = ENEMY_TYPES[enemyType];
+                const scaledHp = Math.ceil(typeConfig.hp * hpMultiplier);
 
                 const enemy = pools.enemy.acquire();
                 enemy.x = pos.x;
                 enemy.y = pos.y;
-                enemy.vx = Math.cos(angleToPlayer) * config.speed * waveDiffMult.enemySpeed;
-                enemy.vy = Math.sin(angleToPlayer) * config.speed * waveDiffMult.enemySpeed;
+                enemy.vx = Math.cos(angleToPlayer) * typeConfig.speed * waveDiffMult.enemySpeed;
+                enemy.vy = Math.sin(angleToPlayer) * typeConfig.speed * waveDiffMult.enemySpeed;
                 enemy.angle = angleToPlayer * 180 / Math.PI;
-                enemy.type = 'SCOUT';
+                enemy.type = enemyType;
                 enemy.hp = scaledHp;
                 enemy.maxHp = scaledHp;
-                enemy.fireTimer = 0;
+                enemy.fireTimer = typeConfig.fireRate || 0;
                 enemy.burstCooldown = 0;
                 enemy.spawnTime = gameTime;
                 enemy.offScreenTime = 0;
@@ -4193,67 +3999,85 @@
             }
         }
         
-        function spawnEnemy() {
-            if (!player) return; // Safety check
-
-            // Determine enemy type based on wave/time
+        function getSpawnType() {
             let type = 'SCOUT';
             const r = Math.random();
+            const t = gameTime;
 
-            if (gameTime > 90 && r < 0.08) {
-                type = 'TANK';
-            } else if (waveNumber >= 10 && r < 0.20) {
-                type = 'KAMIKAZE';
+            if (t < 30) {
+                // First 30s: scouts only
+                type = 'SCOUT';
+            } else if (t < 90) {
+                // 30s-90s: kamikazes appear (15%)
+                if (r < 0.15) type = 'KAMIKAZE';
+            } else if (t < 180) {
+                // 90s-3min: kamikazes (20%) + tanks start (8%)
+                if (r < 0.08) type = 'TANK';
+                else if (r < 0.28) type = 'KAMIKAZE';
+            } else if (t < 300) {
+                // 3min-5min: more tanks (20%) + kamikazes (25%)
+                if (r < 0.20) type = 'TANK';
+                else if (r < 0.45) type = 'KAMIKAZE';
+            } else if (t < 480) {
+                // 5min-8min: tanks dominate (27%) + first aliens (5%) + kamikazes (20%)
+                if (r < 0.05) type = 'ALIEN';
+                else if (r < 0.32) type = 'TANK';
+                else if (r < 0.52) type = 'KAMIKAZE';
+            } else {
+                // 8min+: late game, aliens grow (10%), tanks abundant (28%), kamikazes (20%)
+                if (r < 0.10) type = 'ALIEN';
+                else if (r < 0.38) type = 'TANK';
+                else if (r < 0.58) type = 'KAMIKAZE';
             }
+            return type;
+        }
 
-            // Spawn position relative to PLAYER (not canvas bounds)
-            const side = Math.floor(Math.random() * 4);
-            let x, y;
-            const offset = ENEMY_SPAWN_OFFSET_MIN + Math.random() * ENEMY_SPAWN_OFFSET_RANGE;
-            const spawnDistance = CANVAS_WIDTH / 2 + offset;
+        function spawnEnemy() {
+            if (!player) return;
 
-            switch (side) {
-                case 0: // Left
-                    x = player.x - spawnDistance;
-                    y = player.y + (Math.random() - 0.5) * CANVAS_HEIGHT;
-                    break;
-                case 1: // Right
-                    x = player.x + spawnDistance;
-                    y = player.y + (Math.random() - 0.5) * CANVAS_HEIGHT;
-                    break;
-                case 2: // Top
-                    x = player.x + (Math.random() - 0.5) * CANVAS_WIDTH;
-                    y = player.y - spawnDistance;
-                    break;
-                case 3: // Bottom
-                    x = player.x + (Math.random() - 0.5) * CANVAS_WIDTH;
-                    y = player.y + spawnDistance;
-                    break;
-            }
+            // Spawn a mini-group of 3-5 enemies from the same direction
+            const groupSize = 3 + Math.floor(Math.random() * 3);
+            const angle = Math.random() * Math.PI * 2;
+            const spawnDistance = CANVAS_WIDTH / 2 + ENEMY_SPAWN_OFFSET_MIN + Math.random() * ENEMY_SPAWN_OFFSET_RANGE;
 
-            const config = ENEMY_TYPES[type];
-            const angleToPlayer = Math.atan2(player.y - y, player.x - x);
-            
-            // Scale enemy HP based on player level (+40% per level) and difficulty
+            // Cluster center
+            const cx = player.x + Math.cos(angle) * spawnDistance;
+            const cy = player.y + Math.sin(angle) * spawnDistance;
+
             const diffMult = getDiffMultipliers();
-            const hpMultiplier = (1 + (playerLevel - 1) * 0.40) * diffMult.enemyHP;
-            const scaledHp = Math.ceil(config.hp * hpMultiplier);
+            const hpMultiplier = Math.pow(1.12, playerLevel - 1) * diffMult.enemyHP;
             const speedMult = diffMult.enemySpeed;
 
-            const enemy = pools.enemy.acquire();
-            enemy.x = x;
-            enemy.y = y;
-            enemy.vx = Math.cos(angleToPlayer) * config.speed * speedMult;
-            enemy.vy = Math.sin(angleToPlayer) * config.speed * speedMult;
-            enemy.angle = angleToPlayer * 180 / Math.PI;
-            enemy.type = type;
-            enemy.hp = scaledHp;
-            enemy.maxHp = scaledHp;
-            enemy.fireTimer = config.fireRate || 0;
-            enemy.burstCooldown = 0;
-            enemy.spawnTime = gameTime;
-            enemy.offScreenTime = 0;
-            enemies.push(enemy);
+            for (let i = 0; i < groupSize; i++) {
+                if (enemies.length >= HARD_MAX_ENEMIES) break;
+
+                const type = getSpawnType();
+                const config = ENEMY_TYPES[type];
+
+                // Position within the group (tight 40px radius)
+                const offsetAngle = Math.random() * Math.PI * 2;
+                const offsetDist = Math.random() * 40;
+                const x = cx + Math.cos(offsetAngle) * offsetDist;
+                const y = cy + Math.sin(offsetAngle) * offsetDist;
+
+                const angleToPlayer = Math.atan2(player.y - y, player.x - x);
+                const scaledHp = Math.ceil(config.hp * hpMultiplier);
+
+                const enemy = pools.enemy.acquire();
+                enemy.x = x;
+                enemy.y = y;
+                enemy.vx = Math.cos(angleToPlayer) * config.speed * speedMult;
+                enemy.vy = Math.sin(angleToPlayer) * config.speed * speedMult;
+                enemy.angle = angleToPlayer * 180 / Math.PI;
+                enemy.type = type;
+                enemy.hp = scaledHp;
+                enemy.maxHp = scaledHp;
+                enemy.fireTimer = config.fireRate || 0;
+                enemy.burstCooldown = 0;
+                enemy.spawnTime = gameTime;
+                enemy.offScreenTime = 0;
+                enemies.push(enemy);
+            }
         }
         
         function updateEnemies() {
@@ -4262,7 +4086,8 @@
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 const config = ENEMY_TYPES[e.type];
-                const speed = config.speed * getDiffMultipliers().enemySpeed;
+                const timeSpeedBonus = 1 + Math.min(gameTime / 600, 0.3); // +30% max over 10 min
+                const speed = config.speed * getDiffMultipliers().enemySpeed * timeSpeedBonus;
 
                 // Seek player with limited turn rate
                 const dx = player.x - e.x;
@@ -4297,14 +4122,6 @@
                     }
                 }
                 
-                // Spinner fires
-                if (e.type === 'SPINNER') {
-                    e.fireTimer -= deltaTime;
-                    if (e.fireTimer <= 0) {
-                        fireSpinnerBullets(e);
-                        e.fireTimer = config.fireRate;
-                    }
-                }
                 
                 // Separation from other enemies (staggered — half per frame)
                 if ((i + separationFrame) & 1) {
@@ -4323,10 +4140,29 @@
                             const push = (minDist - sepDist) * 0.5;
                             const pushX = (sepDx / sepDist) * push;
                             const pushY = (sepDy / sepDist) * push;
-                            e.vx += pushX;
-                            e.vy += pushY;
-                            other.vx -= pushX;
-                            other.vy -= pushY;
+
+                            const eIsK = e.type === 'KAMIKAZE';
+                            const oIsK = other.type === 'KAMIKAZE';
+
+                            if (eIsK && oIsK) {
+                                // Kamikazes push each other normally
+                                e.vx += pushX;
+                                e.vy += pushY;
+                                other.vx -= pushX;
+                                other.vy -= pushY;
+                            } else {
+                                // Kamikazes immune to push from others, bulldoze 2.5x
+                                if (!eIsK) {
+                                    const mult = oIsK ? 2.5 : 1;
+                                    e.vx += pushX * mult;
+                                    e.vy += pushY * mult;
+                                }
+                                if (!oIsK) {
+                                    const mult = eIsK ? 2.5 : 1;
+                                    other.vx -= pushX * mult;
+                                    other.vy -= pushY * mult;
+                                }
+                            }
                         }
                     }
                 }
@@ -4350,6 +4186,13 @@
                 if (e.vulnerabilityTimer > 0) {
                     e.vulnerabilityTimer -= deltaTime;
                     if (e.vulnerabilityTimer <= 0) e.vulnerability = 0;
+                }
+
+                // Kamikaze trail (same pattern as rocket trails)
+                if (e.type === 'KAMIKAZE') {
+                    if (!e.trail) e.trail = [];
+                    e.trail.unshift({ x: e.x, y: e.y });
+                    if (e.trail.length > 50) e.trail.pop();
                 }
 
                 // Update position
@@ -4384,29 +4227,8 @@
                     const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
                     e.vx = Math.cos(rad) * spd;
                     e.vy = Math.sin(rad) * spd;
+                    if (e.trail) e.trail.length = 0;
                 }
-
-                // Spinner self-destruct
-                if (e.type === 'SPINNER' && gameTime - e.spawnTime > 20) {
-                    pools.enemy.release(e);
-                    fastRemove(enemies, i);
-                    spawnRing(e.x, e.y, config.color, 40);
-                }
-            }
-        }
-        
-        function fireSpinnerBullets(enemy) {
-            const bulletCount = 6;
-            for (let i = 0; i < bulletCount; i++) {
-                const angle = (360 / bulletCount) * i + enemy.angle;
-                const rad = angle * Math.PI / 180;
-                const bullet = pools.enemyBullet.acquire();
-                bullet.x = enemy.x;
-                bullet.y = enemy.y;
-                bullet.vx = Math.cos(rad) * 260;
-                bullet.vy = Math.sin(rad) * 260;
-                bullet.life = 2;
-                enemyBullets.push(bullet);
             }
         }
         
@@ -4443,7 +4265,7 @@
 
             // Direct XP gain
             if (!enemy.noXP) {
-                const xpValue = enemy.type === 'TANK' ? 3 : (enemy.type === 'SPINNER' ? 2 : 1);
+                const xpValue = enemy.type === 'TANK' ? 5 : (enemy.type === 'KAMIKAZE' ? 2 : 1);
                 collectXP(xpValue);
             }
 
@@ -5441,6 +5263,10 @@
             if (option.type === 'weapon_activation') {
                 if (activeWeapons.length >= MAX_ACTIVE_WEAPONS) return;
                 activeWeapons.push(option.id);
+                if (option.id === 'sentry_turret' && player) {
+                    lastTurretX = player.x;
+                    lastTurretY = player.y;
+                }
             } else if (option.type === 'upgrade') {
                 upgradeLevels[option.id] = (upgradeLevels[option.id] || 0) + 1;
             } else if (option.type === 'bonus') {
@@ -5957,41 +5783,44 @@
             bladeTimer -= deltaTime;
             if (bladeTimer > 0) return;
 
-            // Check if any enemies in melee range
+            const playerRad = player.angle * Math.PI / 180;
+
+            // Check enemies from player position within blast range
             const nearbyEnemies = spatialGrid.queryRadius(player.x, player.y, stats.bladeRadius + 30);
             if (nearbyEnemies.length === 0) return;
 
             bladeTimer = stats.bladeInterval;
-            const playerRad = player.angle * Math.PI / 180;
             const halfArc = (stats.bladeArc / 2) * Math.PI / 180;
 
-            // Multi-slash
+            // Simultaneous fan blast (all slashes fire at once)
             for (let s = 0; s < stats.bladeMultiSlash; s++) {
-                const slashDelay = s * 0.1;
-                const rotOffset = stats.bladeSlashRotation > 0 ? (s - (stats.bladeMultiSlash - 1) / 2) * (stats.bladeSlashRotation * Math.PI / 180) : 0;
+                const rotOffset = stats.bladeSlashRotation > 0
+                    ? (s - (stats.bladeMultiSlash - 1) / 2) * (stats.bladeSlashRotation * Math.PI / 180)
+                    : 0;
                 const slashAngle = playerRad + rotOffset;
 
-                // Create slash visual effect
+                // Create blast visual from player position (inherits player velocity)
                 slashEffects.push({
                     x: player.x, y: player.y,
                     angle: slashAngle,
                     radius: stats.bladeRadius,
                     arc: halfArc,
-                    life: 0.3 + slashDelay,
-                    maxLife: 0.3 + slashDelay,
-                    delay: slashDelay,
+                    life: 0.22,
+                    maxLife: 0.22,
                     color: WEAPONS['void_blade'].color,
-                    isRift: false
+                    vx: player.vx || 0,
+                    vy: player.vy || 0
                 });
 
                 // Spawn rift zone on evolution trigger
                 if (stats.hasDimensionalRift && riftTimer <= 0 && s === 0) {
                     riftTimer = 6;
+                    const riftDist = stats.bladeRadius * 0.6;
                     riftZones.push({
-                        x: player.x + Math.cos(slashAngle) * stats.bladeRadius * 0.6,
-                        y: player.y + Math.sin(slashAngle) * stats.bladeRadius * 0.6,
+                        x: player.x + Math.cos(slashAngle) * riftDist,
+                        y: player.y + Math.sin(slashAngle) * riftDist,
                         angle: slashAngle,
-                        radius: stats.bladeRadius,
+                        radius: stats.bladeRadius * 0.5,
                         arc: halfArc,
                         life: 3.0,
                         maxLife: 3.0,
@@ -6001,66 +5830,66 @@
                     });
                 }
 
-                // Deal damage to enemies in the arc (delayed for multi-slash)
-                if (slashDelay === 0) {
-                    performSlashDamage(stats, slashAngle, halfArc, nearbyEnemies);
-                } else {
-                    // Schedule delayed slashes
-                    setTimeout(() => {
-                        if (gameState !== 'playing' || !player) return;
-                        const enemies2 = spatialGrid.queryRadius(player.x, player.y, stats.bladeRadius + 30);
-                        performSlashDamage(stats, slashAngle, halfArc, enemies2);
-                    }, slashDelay * 1000);
-                }
+                // Instant damage from player position
+                performBlastDamage(stats, player.x, player.y, slashAngle, halfArc);
             }
         }
 
-        function performSlashDamage(stats, slashAngle, halfArc, nearbyEnemies) {
-            for (const e of nearbyEnemies) {
-                const dx = e.x - player.x;
-                const dy = e.y - player.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > stats.bladeRadius) continue;
+        function performBlastDamage(stats, blastX, blastY, slashAngle, halfArc) {
+            const damageRadius = stats.bladeRadius * 0.9;
+            const knockbackRadius = stats.bladeRadius * 1.1;
+            const nearbyEnemies = spatialGrid.queryRadius(blastX, blastY, knockbackRadius + 30);
 
-                // Check angle
+            for (const e of nearbyEnemies) {
+                const dx = e.x - blastX;
+                const dy = e.y - blastY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > knockbackRadius) continue;
+
+                // Arc angle check from blast origin
                 const angleToEnemy = Math.atan2(dy, dx);
                 let angleDiff = angleToEnemy - slashAngle;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
                 if (Math.abs(angleDiff) > halfArc) continue;
 
-                // Damage with falloff
-                let dmg = stats.bladeDamage;
-                if (stats.bladeFalloff < 1.0) {
-                    const distRatio = dist / stats.bladeRadius;
-                    if (distRatio > 0.6) {
-                        dmg = Math.round(dmg * (stats.bladeFalloff + (1 - stats.bladeFalloff) * (1 - (distRatio - 0.6) / 0.4)));
+                // INNER ZONE: damage + knockback
+                if (dist <= damageRadius) {
+                    let dmg = stats.bladeDamage;
+                    if (stats.bladeFalloff < 1.0) {
+                        const distRatio = dist / damageRadius;
+                        if (distRatio > 0.6) {
+                            dmg = Math.round(dmg * (stats.bladeFalloff + (1 - stats.bladeFalloff) * (1 - (distRatio - 0.6) / 0.4)));
+                        }
+                    }
+                    const vulnMult = e.vulnerability || 0;
+                    const totalDmg = Math.round(dmg * (1 + vulnMult));
+                    e.hp -= totalDmg;
+                    spawnFloatingText(e.x, e.y - 15, totalDmg.toString(), WEAPONS['void_blade'].color);
+                    spawnRing(e.x, e.y, WEAPONS['void_blade'].color);
+
+                    if (stats.bladeVulnerability > 0) {
+                        e.vulnerability = stats.bladeVulnerability;
+                        e.vulnerabilityTimer = stats.bladeVulnDuration;
                     }
                 }
 
-                // Apply vulnerability bonus from snares/blade
-                const vulnMult = e.vulnerability || 0;
-                const totalDmg = Math.round(dmg * (1 + vulnMult));
-                e.hp -= totalDmg;
-                spawnFloatingText(e.x, e.y - 15, totalDmg.toString(), WEAPONS['void_blade'].color);
-                spawnRing(e.x, e.y, WEAPONS['void_blade'].color);
-
-                // Apply vulnerability debuff
-                if (stats.bladeVulnerability > 0) {
-                    e.vulnerability = stats.bladeVulnerability;
-                    e.vulnerabilityTimer = stats.bladeVulnDuration;
-                }
-
-                // Knockback
+                // BOTH ZONES: knockback (linear falloff in outer zone)
                 if (stats.bladeKnockback > 0 && dist > 0) {
-                    e.vx += (dx / dist) * stats.bladeKnockback;
-                    e.vy += (dy / dist) * stats.bladeKnockback;
+                    let pushForce = stats.bladeKnockback;
+                    if (dist > damageRadius) {
+                        // Outer zone: linear falloff from 100% to 0%
+                        const outerProgress = (dist - damageRadius) / (knockbackRadius - damageRadius);
+                        pushForce *= (1 - outerProgress);
+                    }
+                    e.vx += (dx / dist) * pushForce;
+                    e.vy += (dy / dist) * pushForce;
                 }
 
-                if (e.hp <= 0) {
+                // Kill check (only inner zone gets damage)
+                if (dist <= damageRadius && e.hp <= 0) {
                     const idx = enemies.indexOf(e);
                     if (idx !== -1) {
-                        // Kill shockwave
                         if (stats.bladeKillShockwave) {
                             const nearby = spatialGrid.queryRadius(e.x, e.y, 80);
                             for (const n of nearby) {
@@ -6118,10 +5947,15 @@
 
         function updateSlashEffects() {
             for (let i = slashEffects.length - 1; i >= 0; i--) {
-                slashEffects[i].life -= deltaTime;
-                if (slashEffects[i].life <= 0) {
+                const s = slashEffects[i];
+                s.life -= deltaTime;
+                if (s.life <= 0) {
                     fastRemove(slashEffects, i);
+                    continue;
                 }
+                // Move with captured velocity (player momentum at cast time)
+                s.x += s.vx * deltaTime;
+                s.y += s.vy * deltaTime;
             }
         }
 
@@ -6133,28 +5967,38 @@
             const stats = getWeaponStats();
             if (!stats.hasSnare) return;
 
-            // Deploy new snares
+            // Deploy new snares in pairs around the player
+            const SNARE_SPAWN_RADIUS = 250;
             snareDeployTimer -= deltaTime;
-            if (snareDeployTimer <= 0 && snares.length < stats.snareMaxCount) {
+            if (snareDeployTimer <= 0) {
                 snareDeployTimer = stats.snareDeployInterval;
-                const s = pools.snare.acquire();
-                s.x = player.x;
-                s.y = player.y;
-                s.life = stats.snareLifetime;
-                s.maxLife = stats.snareLifetime;
-                s.radius = stats.snareRadius;
-                s.dps = stats.snareDPS;
-                s.slow = stats.snareSlow;
-                s.tickTimer = 0;
-                s.tickRate = stats.snareTickRate;
-                s.vulnerability = stats.snareVulnerability;
-                s.rootDuration = stats.snareRootDuration;
-                s.permaSlow = stats.snarePermaSlow;
-                s.killRefresh = stats.snareKillRefresh;
-                s.deathBurst = stats.snareDeathBurst;
-                s.isCage = false;
-                s.stackSlow = stats.snareStackSlow;
-                snares.push(s);
+
+                // Deploy snares at equidistant angles
+                const count = stats.snarePerDeploy;
+                const angleStep = (Math.PI * 2) / count;
+                for (let p = 0; p < count; p++) {
+                    const angle = snareDeployAngle + p * angleStep;
+                    const s = pools.snare.acquire();
+                    s.x = player.x + Math.cos(angle) * SNARE_SPAWN_RADIUS;
+                    s.y = player.y + Math.sin(angle) * SNARE_SPAWN_RADIUS;
+                    s.life = stats.snareLifetime;
+                    s.maxLife = stats.snareLifetime;
+                    s.radius = stats.snareRadius;
+                    s.dps = stats.snareDPS;
+                    s.slow = stats.snareSlow;
+                    s.tickTimer = 0;
+                    s.tickRate = stats.snareTickRate;
+                    s.vulnerability = stats.snareVulnerability;
+                    s.rootDuration = stats.snareRootDuration;
+                    s.permaSlow = stats.snarePermaSlow;
+                    s.killRefresh = stats.snareKillRefresh;
+                    s.deathBurst = stats.snareDeathBurst;
+                    s.isCage = false;
+                    s.stackSlow = stats.snareStackSlow;
+                    snares.push(s);
+                }
+                // Rotate by one snare diameter (in radians at spawn radius)
+                snareDeployAngle += (2 * stats.snareRadius) / SNARE_SPAWN_RADIUS;
             }
 
             // Temporal Cage evolution
@@ -6199,6 +6043,7 @@
                         const vulnMult = e.vulnerability || 0;
                         const totalDmg = Math.round(dmg * (1 + vulnMult));
                         e.hp -= totalDmg;
+                        spawnFloatingText(e.x, e.y, totalDmg, COLORS.PLAYER);
 
                         // Apply slow
                         e.snareSlow = s.slow;
@@ -6235,7 +6080,7 @@
                                 }
                                 // Death burst
                                 if (s.deathBurst) {
-                                    spawnRing(e.x, e.y, WEAPONS['warp_snare'].color, 60);
+                                    spawnRing(e.x, e.y, COLORS.PLAYER, 60);
                                     const burstNearby = spatialGrid.queryRadius(e.x, e.y, 60);
                                     for (const n of burstNearby) {
                                         if (n !== e && n.hp > 0) {
@@ -6268,7 +6113,7 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist <= stats.mineExplosionRadius) {
                     e.hp -= stats.mineDamage;
-                    spawnFloatingText(e.x, e.y, stats.mineDamage, '#FF6EC7');
+                    spawnFloatingText(e.x, e.y, stats.mineDamage, COLORS.PLAYER);
                     if (e.hp <= 0) {
                         const idx = enemies.indexOf(e);
                         if (idx !== -1) killEnemy(e, idx);
@@ -6277,7 +6122,7 @@
             }
 
             // Visual explosion
-            spawnRing(mine.x, mine.y, '#FF6EC7', stats.mineExplosionRadius);
+            spawnRing(mine.x, mine.y, COLORS.PLAYER, stats.mineExplosionRadius);
             // Radial particles
             for (let i = 0; i < 8; i++) {
                 const angle = (i / 8) * Math.PI * 2;
@@ -6288,7 +6133,7 @@
                     vy: Math.sin(angle) * speed,
                     life: 0.4, maxLife: 0.4,
                     size: 3 + Math.random() * 2,
-                    color: '#FF6EC7',
+                    color: COLORS.PLAYER,
                     type: 'spark'
                 });
             }
@@ -6328,38 +6173,52 @@
             const stats = getWeaponStats();
             if (!stats.hasMines || !player) return;
 
-            // Auto-deploy mines
-            mineDeployTimer += deltaTime;
-            if (mineDeployTimer >= stats.mineInterval) {
-                mineDeployTimer = 0;
-                // If at max count, remove oldest mine
-                if (mines.length >= stats.mineMaxCount) {
-                    pools.mine.release(mines[0]);
-                    mines.splice(0, 1);
-                }
-                const m = pools.mine.acquire();
-                m.x = player.x;
-                m.y = player.y;
-                m.life = stats.mineLifetime;
-                m.maxLife = stats.mineLifetime;
-                m.armed = false;
-                m.armTimer = stats.mineArmingDelay;
-                m.pulsePhase = 0;
-                m.detonating = false;
-                m.detonateDelay = 0;
-                m.isBlackHole = false;
-                m.blackHoleTimer = 0;
+            // Auto-deploy mines — speed-dependent trail spawning
+            const playerSpeed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+            const effectiveMaxSpeed = MAX_SPEED * permSpeedMulti;
+            const speedRatio = Math.min(playerSpeed / effectiveMaxSpeed, 1);
 
-                // Black Hole evolution: every 12s, a mine becomes a black hole
-                if (stats.hasBlackHole) {
-                    blackHoleCooldown -= stats.mineInterval;
-                    if (blackHoleCooldown <= 0) {
-                        m.isBlackHole = true;
-                        blackHoleCooldown = 12;
+            if (speedRatio > 0.01) {
+                const effectiveInterval = 0.4 / speedRatio;
+                mineDeployTimer += deltaTime;
+                if (mineDeployTimer >= effectiveInterval) {
+                    mineDeployTimer = 0;
+                    // If at max count, remove oldest mine
+                    if (mines.length >= stats.mineMaxCount) {
+                        pools.mine.release(mines[0]);
+                        mines.splice(0, 1);
                     }
-                }
+                    // Spawn behind player: 100px back, random ±30° cone
+                    const behindRad = (player.angle + 180) * Math.PI / 180;
+                    const randOffset = (Math.random() - 0.5) * (60 * Math.PI / 180); // ±30°
+                    const spawnAngle = behindRad + randOffset;
+                    const m = pools.mine.acquire();
+                    m.x = player.x + Math.cos(spawnAngle) * 100;
+                    m.y = player.y + Math.sin(spawnAngle) * 100;
+                    m.life = stats.mineLifetime;
+                    m.maxLife = stats.mineLifetime;
+                    m.armed = false;
+                    m.armTimer = stats.mineArmingDelay;
+                    m.pulsePhase = 0;
+                    m.detonating = false;
+                    m.detonateDelay = 0;
+                    m.isBlackHole = false;
+                    m.blackHoleTimer = 0;
 
-                mines.push(m);
+                    // Black Hole evolution: every 12s, a mine becomes a black hole
+                    if (stats.hasBlackHole) {
+                        blackHoleCooldown -= effectiveInterval;
+                        if (blackHoleCooldown <= 0) {
+                            m.isBlackHole = true;
+                            blackHoleCooldown = 12;
+                        }
+                    }
+
+                    mines.push(m);
+                }
+            } else {
+                // Not moving — don't spawn, but keep timer ready
+                mineDeployTimer = 0;
             }
 
             // Update each mine (reverse iterate for safe removal)
@@ -6455,6 +6314,7 @@
                         if (dx * dx + dy * dy <= field.radius * field.radius) {
                             const dmg = Math.round(field.dps * 0.5);
                             e.hp -= dmg;
+                            spawnFloatingText(e.x, e.y, dmg, COLORS.PLAYER);
                             if (field.slow > 0) {
                                 e.vx *= (1 - field.slow);
                                 e.vy *= (1 - field.slow);
@@ -6480,17 +6340,11 @@
             const stats = getWeaponStats();
             if (!stats.hasTurrets || !player) return;
 
-            // Auto-deploy turrets
-            turretDeployTimer += deltaTime;
-            if (turretDeployTimer >= stats.turretCooldown) {
-                turretDeployTimer = 0;
-                // Remove oldest if at max
-                if (turrets.length >= stats.turretMaxCount) {
-                    const oldest = turrets[0];
-                    pools.turret.release(oldest);
-                    turrets.splice(0, 1);
-                }
-                // Deploy new turret at player position
+            // Distance-based deployment: deploy when player moves far enough from last turret
+            const ddx = player.x - lastTurretX;
+            const ddy = player.y - lastTurretY;
+            if (ddx * ddx + ddy * ddy >= stats.turretDeployDistance * stats.turretDeployDistance) {
+                // Deploy new turret at player position (lifetime handles expiry, no max cap)
                 const t = pools.turret.acquire();
                 t.x = player.x;
                 t.y = player.y;
@@ -6499,54 +6353,23 @@
                 t.fireTimer = 0;
                 t.angle = player.angle * Math.PI / 180;
                 t.shotCount = 0;
-                t.shieldCurrent = stats.turretShieldHP;
                 turrets.push(t);
-                spawnRing(player.x, player.y, '#FF8C00', 30);
+                spawnRing(player.x, player.y, COLORS.PLAYER, 30);
+                lastTurretX = player.x;
+                lastTurretY = player.y;
             }
 
             // Update each turret (reverse iterate for safe removal)
             for (let i = turrets.length - 1; i >= 0; i--) {
                 const t = turrets[i];
 
-                // Lifetime
+                // Lifetime expiry
                 t.life -= deltaTime;
                 if (t.life <= 0) {
-                    spawnRing(t.x, t.y, '#FF8C00', 20);
+                    spawnRing(t.x, t.y, COLORS.PLAYER, 20);
                     pools.turret.release(t);
                     turrets.splice(i, 1);
                     continue;
-                }
-
-                // Shield regen
-                if (stats.turretShieldHP > 0 && t.shieldCurrent < stats.turretShieldHP && t.shieldCurrent > 0) {
-                    t.shieldCurrent = Math.min(t.shieldCurrent + stats.turretShieldRegen * deltaTime, stats.turretShieldHP);
-                }
-
-                // Enemy collision with shield (only if turret has shield)
-                if (t.shieldCurrent > 0) {
-                    const nearbyForShield = spatialGrid.queryRadius(t.x, t.y, 30);
-                    for (const e of nearbyForShield) {
-                        const edx = e.x - t.x;
-                        const edy = e.y - t.y;
-                        const edist = Math.sqrt(edx * edx + edy * edy);
-                        if (edist < 30) {
-                            t.shieldCurrent -= 25 * deltaTime;
-                            // Knockback enemy
-                            if (edist > 0) {
-                                const kbForce = 100 * deltaTime;
-                                e.vx += (edx / edist) * kbForce;
-                                e.vy += (edy / edist) * kbForce;
-                            }
-                        }
-                    }
-                    if (t.shieldCurrent <= 0) {
-                        t.shieldCurrent = 0;
-                        t.life = 0;
-                        spawnRing(t.x, t.y, '#FF8C00', 40);
-                        pools.turret.release(t);
-                        turrets.splice(i, 1);
-                        continue;
-                    }
                 }
 
                 // Find target enemy
@@ -6570,7 +6393,7 @@
                     let angleDiff = targetAngle - t.angle;
                     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                    const turnRate = Math.PI * 2 * deltaTime; // 360°/sec
+                    const turnRate = Math.PI * 4 * deltaTime; // 720°/sec — fast tracking for machine gun
                     if (Math.abs(angleDiff) < turnRate) {
                         t.angle = targetAngle;
                     } else {
@@ -6599,6 +6422,8 @@
                     t.shotCount++;
 
                     const angleToTarget = Math.atan2(closestEnemy.y - t.y, closestEnemy.x - t.x);
+                    const spread = (Math.random() - 0.5) * 0.12; // ±3.4° machine gun spread
+                    const fireAngle = angleToTarget + spread;
 
                     // Decide: mini-rocket or normal bullet
                     if (stats.turretRocketEvery > 0 && t.shotCount % stats.turretRocketEvery === 0) {
@@ -6606,12 +6431,12 @@
                         const rocket = pools.bullet.acquire();
                         rocket.x = t.x;
                         rocket.y = t.y;
-                        rocket.vx = Math.cos(angleToTarget) * 800;
-                        rocket.vy = Math.sin(angleToTarget) * 800;
+                        rocket.vx = Math.cos(fireAngle) * 800;
+                        rocket.vy = Math.sin(fireAngle) * 800;
                         rocket.life = stats.turretRange / 800 + 0.2;
                         rocket.damage = stats.turretRocketDamage;
                         rocket.type = 'turret_rocket';
-                        rocket.color = '#FF8C00';
+                        rocket.color = COLORS.PLAYER;
                         rocket.piercing = false;
                         rocket.pierceCount = 0;
                         rocket.hitEnemies = null;
@@ -6626,12 +6451,12 @@
                         const bullet = pools.bullet.acquire();
                         bullet.x = t.x;
                         bullet.y = t.y;
-                        bullet.vx = Math.cos(angleToTarget) * stats.turretBulletSpeed;
-                        bullet.vy = Math.sin(angleToTarget) * stats.turretBulletSpeed;
+                        bullet.vx = Math.cos(fireAngle) * stats.turretBulletSpeed;
+                        bullet.vy = Math.sin(fireAngle) * stats.turretBulletSpeed;
                         bullet.life = stats.turretRange / stats.turretBulletSpeed + 0.1;
                         bullet.damage = stats.turretDamage;
                         bullet.type = 'turret';
-                        bullet.color = '#FF8C00';
+                        bullet.color = COLORS.PLAYER;
                         bullet.piercing = stats.turretPierce > 0;
                         bullet.pierceCount = stats.turretPierce;
                         bullet.hitEnemies = stats.turretPierce > 0 ? new Set() : null;
@@ -6690,7 +6515,7 @@
                                 const dmg = 12 * deltaTime;
                                 e.hp -= dmg;
                                 if (showText) {
-                                    spawnFloatingText(e.x, e.y - config.radius, Math.round(12 * 0.5).toString(), '#FF8C00');
+                                    spawnFloatingText(e.x, e.y - config.radius, Math.round(12 * 0.5).toString(), COLORS.PLAYER);
                                 }
                                 if (e.hp <= 0) {
                                     const idx = enemies.indexOf(e);
@@ -6898,7 +6723,7 @@
             const explosionY = b.y;
             const explosionRadius = b.explosionRadius || 0;
             const explosionDamage = b.explosionDamage || 0;
-            const explosionColor = isArmageddon ? '#FF6B00' : isTurretRocket ? '#FF8C00' : COLORS.PLAYER;
+            const explosionColor = isArmageddon ? '#FF6B00' : COLORS.PLAYER;
 
             // Visual explosion effect
             const visualSize = isArmageddon ? Math.max(explosionRadius * 4, 300) : Math.max(explosionRadius * 2.5, 40);
@@ -8215,21 +8040,21 @@
                 }
             }
 
-            // Batch render turret bullets (small orange circles, no glow)
+            // Batch render turret bullets (small cyan circles, no glow)
             if (byType.turret.length > 0) {
                 ctx.shadowBlur = 0;
-                ctx.fillStyle = '#FF8C00';
+                ctx.fillStyle = COLORS.PLAYER;
                 for (const b of byType.turret) {
                     ctx.beginPath();
-                    ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+                    ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
 
-            // Batch render turret rockets (small orange triangles, no glow)
+            // Batch render turret rockets (small cyan triangles, no glow)
             if (byType.turret_rocket.length > 0) {
                 ctx.shadowBlur = 0;
-                ctx.strokeStyle = '#FF8C00';
+                ctx.strokeStyle = COLORS.PLAYER;
                 ctx.lineWidth = 2;
                 for (const b of byType.turret_rocket) {
                     const angle = Math.atan2(b.vy, b.vx);
@@ -8368,7 +8193,7 @@
 
         function renderEnemies() {
             // Sort enemies by type for batched rendering
-            const byType = { SCOUT: [], KAMIKAZE: [], SPINNER: [], TANK: [], ALIEN: [] };
+            const byType = { SCOUT: [], KAMIKAZE: [], TANK: [], ALIEN: [] };
 
             for (const e of enemies) {
                 if (shouldRenderEntity(e, CULLING_DISTANCES.enemies)) {
@@ -8402,13 +8227,28 @@
                 }
             }
 
-            // Batch render kamikazes (no shadowBlur for performance)
+            // Batch render kamikazes with trail (no shadowBlur for performance)
             if (byType.KAMIKAZE.length > 0) {
                 const config = ENEMY_TYPES['KAMIKAZE'];
-                ctx.strokeStyle = config.color;
-                ctx.lineWidth = 3;
 
                 for (const e of byType.KAMIKAZE) {
+                    // Draw trail as fading line (same as rocket trail)
+                    if (e.trail && e.trail.length > 1) {
+                        for (let t = 0; t < e.trail.length - 1; t++) {
+                            const alpha = 1 - (t / e.trail.length);
+                            const width = 2 * (1 - t / e.trail.length);
+                            ctx.strokeStyle = `rgba(255, 154, 107, ${alpha * 0.6})`;
+                            ctx.lineWidth = width;
+                            ctx.beginPath();
+                            ctx.moveTo(e.trail[t].x, e.trail[t].y);
+                            ctx.lineTo(e.trail[t + 1].x, e.trail[t + 1].y);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Draw kamikaze shape
+                    ctx.strokeStyle = config.color;
+                    ctx.lineWidth = 3;
                     ctx.save();
                     ctx.translate(e.x, e.y);
                     ctx.rotate(e.angle * Math.PI / 180);
@@ -8425,39 +8265,6 @@
                 }
             }
 
-            // Batch render spinners (no shadowBlur for performance)
-            if (byType.SPINNER.length > 0) {
-                const config = ENEMY_TYPES['SPINNER'];
-                ctx.strokeStyle = config.color;
-
-                for (const e of byType.SPINNER) {
-                    ctx.save();
-                    ctx.translate(e.x, e.y);
-                    ctx.rotate(e.angle * Math.PI / 180);
-
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (Math.PI / 3) * i;
-                        const x = Math.cos(angle) * config.radius;
-                        const y = Math.sin(angle) * config.radius;
-                        if (i === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
-                    }
-                    ctx.closePath();
-                    ctx.stroke();
-
-                    ctx.lineWidth = 2;
-                    const rimAngle = gameTime * 3;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, config.radius - 5, rimAngle, rimAngle + Math.PI * 0.5);
-                    ctx.stroke();
-
-                    ctx.restore();
-                }
-            }
-
-            // Batch render tanks (special case - has HP bar)
             // Batch render tanks (no shadowBlur for performance)
             if (byType.TANK.length > 0) {
                 const config = ENEMY_TYPES['TANK'];
@@ -8688,7 +8495,7 @@
                 // Range circle
                 ctx.beginPath();
                 ctx.arc(t.x, t.y, stats.turretRange, 0, Math.PI * 2);
-                ctx.strokeStyle = '#FF8C00';
+                ctx.strokeStyle = COLORS.PLAYER;
                 ctx.globalAlpha = 0.08;
                 ctx.lineWidth = 1;
                 ctx.stroke();
@@ -8709,7 +8516,7 @@
                 ctx.closePath();
                 ctx.fillStyle = '#1a1a2e';
                 ctx.fill();
-                ctx.strokeStyle = '#FF8C00';
+                ctx.strokeStyle = COLORS.PLAYER;
                 ctx.globalAlpha = baseAlpha;
                 ctx.lineWidth = 2;
                 ctx.stroke();
@@ -8718,17 +8525,17 @@
                 // Cannon (rotated rectangle)
                 ctx.save();
                 ctx.rotate(t.angle);
-                ctx.fillStyle = '#FF8C00';
+                ctx.fillStyle = COLORS.PLAYER;
                 ctx.globalAlpha = baseAlpha;
                 ctx.fillRect(4, -3, 20, 6);
 
-                // Muzzle flash (brief white flash when just fired)
-                if (t.fireTimer > stats.turretFireRate - 0.06) {
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.globalAlpha = 0.8;
-                    ctx.beginPath();
-                    ctx.arc(26, 0, 4, 0, Math.PI * 2);
-                    ctx.fill();
+                // Muzzle flash — pre-rendered glow sprite at cannon tip
+                const flashProgress = t.fireTimer / stats.turretFireRate;
+                if (flashProgress > 0.7) {
+                    const flashAlpha = (flashProgress - 0.7) / 0.3; // 1→0 fade
+                    const flashSize = 10 + flashAlpha * 8; // 18→10 shrink
+                    ctx.globalAlpha = flashAlpha * 0.9;
+                    ctx.drawImage(turretMuzzleSprite, 26 - flashSize, -flashSize, flashSize * 2, flashSize * 2);
                 }
                 ctx.globalAlpha = 1;
                 ctx.restore();
@@ -8736,42 +8543,18 @@
                 // Center dot
                 ctx.beginPath();
                 ctx.arc(0, 0, 6, 0, Math.PI * 2);
-                ctx.fillStyle = '#FF8C00';
+                ctx.fillStyle = COLORS.PLAYER;
                 ctx.globalAlpha = baseAlpha;
                 ctx.fill();
                 ctx.globalAlpha = 1;
 
                 ctx.restore(); // Restore from translate
-
-                // Shield
-                if (stats.turretShieldHP > 0 && t.shieldCurrent > 0) {
-                    const shieldAlpha = (t.shieldCurrent / stats.turretShieldHP) * 0.3;
-                    ctx.beginPath();
-                    ctx.arc(t.x, t.y, 30, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#FF8C00';
-                    ctx.globalAlpha = shieldAlpha;
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
-                }
-
-                // Life bar
-                const barW = 40;
-                const barH = 3;
-                const barX = t.x - barW / 2;
-                const barY = t.y + 28;
-                ctx.fillStyle = '#333';
-                ctx.fillRect(barX, barY, barW, barH);
-                const hp = Math.max(0, lifeRatio);
-                const barColor = hp > 0.5 ? '#39FF14' : hp > 0.25 ? '#FFD700' : '#FF4444';
-                ctx.fillStyle = barColor;
-                ctx.fillRect(barX, barY, barW * hp, barH);
             }
 
             // Combat Station beams between turrets
             if (stats.hasCombatStation && turrets.length >= 2) {
                 const pulseAlpha = 0.2 + 0.1 * Math.sin(gameTime * 4);
-                ctx.strokeStyle = '#FF8C00';
+                ctx.strokeStyle = COLORS.PLAYER;
                 ctx.lineWidth = 2;
 
                 for (let a = 0; a < turrets.length - 1; a++) {
@@ -8804,7 +8587,7 @@
                 const pulse = 1 + Math.sin(gameTime * 3) * 0.05;
                 ctx.save();
                 ctx.globalAlpha = fieldAlpha;
-                ctx.fillStyle = '#FF6EC7';
+                ctx.fillStyle = COLORS.PLAYER;
                 ctx.beginPath();
                 ctx.arc(field.x, field.y, field.radius * pulse, 0, Math.PI * 2);
                 ctx.fill();
@@ -8815,11 +8598,12 @@
             for (const mine of mines) {
                 if (!shouldRenderEntity(mine, CULLING_DISTANCES.particles)) continue;
 
-                // Gravity field visualization
+                // Gravity field boundary (always visible dashed circle)
                 const gravRadius = mine.isBlackHole ? 500 : stats.mineGravityRadius;
+                const ringColor = mine.isBlackHole ? '#8B00FF' : COLORS.PLAYER;
                 ctx.save();
                 ctx.globalAlpha = mine.isBlackHole ? 0.15 : 0.08;
-                ctx.strokeStyle = mine.isBlackHole ? '#8B00FF' : '#FF6EC7';
+                ctx.strokeStyle = ringColor;
                 ctx.setLineDash([6, 8]);
                 ctx.lineWidth = 1;
                 ctx.beginPath();
@@ -8827,10 +8611,28 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
+                // Gravity pull rings — slow shrink from edge to center
+                const ringCount = 3;
+                const ringSpeed = 3.0; // seconds per full cycle
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = ringColor;
+                for (let r = 0; r < ringCount; r++) {
+                    const phase = ((mine.pulsePhase / 4 / ringSpeed) + r / ringCount) % 1; // 0→1 loop
+                    const radius = gravRadius * (1 - phase);
+                    // Smooth fade: peak opacity at mid-travel, fade at edges
+                    const alpha = Math.sin(phase * Math.PI) * 0.12;
+                    if (radius > 14) {
+                        ctx.globalAlpha = alpha;
+                        ctx.beginPath();
+                        ctx.arc(mine.x, mine.y, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+
                 // Event horizon ring
                 if (stats.mineEventHorizon > 0) {
                     ctx.globalAlpha = 0.2;
-                    ctx.strokeStyle = '#FF6EC7';
+                    ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 1.5;
                     ctx.beginPath();
                     ctx.arc(mine.x, mine.y, stats.mineEventHorizon, 0, Math.PI * 2);
@@ -8840,7 +8642,7 @@
 
                 // Mine body
                 const pulseR = mine.armed ? 14 + Math.sin(mine.pulsePhase) * 4 : 14;
-                const mineColor = mine.isBlackHole ? '#8B00FF' : '#FF6EC7';
+                const mineColor = mine.isBlackHole ? '#8B00FF' : COLORS.PLAYER;
                 ctx.save();
                 ctx.globalAlpha = mine.armed ? 1.0 : 0.4;
                 ctx.strokeStyle = mineColor;
@@ -8906,7 +8708,7 @@
 
                 if (s.isCage) {
                     // Temporal Cage: hexagonal outline
-                    ctx.strokeStyle = WEAPONS['warp_snare'].color;
+                    ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 3;
                     ctx.beginPath();
                     for (let i = 0; i < 6; i++) {
@@ -8933,11 +8735,11 @@
                     ctx.stroke();
                     // Fill
                     ctx.globalAlpha = alpha * 0.08;
-                    ctx.fillStyle = WEAPONS['warp_snare'].color;
+                    ctx.fillStyle = COLORS.PLAYER;
                     ctx.fill();
                 } else {
                     // Normal snare: dashed circle
-                    ctx.strokeStyle = WEAPONS['warp_snare'].color;
+                    ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 1.5;
                     ctx.setLineDash([6, 8]);
                     ctx.beginPath();
@@ -8950,7 +8752,7 @@
                     ctx.setLineDash([]);
                     // Subtle fill
                     ctx.globalAlpha = alpha * 0.04 + Math.sin(gameTime * 3) * 0.02;
-                    ctx.fillStyle = WEAPONS['warp_snare'].color;
+                    ctx.fillStyle = COLORS.PLAYER;
                     ctx.beginPath();
                     ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
                     ctx.fill();
@@ -8962,26 +8764,50 @@
         function renderSlashEffects() {
             if (slashEffects.length === 0) return;
             for (const s of slashEffects) {
-                if (s.delay > 0 && (s.maxLife - s.life) < s.delay) continue;
-                const progress = 1 - ((s.life - (s.delay || 0)) / (s.maxLife - (s.delay || 0)));
-                const alpha = 1 - progress;
+                const progress = 1 - (s.life / s.maxLife); // 0 at start, 1 at end
+                if (progress < 0 || progress > 1) continue;
+
+                // easeOutQuart: fast start, decelerates at the end
+                const eased = 1 - Math.pow(1 - progress, 4);
+                const currentR = s.radius * (0.05 + eased * 0.95);
+                const alpha = 1 - progress * progress;
                 if (alpha <= 0) continue;
 
                 ctx.save();
-                ctx.globalAlpha = alpha * 0.8;
-                ctx.strokeStyle = s.color;
-                ctx.lineWidth = 4 + (1 - progress) * 2;
+
+                // Continuous gradient trail — filled sector fading from center outward
+                const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, currentR);
+                grad.addColorStop(0, 'rgba(92, 224, 214, 0)');
+                grad.addColorStop(0.5, 'rgba(92, 224, 214, ' + (alpha * 0.06) + ')');
+                grad.addColorStop(0.85, 'rgba(92, 224, 214, ' + (alpha * 0.18) + ')');
+                grad.addColorStop(1, 'rgba(92, 224, 214, ' + (alpha * 0.3) + ')');
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = grad;
                 ctx.beginPath();
-                ctx.arc(s.x, s.y, s.radius * (0.3 + progress * 0.7), s.angle - s.arc, s.angle + s.arc);
+                ctx.moveTo(s.x, s.y);
+                ctx.arc(s.x, s.y, currentR, s.angle - s.arc, s.angle + s.arc);
+                ctx.closePath();
+                ctx.fill();
+
+                // Leading arc wavefront — thick with glow
+                ctx.globalAlpha = alpha * 0.9;
+                ctx.strokeStyle = s.color;
+                ctx.lineWidth = 8 + (1 - progress) * 3;
+                ctx.shadowColor = s.color;
+                ctx.shadowBlur = 18;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, currentR, s.angle - s.arc, s.angle + s.arc);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Inner white flash
+                ctx.globalAlpha = alpha * 0.5 * (1 - progress);
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, currentR * 0.92, s.angle - s.arc * 0.85, s.angle + s.arc * 0.85);
                 ctx.stroke();
 
-                // Inner thin flash
-                ctx.globalAlpha = alpha * 0.4;
-                ctx.strokeStyle = '#FFFFFF';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.arc(s.x, s.y, s.radius * (0.4 + progress * 0.6), s.angle - s.arc * 0.8, s.angle + s.arc * 0.8);
-                ctx.stroke();
                 ctx.restore();
             }
         }
@@ -9607,8 +9433,8 @@
                 { id: 'plasma_field', name: 'PLASMA FIELD', icon: 'aura', color: '#7FDBFF' },
                 { id: 'alien_drone', name: 'ALIEN DRONE', icon: 'drone', color: '#39FF14' },
                 { id: 'fusion_beam', name: 'FUSION BEAM', icon: 'fusionbeam', color: '#00FFCC' },
-                { id: 'gravity_mines', name: 'GRAVITY MINES', icon: 'mine', color: '#FF6EC7' },
-                { id: 'sentry_turret', name: 'SENTRY TURRET', icon: 'turret', color: '#FF8C00' }
+                { id: 'gravity_mines', name: 'GRAVITY MINES', icon: 'mine', color: '#7FDBFF' },
+                { id: 'sentry_turret', name: 'SENTRY TURRET', icon: 'turret', color: '#7FDBFF' }
             ];
 
             const cols = mobile ? 2 : 3;
