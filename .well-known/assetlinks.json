@@ -3,6 +3,6 @@
   "target": {
     "namespace": "android_app",
     "package_name": "com.fafimba.stellarswarm",
-    "sha256_cert_fingerprints": ["TODO:REPLACE_WITH_ACTUAL_SHA256_FINGERPRINT"]
+    "sha256_cert_fingerprints": ["7B:EE:E2:1B:28:52:32:D0:9A:F8:BD:10:7D:4F:11:E1:BF:B1:14:72:81:2E:B3:FF:7C:D8:4C:A6:0E:30:F6:EE"]
   }
 }]

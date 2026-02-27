@@ -1,3 +1,8 @@
 node_modules/
 .DS_Store
 *.log
+*.keystore
+*.jks
+keystore.properties
+.gradle/
+app/build/
