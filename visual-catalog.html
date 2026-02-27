@@ -155,7 +155,6 @@ h2 {
         ALIEN:    { radius: 34, color: '#39FF14', outline: '#1A5C1A' }
     };
     const WEAPON_COLORS = {
-        phase_shard: '#00FFD0',
         void_blade: '#FF44CC',
         warp_snare: '#FFB020',
         plasma_field: '#7FDBFF'
@@ -411,52 +410,6 @@ h2 {
         ctx.lineTo(-1, 0);
         ctx.lineTo(-2, 3);
         ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    function drawPhaseShard(ctx, cx, cy, s, t) {
-        const color = WEAPON_COLORS.phase_shard;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(s, s);
-        ctx.rotate(t * 8);
-        // Outer diamond
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, -7); ctx.lineTo(5, 0); ctx.lineTo(0, 7); ctx.lineTo(-5, 0);
-        ctx.closePath();
-        ctx.stroke();
-        // Inner detail
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#AAFFEE';
-        ctx.beginPath();
-        ctx.moveTo(0, -3); ctx.lineTo(2, 0); ctx.lineTo(0, 3); ctx.lineTo(-2, 0);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    function drawEntropyShard(ctx, cx, cy, s, t) {
-        const color = WEAPON_COLORS.phase_shard;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(s, s);
-        ctx.rotate(t * 4);
-        // Outer diamond
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(0, -12); ctx.lineTo(8, 0); ctx.lineTo(0, 12); ctx.lineTo(-8, 0);
-        ctx.closePath();
-        ctx.stroke();
-        // Cross-hatch
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#AAFFEE';
-        ctx.beginPath();
-        ctx.moveTo(-5, 0); ctx.lineTo(5, 0);
-        ctx.moveTo(0, -7); ctx.lineTo(0, 7);
         ctx.stroke();
         ctx.restore();
     }
@@ -1025,8 +978,6 @@ h2 {
             { name: 'Rocket', w: 100, h: 70, scale: 2.5, draw: drawRocket, animated: false, colors: ['#7FDBFF'] },
             { name: 'Mini Rocket', w: 80, h: 60, scale: 3, draw: drawMiniRocket, animated: false, colors: ['#7FDBFF'] },
             { name: 'Armageddon Rocket', w: 140, h: 90, scale: 1.5, draw: drawArmageddonRocket, animated: false, colors: ['#FF6B00', '#FFD700'] },
-            { name: 'Phase Shard', w: 90, h: 90, scale: 3, draw: drawPhaseShard, animated: true, colors: ['#00FFD0', '#AAFFEE'] },
-            { name: 'Entropy Shard', w: 110, h: 110, scale: 2.5, draw: drawEntropyShard, animated: true, colors: ['#00FFD0', '#AAFFEE'] },
             { name: 'Enemy Bullet', w: 80, h: 60, scale: 3, draw: drawEnemyBullet, animated: false, colors: ['#FF6B6B'] },
             { name: 'Turret Bullet', w: 80, h: 60, scale: 3, draw: drawTurretBullet, animated: false, colors: ['#7FDBFF'] },
             { name: 'Turret Rocket', w: 80, h: 60, scale: 3, draw: drawTurretRocket, animated: false, colors: ['#7FDBFF'] },

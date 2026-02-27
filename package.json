@@ -1,0 +1,21 @@
+{
+  "name": "stellar-swarm",
+  "version": "1.0.0",
+  "description": "Space shooter survivors game",
+  "scripts": {
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:build": "npx cap sync && cd android && ./gradlew assembleDebug"
+  },
+  "author": "fafimba",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

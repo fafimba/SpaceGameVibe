@@ -520,11 +520,7 @@
 
         // Near-miss
         const NEAR_MISS_RADIUS = 12;
-
-        // Demo / Full version
-        const DEMO_MAX_LEVEL = 10;
-        const FULLVERSION_SAVE_KEY = 'stellarswarm_fullversion';
-
+        
         // Effects
         const SHAKE_INTENSITY_HIT = 6;
         const SHAKE_DURATION_HIT = 220;
@@ -850,7 +846,7 @@
         const container = document.getElementById('gameContainer');
         const joystickBaseEl = document.getElementById('joystickBase');
         
-        let gameState = 'menu'; // menu, playing, paused, gameOver, skilltree, tutorial, shop, demoEnd
+        let gameState = 'menu'; // menu, playing, paused, gameOver, skilltree, tutorial, shop
 
         // ── Audio System (disabled during development) ──
         const AudioManager = {
@@ -964,26 +960,7 @@
             }
         }
 
-        // Full version flag (separate key for IAP integration)
-        let isFullVersion = false;
-
-        function loadFullVersion() {
-            try {
-                isFullVersion = localStorage.getItem(FULLVERSION_SAVE_KEY) === 'true';
-            } catch (e) {
-                isFullVersion = false;
-            }
-        }
-
-        function saveFullVersion(val) {
-            isFullVersion = val;
-            try {
-                localStorage.setItem(FULLVERSION_SAVE_KEY, val ? 'true' : 'false');
-            } catch (e) {
-                console.warn('Could not save full version flag:', e);
-            }
-        }
-
+        
         // Performance monitoring
         let frameTimeAccum = 0;
         let frameCount = 0;
@@ -1072,14 +1049,6 @@
                 saveProgression(fresh);
                 cachedProgression = fresh;
                 spawnFloatingText(player.x, player.y - 50, 'SHOP PROGRESS WIPED', '#FF6B6B');
-            },
-            'unlock': () => {
-                saveFullVersion(true);
-                spawnFloatingText(player.x, player.y - 50, 'FULL VERSION UNLOCKED', '#39FF14');
-            },
-            'demo': () => {
-                saveFullVersion(false);
-                spawnFloatingText(player.x, player.y - 50, 'DEMO MODE ACTIVATED', '#FFD93D');
             },
         };
         
@@ -1677,8 +1646,6 @@
         }
 
         function init() {
-            loadFullVersion();
-
             // Set canvas dimensions based on device
             if (isMobile()) {
                 CANVAS_WIDTH = 720;
@@ -1991,10 +1958,6 @@
                     gameState = 'menu';
                     resetMenuAnimation();
                 }
-                if (e.code === 'Escape' && gameState === 'demoEnd') {
-                    gameState = 'menu';
-                    resetMenuAnimation();
-                }
 
                 // Toggle debug overlay with B key
                 if (e.code === 'KeyB') {
@@ -2031,8 +1994,6 @@
                     handleShopClick(clickX, clickY);
                 } else if (gameState === 'tutorial') {
                     handleTutorialClick(clickX, clickY);
-                } else if (gameState === 'demoEnd') {
-                    handleDemoEndClick(clickX, clickY);
                 } else if (gameState === 'menu' || gameState === 'gameOver') {
                     handleMenuClick(clickX, clickY);
                 }
@@ -2074,12 +2035,6 @@
                         x: (touch.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
                         y: (touch.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
                     };
-                }
-
-                if (gameState === 'demoEnd') {
-                    const coords = touchToCanvas(e.touches[0]);
-                    handleDemoEndClick(coords.x, coords.y);
-                    return;
                 }
 
                 if (gameState === 'menu' || gameState === 'gameOver') {
@@ -4449,9 +4404,6 @@
         // ============================================================
 
         function collectXP(amount) {
-            // Demo: stop XP gain at level cap
-            if (!isFullVersion && playerLevel >= DEMO_MAX_LEVEL) return;
-
             playerXP += Math.round(amount * permXPMulti * getDiffMultipliers().xp);
 
             let levelsGained = 0;
@@ -4461,23 +4413,10 @@
                 xpToNextLevel = Math.floor(XP_PER_LEVEL_BASE * Math.pow(XP_PER_LEVEL_GROWTH, playerLevel - 1));
                 skillPoints++;
                 levelsGained++;
-
-                // Demo limit: cap at DEMO_MAX_LEVEL
-                if (!isFullVersion && playerLevel >= DEMO_MAX_LEVEL) {
-                    playerXP = 0;
-                    break;
-                }
             }
 
             // Only trigger effects and open skill tree once if leveled up
             if (levelsGained > 0) {
-                // Demo: trigger demoEnd screen at level cap
-                if (!isFullVersion && playerLevel >= DEMO_MAX_LEVEL) {
-                    triggerFlash(COLORS.UI_PRIMARY, 0.3, 300);
-                    triggerSlowmo(200);
-                    gameState = 'demoEnd';
-                    return;
-                }
                 levelUp(levelsGained);
             }
         }
@@ -6995,7 +6934,7 @@
             ctx.translate(cameraOffset.x, cameraOffset.y);
 
             // Game entities (all rendered in world coordinates)
-            if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver' || gameState === 'demoEnd') {
+            if (gameState === 'playing' || gameState === 'paused' || gameState === 'gameOver') {
                 renderMines();
                 renderSnares();
                 renderRiftZones();
@@ -8732,9 +8671,6 @@
             } else if (gameState === 'gameOver') {
                 renderHUD();
                 renderGameOver();
-            } else if (gameState === 'demoEnd') {
-                renderHUD();
-                renderDemoEnd();
             } else if (gameState === 'tutorial') {
                 renderTutorial();
             } else if (gameState === 'shop') {
@@ -8822,13 +8758,6 @@
             ctx.font = mobile ? '22px "Segoe UI", sans-serif' : '18px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_SECONDARY;
             ctx.fillText('Drift. Survive. Swarm the stars.', cx, titleY + (mobile ? 45 : 40));
-
-            // Version indicator
-            if (!isFullVersion) {
-                ctx.font = mobile ? 'bold 16px "Segoe UI", sans-serif' : 'bold 12px "Segoe UI", sans-serif';
-                ctx.fillStyle = 'rgba(255, 221, 87, 0.5)';
-                ctx.fillText('FREE VERSION', cx, titleY + (mobile ? 75 : 62));
-            }
 
             // --- Weapon selector (only after ship arrives) ---
             const selWeapon = WEAPONS[STARTING_WEAPON_IDS[menuWeaponIndex]];
@@ -9279,12 +9208,7 @@
                 ctx.shadowColor = 'rgba(0, 255, 170, 0.5)';
                 ctx.shadowBlur = 10;
             }
-            if (!isFullVersion) {
-                ctx.font = 'bold 11px "Segoe UI", sans-serif';
-                ctx.fillText(playerLevel + '/' + DEMO_MAX_LEVEL, hexX, hexY + 5);
-            } else {
-                ctx.fillText(playerLevel.toString(), hexX, hexY + 5);
-            }
+            ctx.fillText(playerLevel.toString(), hexX, hexY + 5);
             ctx.shadowBlur = 0;
 
             // XP bar
@@ -9950,7 +9874,6 @@
         let currentShopButtons = [];
         let currentTutorialButtons = [];
         let currentMenuButtons = [];
-        let currentDemoEndButtons = [];
 
         function handleShopClick(clickX, clickY) {
             for (const btn of currentShopButtons) {
@@ -10032,110 +9955,6 @@
             return false;
         }
 
-
-        function renderDemoEnd() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-            const cx = CANVAS_WIDTH / 2;
-            const mobile = isMobile();
-            ctx.textAlign = 'center';
-
-            // Title
-            ctx.font = mobile ? 'bold 64px "Segoe UI", sans-serif' : 'bold 56px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_GOLD;
-            ctx.fillText('DEMO COMPLETE', cx, CANVAS_HEIGHT * 0.22);
-
-            // Subtitle
-            ctx.font = mobile ? '24px "Segoe UI", sans-serif' : '20px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('You\'ve reached level ' + DEMO_MAX_LEVEL + '. Unlock the full game to keep playing!', cx, CANVAS_HEIGHT * 0.22 + (mobile ? 45 : 40));
-
-            // Run stats
-            let sy = CANVAS_HEIGHT * 0.22 + (mobile ? 110 : 100);
-            const lineGap = mobile ? 40 : 34;
-
-            // Kills
-            ctx.font = mobile ? 'bold 28px "Segoe UI", sans-serif' : 'bold 22px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText(totalKills + ' KILLS', cx, sy);
-            sy += lineGap;
-
-            // Time survived
-            const mins = Math.floor(gameTime / 60);
-            const secs = Math.floor(gameTime % 60);
-            ctx.fillText((mins > 0 ? mins + 'm ' : '') + secs + 's SURVIVED', cx, sy);
-            sy += lineGap;
-
-            // Wave reached
-            ctx.fillText('WAVE ' + waveNumber, cx, sy);
-            sy += lineGap + (mobile ? 30 : 24);
-
-            // Decorative line
-            ctx.strokeStyle = 'rgba(255, 221, 87, 0.3)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(cx - 150, sy - 10);
-            ctx.lineTo(cx + 150, sy - 10);
-            ctx.stroke();
-
-            // Buttons
-            let demoBtns = [];
-            const btnW = mobile ? 440 : 340;
-            const btnH = mobile ? 70 : 55;
-            const btnGap = mobile ? 20 : 16;
-
-            // UNLOCK FULL GAME button (gold, pulsing)
-            const unlockX = cx - btnW / 2;
-            const unlockY = sy + 10;
-            const pulse = Math.sin(Date.now() / 300) * 0.15 + 0.85;
-            ctx.globalAlpha = pulse;
-            ctx.fillStyle = COLORS.HUD_GOLD;
-            ctx.beginPath();
-            ctx.roundRect(unlockX, unlockY, btnW, btnH, 10);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = '#000';
-            ctx.font = mobile ? 'bold 28px "Segoe UI", sans-serif' : 'bold 20px "Segoe UI", sans-serif';
-            ctx.fillText('UNLOCK FULL GAME', cx, unlockY + (mobile ? 46 : 37));
-            demoBtns.push({ type: 'unlock', x: unlockX, y: unlockY, w: btnW, h: btnH });
-
-            // BACK TO MENU button (subtle)
-            const backY = unlockY + btnH + btnGap;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.roundRect(unlockX, backY, btnW, btnH, 10);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.font = mobile ? 'bold 26px "Segoe UI", sans-serif' : 'bold 18px "Segoe UI", sans-serif';
-            ctx.fillText('BACK TO MENU', cx, backY + (mobile ? 45 : 36));
-            demoBtns.push({ type: 'back', x: unlockX, y: backY, w: btnW, h: btnH });
-
-            currentDemoEndButtons = demoBtns;
-        }
-
-        function handleDemoEndClick(clickX, clickY) {
-            for (const btn of currentDemoEndButtons) {
-                if (clickX >= btn.x && clickX <= btn.x + btn.w &&
-                    clickY >= btn.y && clickY <= btn.y + btn.h) {
-                    if (btn.type === 'unlock') {
-                        // Placeholder: set full version and resume game
-                        saveFullVersion(true);
-                        gameState = 'playing';
-                        return true;
-                    }
-                    if (btn.type === 'back') {
-                        gameState = 'menu';
-                        resetMenuAnimation();
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
 
         function renderPauseOverlay() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
