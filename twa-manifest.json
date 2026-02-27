@@ -1,35 +1,51 @@
 {
-  "packageId": "com.fafimba.stellarswarm",
+  "packageId": "io.github.fafimba.twa",
   "host": "fafimba.github.io",
-  "name": "Stellar Swarm",
-  "launcherName": "Stellar Swarm",
+  "name": "Space Survivor",
+  "launcherName": "SpaceSurvive",
   "display": "fullscreen",
   "themeColor": "#000000",
+  "themeColorDark": "#000000",
   "navigationColor": "#000000",
   "navigationColorDark": "#000000",
   "navigationDividerColor": "#000000",
   "navigationDividerColorDark": "#000000",
   "backgroundColor": "#000000",
-  "enableNotifications": false,
+  "enableNotifications": true,
   "startUrl": "/SpaceGameVibe/index.html",
   "iconUrl": "https://fafimba.github.io/SpaceGameVibe/icons/icon-512.png",
   "maskableIconUrl": "https://fafimba.github.io/SpaceGameVibe/icons/icon-512.png",
-  "shortcuts": [],
-  "signing": {
-    "file": "./stellar-swarm-release.keystore",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "/Users/fafimba/Documents/GitHub/SpaceGameVibe/android.keystore",
     "alias": "stellarswarm"
   },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://fafimba.github.io/SpaceGameVibe/manifest.json",
   "fallbackType": "customtabs",
-  "features": {},
-  "alphaDependency": {
+  "features": {
+    "playBilling": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
     "enabled": false
   },
-  "enableSiteSettingsShortcut": false,
+  "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "fullScopeUrl": "https://fafimba.github.io/SpaceGameVibe/",
-  "minSdkVersion": 19,
+  "minSdkVersion": 21,
   "orientation": "portrait",
-  "fingerprints": []
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
 }
