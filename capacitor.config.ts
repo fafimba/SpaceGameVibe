@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.fafimba.stellarswarm',
-  appName: 'Stellar Swarm',
+  appName: 'Space Survivor',
   webDir: 'www',
   server: {
     allowNavigation: [],

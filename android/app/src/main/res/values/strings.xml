@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Stellar Swarm</string>
-    <string name="title_activity_main">Stellar Swarm</string>
+    <string name="app_name">Space Survivor</string>
+    <string name="title_activity_main">Space Survivor</string>
     <string name="package_name">com.fafimba.stellarswarm</string>
     <string name="custom_url_scheme">com.fafimba.stellarswarm</string>
 </resources>

@@ -1,6 +1,6 @@
 {
-  "name": "Stellar Swarm",
-  "short_name": "Stellar Swarm",
+  "name": "Space Survivor",
+  "short_name": "Space Survivor",
   "description": "Space shooter survivors game. Auto-fire, dodge enemies, level up, choose upgrades.",
   "start_url": "/SpaceGameVibe/index.html",
   "scope": "/SpaceGameVibe/",
