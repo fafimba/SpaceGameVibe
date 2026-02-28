@@ -1,12 +1,12 @@
-# index.html Code Index (~10252 lines)
+# index.html Code Index (~10360 lines)
 
-Last updated: 2026-02-27
+Last updated: 2026-02-28
 
 ## File Structure
 ```
 Lines 1-356:    HTML + CSS (styles, canvas, touch controls, upgrade panel)
 Lines 357-373:  HTML body (canvas, joystick, upgradePanel with weapon inventory)
-Lines 374-10252: JavaScript IIFE
+Lines 374-10360: JavaScript IIFE
 ```
 
 ---
@@ -59,7 +59,7 @@ Lines 374-10252: JavaScript IIFE
 - L858-862: Timing — `lastTime`, `deltaTime`, `timeScale`, `gameTime`, `totalKills`
 - L864-869: Wave alert system
 
-## 4. META-PROGRESSION (876-990)
+## 4. META-PROGRESSION (876-1098)
 - L874: `PROGRESSION_SAVE_KEY`
 - L875: `WEAPON_IDS` array
 - L881: `getDiffMultipliers()` — returns fixed values (all 1, no difficulty system)
@@ -69,199 +69,200 @@ Lines 374-10252: JavaScript IIFE
 - L932: `loadProgression()` — migration sets all weapons to true
 - L959: `saveProgression()`
 - L968-986: **Full version flag** — `isFullVersion`, `loadFullVersion()`, `saveFullVersion(val)` (separate localStorage key for IAP)
-- L998: `setGlow()` / L1005: `clearGlow()` helpers
+- L989-1085: **Digital Goods API / Play Billing** — `digitalGoodsService`, `cachedProductPrice`, `PRODUCT_ID='full_game_unlock'`, `initDigitalGoods()`, `checkExistingPurchases()`, `purchaseFullGame()`
+- L1098: `setGlow()` / L1105: `clearGlow()` helpers
 
-## 5. GAME STATE VARIABLES continued (1010-1210)
-- L1030-1084: Cheat codes — per-weapon, 'wipe', 'full', 'unlock' (full version), 'demo' (revert to demo)
-- L1086-1089: Touch state
-- L1091-1092: Player
-- L1094-1107: Entity arrays — bullets, enemies, enemyBullets, particles, floatingTexts, pickups, orbitals, lightningEffects, novaBeamEffects, drones, snares, slashEffects, riftZones
-- L1108-1117: Fusion beam state, Weapon state vars
-- L1119-1126: Camera system
-- L1156: Performance — `separationFrame`
-- L1190: **Menu intro animation** vars
+## 5. GAME STATE VARIABLES continued (1110-1318)
+- L1138-1192: Cheat codes — per-weapon, 'wipe', 'full', 'unlock' (full version), 'demo' (revert to demo)
+- L1194-1197: Touch state
+- L1199-1200: Player
+- L1202-1215: Entity arrays — bullets, enemies, enemyBullets, particles, floatingTexts, pickups, orbitals, lightningEffects, novaBeamEffects, drones, snares, slashEffects, riftZones
+- L1216-1225: Fusion beam state, Weapon state vars
+- L1227-1234: Camera system
+- L1264: Performance — `separationFrame`
+- L1298: **Menu intro animation** vars
 
-## 6. PERFORMANCE OPTIMIZATIONS (1228-1430)
-- L1228-1296: Spatial grid — **numeric keys** (`_key(cx,cy)` returns integer), periodic Map rebuild every 120 frames
-- L1298-1394: **Object pools** — bullet, enemy (with `dead` flag), particle, enemyBullet, floatingText, pickup, drone, snare, mine, turret
-- L1397-1406: `CULLING_DISTANCES`
-- L1417: `lerpColor()`
-- L1424: `fastRemove(array, index)`
-- L1430-1496: Performance monitor, debug overlay
+## 6. PERFORMANCE OPTIMIZATIONS (1336-1538)
+- L1336-1404: Spatial grid — **numeric keys** (`_key(cx,cy)` returns integer), periodic Map rebuild every 120 frames
+- L1406-1502: **Object pools** — bullet, enemy (with `dead` flag), particle, enemyBullet, floatingText, pickup, drone, snare, mine, turret
+- L1505-1514: `CULLING_DISTANCES`
+- L1525: `lerpColor()`
+- L1532: `fastRemove(array, index)`
+- L1538-1604: Performance monitor, debug overlay
 
-## 7. INITIALIZATION (1499-1910)
-- L1502: `initBackgroundCache()`
-- L1562: `resetMenuAnimation()` — resets menu intro animation state
-- L1592: `updateMenuAnimation(dt)` — 3-phase menu anim (entry → idle → exit with deceleration)
-- L1679: `init()` — calls `loadFullVersion()` first
-- L1715: `resizeCanvas()`
-- L1734: `generateBackground()`
-- L1749: `startGame()` — triggers menu exit transition (menuAnimPhase='exit'), guards against double-start
-- L1759: `finishMenuExit()` — stores bgOffset for parallax continuity, then resetGame + set playing
-- L1776: `resetGame()` — includes turrets, lastTurretX/Y (set to player spawn), combatStationDmgTimer reset
+## 7. INITIALIZATION (1607-2018)
+- L1610: `initBackgroundCache()`
+- L1670: `resetMenuAnimation()` — resets menu intro animation state
+- L1700: `updateMenuAnimation(dt)` — 3-phase menu anim (entry → idle → exit with deceleration)
+- L1778: `init()` — calls `loadFullVersion()` + `initDigitalGoods()`, visibilitychange re-checks purchases
+- L1823: `resizeCanvas()`
+- L1842: `generateBackground()`
+- L1857: `startGame()` — triggers menu exit transition (menuAnimPhase='exit'), guards against double-start
+- L1867: `finishMenuExit()` — stores bgOffset for parallax continuity, then resetGame + set playing
+- L1884: `resetGame()` — includes turrets, lastTurretX/Y (set to player spawn), combatStationDmgTimer reset
 
-## 8. INPUT HANDLING (1909-2170)
-- L1912: `setupInput()` — left/right arrows in menu cycle starting weapon, demoEnd ESC handler
-- L2042: `updateInput()`
-- L2057: `setupTouchControls()` — includes demoEnd touch handler
+## 8. INPUT HANDLING (2017-2278)
+- L2020: `setupInput()` — left/right arrows in menu cycle starting weapon, demoEnd ESC handler
+- L2150: `updateInput()`
+- L2165: `setupTouchControls()` — includes demoEnd touch handler
 
-## 9. COORDINATE SYSTEM (2169-2205)
-- L2173: `worldToScreen()`
-- L2181: `screenToWorld()`
-- L2189: `isInView()`
-- L2198: `shouldRenderEntity()`
+## 9. COORDINATE SYSTEM (2277-2313)
+- L2281: `worldToScreen()`
+- L2289: `screenToWorld()`
+- L2297: `isInView()`
+- L2306: `shouldRenderEntity()`
 
-## 10. SECTOR BOUNDARY SYSTEM (2206-2336)
-- L2209: `checkSectorBoundary()`
-- L2243: `transportEntities()`
+## 10. SECTOR BOUNDARY SYSTEM (2314-2444)
+- L2317: `checkSectorBoundary()`
+- L2351: `transportEntities()`
 
-## 11. CAMERA UPDATE (2337-2350)
-- L2340: `updateCamera()`
+## 11. CAMERA UPDATE (2445-2458)
+- L2448: `updateCamera()`
 
-## 12. GAME LOOP (2351-2397)
-- L2354: `gameLoop(timestamp)` — includes menu animation update + joystick visibility toggle
-- L2398: `update()` — calls `sweepDeadEnemies()` after `checkCollisions()`
+## 12. GAME LOOP (2459-2505)
+- L2462: `gameLoop(timestamp)` — includes menu animation update + joystick visibility toggle
+- L2506: `update()` — calls `sweepDeadEnemies()` after `checkCollisions()`
 
-## 13. SHIELD ARC STATE MACHINE (2478-2546)
-- L2481: `updateShieldArcState(deltaTime)`
+## 13. SHIELD ARC STATE MACHINE (2586-2654)
+- L2589: `updateShieldArcState(deltaTime)`
 
-## 14. PLAYER SYSTEM (2547-3587)
-- L2547: `updatePlayer()`
-- L2682: `getWeaponStats()` — single weapon level per weapon (0-10), evolution flags at level 10
-- L3033: `hasEnemyInAimCone()`
-- L3055: `fireBullet()`
-- L3192: `fireNovaBeam()`
-- L3247: `fireRocket()`
-- L3338: `fireArmageddonMissile()`
-- L3402: `fireLightning()`
-- L3528: `spawnAlienDrone()`
-- L3563: `spawnThrusterParticle()`
+## 14. PLAYER SYSTEM (2655-3695)
+- L2655: `updatePlayer()`
+- L2790: `getWeaponStats()` — single weapon level per weapon (0-10), evolution flags at level 10
+- L3141: `hasEnemyInAimCone()`
+- L3163: `fireBullet()`
+- L3300: `fireNovaBeam()`
+- L3355: `fireRocket()`
+- L3446: `fireArmageddonMissile()`
+- L3510: `fireLightning()`
+- L3636: `spawnAlienDrone()`
+- L3671: `spawnThrusterParticle()`
 
-## 15. BULLETS (3588-3724)
-- L3588: `updateBullets()`
+## 15. BULLETS (3696-3832)
+- L3696: `updateBullets()`
 
-## 16. ALIEN DRONES (3725-3881)
-- L3728: `updateDrones()`
+## 16. ALIEN DRONES (3833-3989)
+- L3836: `updateDrones()`
 
-## 17. ENEMIES (3882-4342)
-- L3882: `updateSpawnSystem()` — decay spawn interval, spawn groups, wave system (clusters from level 2+)
-- L3919: `spawnWave()` — 3-6 clusters of enemies around player (Vampire Survivors style), 20-80 enemies per wave
-- L3992: `getSpawnType()` — time-based enemy type progression (scouts→kamikazes→tanks→aliens)
-- L4025: `spawnEnemy()` — spawns mini-groups of 3-5 enemies from same direction
-- L4073: `updateEnemies()` — kamikaze bulldozer physics, kamikaze trail (push+reuse oldest)
-- L4230: `updateEnemyBullets()`
-- L4252: `killEnemy(enemy)` — **mark-and-sweep**: sets `enemy.dead = true`, handles XP/effects/splits (no array removal)
-- L4330: `sweepDeadEnemies()` — single reverse pass releasing all dead enemies (called once per frame in `update()`)
+## 17. ENEMIES (3990-4450)
+- L3990: `updateSpawnSystem()` — decay spawn interval, spawn groups, wave system (clusters from level 2+)
+- L4027: `spawnWave()` — 3-6 clusters of enemies around player (Vampire Survivors style), 20-80 enemies per wave
+- L4100: `getSpawnType()` — time-based enemy type progression (scouts→kamikazes→tanks→aliens)
+- L4133: `spawnEnemy()` — spawns mini-groups of 3-5 enemies from same direction
+- L4181: `updateEnemies()` — kamikaze bulldozer physics, kamikaze trail (push+reuse oldest)
+- L4338: `updateEnemyBullets()`
+- L4360: `killEnemy(enemy)` — **mark-and-sweep**: sets `enemy.dead = true`, handles XP/effects/splits (no array removal)
+- L4438: `sweepDeadEnemies()` — single reverse pass releasing all dead enemies (called once per frame in `update()`)
 
-## 18. PICKUPS (4343-4450)
-- L4343: `spawnPickup()`
-- L4366: `updatePickups()`
+## 18. PICKUPS (4451-4558)
+- L4451: `spawnPickup()`
+- L4474: `updatePickups()`
 
-## 19. XP & LEVEL SYSTEM (4451-5308)
-- L4451: `collectXP(amount)` — **demo limit check**: stops at DEMO_MAX_LEVEL, triggers demoEnd state
-- L4485: `levelUp(levelsGained)`
-- L4503: `getAvailableUpgrades()` — starting weapons mutually exclusive via isStartingWeapon check
-- L4561: `allSkillsUnlocked()`
-- L4580: `generateUpgradeOptions()` — picks 3 random from available
-- L4588: `drawSkillIcon(ctx, icon, cx, cy, color)` — all weapon/evolution icons
-- L5121: `showUpgradePanel()` — vertical cards layout, weapon inventory bar, badge system
-- L5251: `selectUpgrade(option)` — types: weapon_activation, upgrade, bonus (sets lastTurretX/Y on sentry_turret activation)
-- L5300: `hideUpgradePanel()`
+## 19. XP & LEVEL SYSTEM (4559-5416)
+- L4559: `collectXP(amount)` — **demo limit check**: stops at DEMO_MAX_LEVEL, triggers demoEnd state
+- L4593: `levelUp(levelsGained)`
+- L4611: `getAvailableUpgrades()` — starting weapons mutually exclusive via isStartingWeapon check
+- L4669: `allSkillsUnlocked()`
+- L4688: `generateUpgradeOptions()` — picks 3 random from available
+- L4696: `drawSkillIcon(ctx, icon, cx, cy, color)` — all weapon/evolution icons
+- L5229: `showUpgradePanel()` — vertical cards layout, weapon inventory bar, badge system
+- L5359: `selectUpgrade(option)` — types: weapon_activation, upgrade, bonus (sets lastTurretX/Y on sentry_turret activation)
+- L5408: `hideUpgradePanel()`
 
-## 20. WEAPON SYSTEMS (5309-5562)
-- L5312: `updateWeapons()`
-- L5349: `updateLightningEffects()`
-- L5360: `updateNovaBeamEffects()`
-- L5370: `updateOrbitals()`
-- L5434: `updateAura()`
-- L5497: `triggerAnnihilationExplosion()`
+## 20. WEAPON SYSTEMS (5417-5670)
+- L5420: `updateWeapons()`
+- L5457: `updateLightningEffects()`
+- L5468: `updateNovaBeamEffects()`
+- L5478: `updateOrbitals()`
+- L5542: `updateAura()`
+- L5605: `triggerAnnihilationExplosion()`
 
-## 21. VOID BLADE SYSTEM (5563-5756)
-- L5566: `updateVoidBlade()` — forward-projected shotgun blast, simultaneous fan pattern, tracks player
-- L5641: `performBlastDamage()` — two-zone: inner (damage+knockback), outer (knockback only with falloff at 1.4× radius)
-- L5710: `updateRiftZones()`
-- L5742: `updateSlashEffects()` — tracks player position for blast visual
+## 21. VOID BLADE SYSTEM (5671-5864)
+- L5674: `updateVoidBlade()` — forward-projected shotgun blast, simultaneous fan pattern, tracks player
+- L5749: `performBlastDamage()` — two-zone: inner (damage+knockback), outer (knockback only with falloff at 1.4× radius)
+- L5818: `updateRiftZones()`
+- L5850: `updateSlashEffects()` — tracks player position for blast visual
 
-## 22. WARP SNARE SYSTEM (5757-5891)
-- L5760: `updateWarpSnares()` — deploys snares in pairs (180° apart) at 250px around player, rotating clockwise
+## 22. WARP SNARE SYSTEM (5865-5999)
+- L5868: `updateWarpSnares()` — deploys snares in pairs (180° apart) at 250px around player, rotating clockwise
 
-## 23. GRAVITY MINES SYSTEM (5892-6117)
-- L5958: `updateGravityMines()` — speed-dependent trail spawning (no spawn when still, 0.4s at max speed), mines spawn 100px behind player in ±30° cone
+## 23. GRAVITY MINES SYSTEM (6000-6225)
+- L6066: `updateGravityMines()` — speed-dependent trail spawning (no spawn when still, 0.4s at max speed), mines spawn 100px behind player in ±30° cone
 
-## 24. SENTRY TURRET SYSTEM (6118-6310)
-- L6121: `updateSentryTurrets()` — distance-based deploy (lastTurretX/Y), machine gun fire (0.06-0.10s), bullet spread ±3.4°, 720°/s cannon tracking
+## 24. SENTRY TURRET SYSTEM (6226-6418)
+- L6229: `updateSentryTurrets()` — distance-based deploy (lastTurretX/Y), machine gun fire (0.06-0.10s), bullet spread ±3.4°, 720°/s cannon tracking
 
-## 25. FUSION BEAM SYSTEM (6311-6471)
-- L6314: `updateFusionBeam()`
-- L6448: `handleBeamKill(enemy, stats)` — no index param, uses mark-and-sweep
+## 25. FUSION BEAM SYSTEM (6419-6579)
+- L6422: `updateFusionBeam()`
+- L6556: `handleBeamKill(enemy, stats)` — no index param, uses mark-and-sweep
 
-## 26. ROCKET EXPLOSION (6472-6552)
-- L6475: `explodePlayerRocket()`
+## 26. ROCKET EXPLOSION (6580-6660)
+- L6583: `explodePlayerRocket()`
 
-## 27. COLLISIONS (6553-6731)
-- L6558: `lineCircleCollision()`
-- L6591: `checkCollisions()` — uses `killEnemy(e)` (mark-and-sweep), kamikaze contact sets `e.dead = true`
+## 27. COLLISIONS (6661-6839)
+- L6666: `lineCircleCollision()`
+- L6699: `checkCollisions()` — uses `killEnemy(e)` (mark-and-sweep), kamikaze contact sets `e.dead = true`
 
-## 28. PLAYER DAMAGE & DEATH (6732-6851)
-- L6732: `damagePlayer()`
-- L6760: `triggerNearMiss()` — visual only, shows "NEAR MISS" text + slowmo + particles
-- L6780: `gameOver()` — crystal calculation (killBonus + crystalsThisRun)
-- L6815: `spawnDeathExplosion()` — uses pool-based particles
+## 28. PLAYER DAMAGE & DEATH (6840-6959)
+- L6840: `damagePlayer()`
+- L6868: `triggerNearMiss()` — visual only, shows "NEAR MISS" text + slowmo + particles
+- L6888: `gameOver()` — crystal calculation (killBonus + crystalsThisRun)
+- L6923: `spawnDeathExplosion()` — uses pool-based particles
 
-## 29. PARTICLES & EFFECTS (6852-6976)
-- L6855-6856: `MAX_PARTICLES = 600`, `MAX_FLOATING_TEXTS = 150` — hard caps
-- L6859: `spawnRing(x, y, color, maxSize)` — early return if at particle cap
-- L6875: `spawnFloatingText()` — early return if at floating text cap
-- L6887: `updateParticles()`
-- L6919: `updateFloatingTexts()`
-- L6932: `updateEffects()`
-- L6953: `triggerShake()`
-- L6959: `triggerFlash()`
-- L6966: `triggerSlowmo()`
+## 29. PARTICLES & EFFECTS (6960-7084)
+- L6963-6964: `MAX_PARTICLES = 600`, `MAX_FLOATING_TEXTS = 150` — hard caps
+- L6967: `spawnRing(x, y, color, maxSize)` — early return if at particle cap
+- L6983: `spawnFloatingText()` — early return if at floating text cap
+- L6995: `updateParticles()`
+- L7027: `updateFloatingTexts()`
+- L7040: `updateEffects()`
+- L7061: `triggerShake()`
+- L7067: `triggerFlash()`
+- L7074: `triggerSlowmo()`
 
-## 30. RENDERING (6977-8722)
-- L6977: `render()` — entities rendered for playing/paused/gameOver/demoEnd states
-- L7044: `renderBackground()` — menu-aware parallax (uses menuCameraY when gameState=menu)
-- L7119: `renderShieldArc()`
-- L7194: `renderPlayer()`
-- L7234: `renderAura()`
-- L7294: `renderFusionBeam()`
-- L7421: `renderOrbitals()`
-- L7442: `renderLightning()`
-- L7482: `renderNovaBeam()`
-- L7514: `renderBullets()` — trail rendering uses push order (trail[0]=oldest, trail[end]=newest)
-- L7739: `renderEnemyBullets()`
-- L7757: `renderDrones()`
-- L7854: `renderEnemies()` — kamikaze trail rendering (push order, alpha = (t+1)/length)
-- L7999: `renderPickups()`
-- L8043: `renderParticles()`
-- L8121: `renderFloatingTexts()`
-- L8145: `renderTurrets()` — cyan color, muzzle flash 0.02s/3px
-- L8239: `renderMines()`
-- L8360: `renderSnares()`
-- L8424: `renderSlashEffects()` — instant blast visual: outer arc + white flash + radial spread lines
-- L8475: `renderRiftZones()`
-- L8503: `drawUpgradeIcon(ctx, upgradeKey, cx, cy, color, size)` — geometric icons for permanent upgrades
-- L8569: `drawVerticalProgressBars(ctx, x, y, width, height, level, maxLevel, color)` — 10 vertical bar segments
-- L8578: `drawWeaponIconAt()`
+## 30. RENDERING (7085-8830)
+- L7085: `render()` — entities rendered for playing/paused/gameOver/demoEnd states
+- L7152: `renderBackground()` — menu-aware parallax (uses menuCameraY when gameState=menu)
+- L7227: `renderShieldArc()`
+- L7302: `renderPlayer()`
+- L7342: `renderAura()`
+- L7402: `renderFusionBeam()`
+- L7529: `renderOrbitals()`
+- L7550: `renderLightning()`
+- L7590: `renderNovaBeam()`
+- L7622: `renderBullets()` — trail rendering uses push order (trail[0]=oldest, trail[end]=newest)
+- L7847: `renderEnemyBullets()`
+- L7865: `renderDrones()`
+- L7962: `renderEnemies()` — kamikaze trail rendering (push order, alpha = (t+1)/length)
+- L8107: `renderPickups()`
+- L8151: `renderParticles()`
+- L8229: `renderFloatingTexts()`
+- L8253: `renderTurrets()` — cyan color, muzzle flash 0.02s/3px
+- L8347: `renderMines()`
+- L8468: `renderSnares()`
+- L8532: `renderSlashEffects()` — instant blast visual: outer arc + white flash + radial spread lines
+- L8583: `renderRiftZones()`
+- L8611: `drawUpgradeIcon(ctx, upgradeKey, cx, cy, color, size)` — geometric icons for permanent upgrades
+- L8677: `drawVerticalProgressBars(ctx, x, y, width, height, level, maxLevel, color)` — 10 vertical bar segments
+- L8686: `drawWeaponIconAt()`
 
-## 31. UI RENDERING (8723-10233)
-- L8723: `renderUI()` — routes to render functions by gameState (includes demoEnd)
-- L8745: `renderMenu()` — animated intro + "FREE VERSION" indicator in demo mode + branches on menuMode
-- L9095: `renderArsenalGallery()`
-- L9183: `renderControlsHelp(startY)`
-- L9219: `renderHUD()` — demo mode shows "Lv X/10" in hexagon badge
-- L9659: `renderTutorial()`
-- L9760: `renderShop()` — standalone shop with icon-only cards and vertical progress bars
-- L9955: `handleShopClick(clickX, clickY)` — standalone shop click handler (whole card clickable)
-- L9990: `handleMenuClick(clickX, clickY)` — handles play, shop, exit, back, upgrade, prevWeapon, nextWeapon
-- L10036: `renderDemoEnd()` — "DEMO COMPLETE" overlay with run stats + unlock/back buttons
-- L10120: `handleDemoEndClick(clickX, clickY)` — unlock sets full version + resumes, back returns to menu
-- L10140: `renderPauseOverlay()`
-- L10155: `renderGameOver()`
+## 31. UI RENDERING (8831-10341)
+- L8831: `renderUI()` — routes to render functions by gameState (includes demoEnd)
+- L8853: `renderMenu()` — animated intro + "FREE VERSION" indicator in demo mode + branches on menuMode
+- L9203: `renderArsenalGallery()`
+- L9291: `renderControlsHelp(startY)`
+- L9327: `renderHUD()` — demo mode shows "Lv X/10" in hexagon badge
+- L9767: `renderTutorial()`
+- L9868: `renderShop()` — standalone shop with icon-only cards and vertical progress bars
+- L10063: `handleShopClick(clickX, clickY)` — standalone shop click handler (whole card clickable)
+- L10098: `handleMenuClick(clickX, clickY)` — handles play, shop, exit, back, upgrade, prevWeapon, nextWeapon
+- L10137: `renderDemoEnd()` — "DEMO COMPLETE" overlay with run stats + unlock/back buttons (shows cached product price)
+- L10224: `handleDemoEndClick(clickX, clickY)` — calls `purchaseFullGame()` for billing flow, back returns to menu
+- L10242: `renderPauseOverlay()`
+- L10257: `renderGameOver()`
 
-## 32. UTILITIES (10234-10244)
-- L10237: `normalizeAngle(angle)`
+## 32. UTILITIES (10342-10352)
+- L10345: `normalizeAngle(angle)`
 
-## 33. START GAME (10244-10252)
-- L10248: `init()` call
+## 33. START GAME (10352-10360)
+- L10356: `init()` call

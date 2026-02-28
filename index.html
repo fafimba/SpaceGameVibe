@@ -986,6 +986,103 @@
             }
         }
 
+        // Digital Goods API for Play Billing
+        let digitalGoodsService = null;
+        let cachedProductPrice = null;
+        const PRODUCT_ID = 'full_game_unlock';
+
+        async function initDigitalGoods() {
+            if (!('getDigitalGoodsService' in window)) {
+                console.log('Digital Goods API not available (not in TWA)');
+                return false;
+            }
+            try {
+                digitalGoodsService = await window.getDigitalGoodsService('https://play.google.com/billing');
+                console.log('Digital Goods Service connected');
+                // Cache product price for UI
+                try {
+                    const details = await digitalGoodsService.getDetails([PRODUCT_ID]);
+                    if (details && details.length > 0) {
+                        cachedProductPrice = details[0].price.value + ' ' + details[0].price.currency;
+                    }
+                } catch (e) {}
+                // Check for existing purchases (user already bought or has Play Pass)
+                await checkExistingPurchases();
+                return true;
+            } catch (e) {
+                console.warn('Failed to init Digital Goods:', e);
+                return false;
+            }
+        }
+
+        async function checkExistingPurchases() {
+            if (!digitalGoodsService) return;
+            try {
+                const purchases = await digitalGoodsService.listPurchases();
+                for (const purchase of purchases) {
+                    if (purchase.itemId === PRODUCT_ID) {
+                        saveFullVersion(true);
+                        console.log('Existing purchase found, full version unlocked');
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Error checking purchases:', e);
+            }
+        }
+
+        async function purchaseFullGame() {
+            // If Digital Goods API not available, just unlock (for web/testing)
+            if (!digitalGoodsService) {
+                console.log('No billing service — unlocking directly (dev/web mode)');
+                saveFullVersion(true);
+                gameState = 'playing';
+                return;
+            }
+
+            try {
+                const details = await digitalGoodsService.getDetails([PRODUCT_ID]);
+                if (!details || details.length === 0) {
+                    console.error('Product not found in Play Console');
+                    spawnFloatingText(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 'Purchase unavailable', '#FF4444');
+                    return;
+                }
+
+                const product = details[0];
+                const paymentMethod = {
+                    supportedMethods: 'https://play.google.com/billing',
+                    data: { sku: PRODUCT_ID }
+                };
+                const paymentDetails = {
+                    total: {
+                        label: product.title || 'Unlock Full Game',
+                        amount: { currency: product.price.currency, value: product.price.value }
+                    }
+                };
+
+                const request = new PaymentRequest([paymentMethod], paymentDetails);
+                const response = await request.show();
+                const { purchaseToken } = response.details;
+
+                // Acknowledge the purchase (required by Google)
+                await digitalGoodsService.acknowledge(purchaseToken, 'onetime');
+                await response.complete('success');
+
+                // Unlock the game
+                saveFullVersion(true);
+                gameState = 'playing';
+                spawnFloatingText(player.x, player.y - 50, 'FULL GAME UNLOCKED!', '#39FF14');
+                console.log('Purchase successful!');
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('Purchase cancelled by user');
+                } else {
+                    console.error('Purchase error:', e);
+                    spawnFloatingText(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 'Purchase failed', '#FF4444');
+                }
+            }
+        }
+
         // Performance monitoring
         let frameTimeAccum = 0;
         let frameCount = 0;
@@ -1680,6 +1777,7 @@
 
         function init() {
             loadFullVersion();
+            initDigitalGoods(); // async, no await — runs in background
 
             // Set canvas dimensions based on device
             if (isMobile()) {
@@ -1701,13 +1799,14 @@
             resetMenuAnimation();
             window.addEventListener('resize', resizeCanvas);
 
-            // Pause/resume audio when tab visibility changes
+            // Pause/resume audio + re-check purchases when tab visibility changes
             document.addEventListener('visibilitychange', () => {
-                if (!AudioManager.initialized) return;
                 if (document.hidden) {
-                    AudioManager.ctx.suspend();
+                    if (AudioManager.initialized) AudioManager.ctx.suspend();
                 } else {
-                    AudioManager.ctx.resume();
+                    if (AudioManager.initialized) AudioManager.ctx.resume();
+                    // Re-check purchases in case user completed purchase from another flow
+                    if (!isFullVersion && digitalGoodsService) checkExistingPurchases();
                 }
             });
 
@@ -10099,7 +10198,10 @@
             ctx.globalAlpha = 1;
             ctx.fillStyle = '#000';
             ctx.font = mobile ? 'bold 28px "Segoe UI", sans-serif' : 'bold 20px "Segoe UI", sans-serif';
-            ctx.fillText('UNLOCK FULL GAME', cx, unlockY + (mobile ? 46 : 37));
+            const unlockText = cachedProductPrice
+                ? 'UNLOCK FULL GAME — ' + cachedProductPrice
+                : 'UNLOCK FULL GAME';
+            ctx.fillText(unlockText, cx, unlockY + (mobile ? 46 : 37));
             demoBtns.push({ type: 'unlock', x: unlockX, y: unlockY, w: btnW, h: btnH });
 
             // BACK TO MENU button (subtle)
@@ -10124,9 +10226,7 @@
                 if (clickX >= btn.x && clickX <= btn.x + btn.w &&
                     clickY >= btn.y && clickY <= btn.y + btn.h) {
                     if (btn.type === 'unlock') {
-                        // Placeholder: set full version and resume game
-                        saveFullVersion(true);
-                        gameState = 'playing';
+                        purchaseFullGame(); // async — handles the full billing flow
                         return true;
                     }
                     if (btn.type === 'back') {
