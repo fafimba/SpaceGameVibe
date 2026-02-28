@@ -20,8 +20,8 @@
     "path": "/Users/fafimba/Documents/GitHub/SpaceGameVibe/android.keystore",
     "alias": "stellarswarm"
   },
-  "appVersionName": "1",
-  "appVersionCode": 1,
+  "appVersionName": "1.0.1",
+  "appVersionCode": 3,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://fafimba.github.io/SpaceGameVibe/manifest.json",
@@ -47,5 +47,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "1.0.1"
 }
