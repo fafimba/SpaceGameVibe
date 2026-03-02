@@ -76,8 +76,8 @@
 
         #joystickBase {
             position: fixed;
-            width: 80px;
-            height: 80px;
+            width: 160px;
+            height: 160px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 50%;
@@ -100,8 +100,8 @@
             background: rgba(255, 255, 255, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.35);
             border-radius: 50%;
-            left: 12px;
-            top: 12px;
+            left: 52px;
+            top: 52px;
             transition: none;
         }
         
@@ -316,7 +316,7 @@
         const XP_PER_LEVEL_GROWTH = 1.28;
 
         // Touch Controls
-        const JOYSTICK_MAX_DISTANCE = 38;
+        const JOYSTICK_MAX_DISTANCE = 76;
         const JOYSTICK_DEADZONE = 0;
         const JOYSTICK_THRUST_THRESHOLD = 0.3;
 
@@ -1975,19 +1975,19 @@
                 joystickActive = true;
 
                 // Position joystick centered at touch point
-                joystickBase.style.left = (joystickTouch.clientX - 40) + 'px';
-                joystickBase.style.top = (joystickTouch.clientY - 40) + 'px';
+                joystickBase.style.left = (joystickTouch.clientX - 80) + 'px';
+                joystickBase.style.top = (joystickTouch.clientY - 80) + 'px';
                 joystickBase.style.bottom = 'auto';
                 joystickBase.style.transform = 'none';
 
                 // Reset knob to center
-                joystickKnob.style.left = '12px';
-                joystickKnob.style.top = '12px';
+                joystickKnob.style.left = '52px';
+                joystickKnob.style.top = '52px';
                 joystickMagnitude = 0;
 
                 e.preventDefault();
             });
-            
+
             joystickZone.addEventListener('touchmove', (e) => {
                 if (joystickActive) {
                     joystickTouch = e.touches[0];
@@ -1999,8 +1999,8 @@
             joystickZone.addEventListener('touchend', () => {
                 joystickActive = false;
                 joystickMagnitude = 0;
-                joystickKnob.style.left = '12px';
-                joystickKnob.style.top = '12px';
+                joystickKnob.style.left = '52px';
+                joystickKnob.style.top = '52px';
 
                 // Reset joystick to default position (bottom center)
                 joystickBase.style.left = '50%';
@@ -2023,8 +2023,8 @@
                     dy = (dy / dist) * JOYSTICK_MAX_DISTANCE;
                 }
 
-                joystickKnob.style.left = (12 + dx) + 'px';
-                joystickKnob.style.top = (12 + dy) + 'px';
+                joystickKnob.style.left = (52 + dx) + 'px';
+                joystickKnob.style.top = (52 + dy) + 'px';
 
                 joystickMagnitude = Math.min(dist / JOYSTICK_MAX_DISTANCE, 1);
                 joystickAngle = Math.atan2(dy, dx) * 180 / Math.PI;
