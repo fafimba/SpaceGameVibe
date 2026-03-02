@@ -191,7 +191,7 @@
         const PLAYER_COLLISION_RADIUS = 20;
         const PLAYER_VISUAL_RADIUS = 24;
         const PLAYER_MAX_HP = 3;
-        const PLAYER_PIVOT_OFFSET = -5;
+        const PLAYER_PIVOT_OFFSET = 0;
         const PLAYER_MASS = 1.8;             // Mass factor: higher = more inertia, harder to change direction
         const THRUSTER_PARTICLE_INTERVAL = 0.08; // Segundos entre partículas del thruster (menor = más partículas)
 
@@ -9288,7 +9288,7 @@
             ctx.save();
             ctx.translate(cx, menuShipY);
             ctx.rotate(-90 * Math.PI / 180); // Point upward
-            ctx.translate(-(-5), 0); // PLAYER_PIVOT_OFFSET = -5
+            ctx.translate(-(0), 0); // PLAYER_PIVOT_OFFSET = 0
 
             // Thruster flame
             if (menuThrusterScale > 0) {
