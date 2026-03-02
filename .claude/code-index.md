@@ -1,4 +1,4 @@
-# index.html Code Index (~10390 lines)
+# index.html Code Index (~10374 lines)
 
 Last updated: 2026-03-02
 
@@ -6,7 +6,7 @@ Last updated: 2026-03-02
 ```
 Lines 1-113:    HTML + CSS (styles, canvas, touch controls, upgradeCanvas)
 Lines 114-119:  HTML body (canvas#game, canvas#upgradeCanvas, joystick)
-Lines 120-10390: JavaScript IIFE
+Lines 120-10366: JavaScript IIFE
 ```
 
 ---

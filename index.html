@@ -256,7 +256,7 @@
             XP: '#00FFAA',
             UI_PRIMARY: '#FFFFFF',
             UI_SECONDARY: '#AAAAAA',
-            BG_TOP: '#0a1628',
+            BG_TOP: '#122240',
             BG_BOTTOM: '#020610',
             // HUD Colors
             HUD_CYAN: '#7FDBFF',
@@ -1652,6 +1652,7 @@
                 fireTimer: 0,
                 invulnerable: 0,
                 thrusterScale: 0,
+                thrustEffort: 0,
                 thrusterParticleTimer: 0,
                 bobOffset: 0,
                 bobTimer: 0,
@@ -2446,13 +2447,19 @@
                 accel = THRUST_ACCEL * permSpeedMulti;
                 player.thrusterScale = Math.min(1, player.thrusterScale + deltaTime / 0.08);
                 idleTimer = 0;
+                // Thrust effort: how hard the engine works (1 = fighting velocity, 0 = cruising)
+                const dot = player.vx * Math.cos(rad) + player.vy * Math.sin(rad);
+                const maxSpd = MAX_SPEED * permSpeedMulti;
+                const targetEffort = Math.max(0, Math.min(1, (1 - dot / maxSpd) * 0.5));
+                player.thrustEffort += (targetEffort - player.thrustEffort) * Math.min(1, deltaTime / 0.15);
             } else if (input.reverse) {
                 accel = -REVERSE_ACCEL * permSpeedMulti;
                 idleTimer = 0;
             }
-            
+
             if (!input.thrust) {
                 player.thrusterScale = Math.max(0, player.thrusterScale - deltaTime / 0.12);
+                player.thrustEffort += (0 - player.thrustEffort) * Math.min(1, deltaTime / 0.12);
             }
             
             player.vx += Math.cos(rad) * accel * deltaTime / PLAYER_MASS;
@@ -7498,7 +7505,7 @@
             // Far layer: sparse grid, slow parallax (distant feel)
             const farSpacing = 120;
             const farSpeed = 0.15;
-            const farOpacity = 0.025;
+            const farOpacity = 0.06;
             const farLineWidth = 1;
             const farOffsetX = mod(camX * farSpeed, farSpacing);
             const farOffsetY = mod(camY * farSpeed, farSpacing);
@@ -7518,7 +7525,7 @@
             // Near layer: larger grid, faster parallax (closer feel)
             const nearSpacing = 400;
             const nearSpeed = 0.4;
-            const nearOpacity = 0.04;
+            const nearOpacity = 0.08;
             const nearLineWidth = 1.5;
             const nearOffsetX = mod(camX * nearSpeed, nearSpacing);
             const nearOffsetY = mod(camY * nearSpeed, nearSpacing);
@@ -7717,7 +7724,7 @@
                 ctx.fillStyle = COLORS.PLAYER;
                 ctx.globalAlpha = 0.8;
                 ctx.beginPath();
-                const flameLength = 15 + p.thrusterScale * 20;
+                const flameLength = 10 + p.thrusterScale * (5 + p.thrustEffort * 25);
                 ctx.moveTo(-12, -6);
                 ctx.lineTo(-12 - flameLength, 0);
                 ctx.lineTo(-12, 6);
@@ -9400,79 +9407,56 @@
             }
 
             if (menuMode === 'main') {
-                // --- Bottom action area: PLAY (large) + UPGRADES (below) ---
-                const playR = mobile ? 80 : 60;
-                const btnAreaBottom = mobile ? CANVAS_HEIGHT - 180 : CANVAS_HEIGHT - 130;
-                const playCY = btnAreaBottom - (mobile ? 80 : 55);
-                const pulse = Math.sin(Date.now() / 300) * 0.08 + 0.92;
+                // Gem button matches BACK button position in shop
+                const gemH = mobile ? 50 : 40;
+                const gemW = mobile ? 200 : 150;
+                const gemX = cx - gemW / 2;
+                const gemY = mobile ? (CANVAS_HEIGHT - gemH - 20) : (CANVAS_HEIGHT - gemH - 20);
 
-                // Play circle — solid cyan, pulsing
+                // PLAY button sits directly above gem button
+                const playW = mobile ? 420 : 300;
+                const playH = mobile ? 80 : 56;
+                const playX = cx - playW / 2;
+                const btnGap = mobile ? 16 : 12;
+                const playY = gemY - btnGap - playH;
+                const pulse = Math.sin(Date.now() / 300) * 0.1 + 0.9;
+
                 ctx.globalAlpha = menuUIAlpha * pulse;
                 ctx.fillStyle = COLORS.PLAYER;
                 ctx.beginPath();
-                ctx.arc(cx, playCY, playR, 0, Math.PI * 2);
+                ctx.roundRect(playX, playY, playW, playH, mobile ? 14 : 10);
                 ctx.fill();
 
-                // Thin outline ring (subtle depth)
-                ctx.globalAlpha = menuUIAlpha * 0.25;
-                ctx.strokeStyle = '#FFFFFF';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.arc(cx, playCY, playR + 4, 0, Math.PI * 2);
-                ctx.stroke();
-
-                // Play triangle — optically centered (shifted right ~12%)
+                // Play triangle inside button
                 ctx.globalAlpha = menuUIAlpha;
                 ctx.fillStyle = '#0a1628';
+                const tSize = mobile ? 20 : 14;
+                const tCy = playY + playH / 2;
                 ctx.beginPath();
-                const tOff = playR * 0.08;
-                const tH = playR * 0.45;
-                const tW = playR * 0.4;
-                ctx.moveTo(cx - tW + tOff, playCY - tH);
-                ctx.lineTo(cx - tW + tOff, playCY + tH);
-                ctx.lineTo(cx + tW * 1.1 + tOff, playCY);
+                ctx.moveTo(cx - tSize * 0.8, tCy - tSize);
+                ctx.lineTo(cx - tSize * 0.8, tCy + tSize);
+                ctx.lineTo(cx + tSize * 1.1, tCy);
                 ctx.closePath();
                 ctx.fill();
 
-                menuBtns.push({ type: 'play', x: cx - playR - 10, y: playCY - playR - 10, w: (playR + 10) * 2, h: (playR + 10) * 2 });
+                menuBtns.push({ type: 'play', x: playX, y: playY, w: playW, h: playH });
 
-                // Upgrades button — outline circle, centered below play
-                const shopR = mobile ? 40 : 30;
-                const shopGap = mobile ? 30 : 22;
-                const shopCY = playCY + playR + shopGap + shopR;
-
+                // --- Gems button ---
                 ctx.globalAlpha = menuUIAlpha * 0.9;
-                ctx.fillStyle = 'rgba(127, 219, 255, 0.06)';
-                ctx.strokeStyle = 'rgba(127, 219, 255, 0.5)';
-                ctx.lineWidth = mobile ? 2 : 1.5;
+                ctx.fillStyle = 'rgba(224, 240, 255, 0.08)';
+                ctx.strokeStyle = 'rgba(224, 240, 255, 0.25)';
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.arc(cx, shopCY, shopR, 0, Math.PI * 2);
+                ctx.roundRect(gemX, gemY, gemW, gemH, mobile ? 10 : 7);
                 ctx.fill();
                 ctx.stroke();
 
-                // Arrow-up icon
                 ctx.globalAlpha = menuUIAlpha;
-                ctx.strokeStyle = COLORS.PLAYER;
-                ctx.lineWidth = mobile ? 3.5 : 2.5;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                const aS = shopR * 0.38;
-                ctx.beginPath();
-                ctx.moveTo(cx, shopCY + aS);
-                ctx.lineTo(cx, shopCY - aS);
-                ctx.moveTo(cx - aS * 0.75, shopCY - aS * 0.25);
-                ctx.lineTo(cx, shopCY - aS);
-                ctx.lineTo(cx + aS * 0.75, shopCY - aS * 0.25);
-                ctx.stroke();
-                ctx.lineCap = 'butt';
-                ctx.lineJoin = 'miter';
+                ctx.font = mobile ? 'bold 24px "Segoe UI", sans-serif' : 'bold 17px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#E0F0FF';
+                ctx.fillText('\u25C6 ' + (prog.crystals || 0), cx, gemY + (mobile ? 34 : 27));
 
-                // Crystal count below upgrade button
-                ctx.font = mobile ? 'bold 22px "Segoe UI", sans-serif' : 'bold 14px "Segoe UI", sans-serif';
-                ctx.fillStyle = 'rgba(224, 240, 255, 0.5)';
-                ctx.fillText('\u25C6 ' + (prog.crystals || 0), cx, shopCY + shopR + (mobile ? 28 : 20));
-
-                menuBtns.push({ type: 'shop', x: cx - shopR - 10, y: shopCY - shopR - 10, w: (shopR + 10) * 2, h: (shopR + 10) * 2 });
+                menuBtns.push({ type: 'shop', x: gemX, y: gemY, w: gemW, h: gemH });
 
             } else if (menuMode === 'shop') {
                 // --- Inline shop: upgrade cards + BACK ---
@@ -9653,11 +9637,11 @@
                         }
                     }
 
-                    // BACK button (desktop)
+                    // BACK button (desktop) — aligned to same Y as gem button in main menu
                     const backW = 200;
                     const backH = 40;
                     const backX = cx - backW / 2;
-                    const backY = puY + puCardH + 16;
+                    const backY = CANVAS_HEIGHT - backH - 20;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                     ctx.lineWidth = 1;
