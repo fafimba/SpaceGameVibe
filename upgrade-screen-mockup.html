@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade Screen Mockup — Stellar Swarm</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        background: #020610;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        color: #E8F0FF;
+        overflow: hidden;
+    }
+    canvas {
+        border: 1px solid rgba(127, 219, 255, 0.15);
+        border-radius: 4px;
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+    .controls {
+        position: fixed;
+        bottom: 20px;
+        display: flex;
+        gap: 12px;
+        z-index: 10;
+    }
+    .controls button {
+        background: rgba(5, 12, 30, 0.85);
+        border: 1px solid rgba(127, 219, 255, 0.3);
+        color: #7FDBFF;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    .controls button:hover {
+        background: rgba(127, 219, 255, 0.1);
+        border-color: #7FDBFF;
+    }
+    .label {
+        position: fixed;
+        top: 15px;
+        color: rgba(200, 215, 240, 0.55);
+        font-size: 13px;
+        text-align: center;
+    }
+</style>
+</head>
+<body>
+<div class="label">MOCKUP — Upgrade Selection Overlay Concept</div>
+<canvas id="c" width="1920" height="1080"></canvas>
+<div class="controls">
+    <button onclick="replay()">Replay Animation</button>
+    <button onclick="togglePause()">Pause / Resume</button>
+</div>
+
+<script>
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+
+// === COLORS (from game) ===
+const COL = {
+    PLAYER: '#7FDBFF',
+    PLAYER_DIM: '#3A9AD9',
+    ENEMY: '#FF6B6B',
+    GOLD: '#FFDD57',
+    GREEN: '#00FFAA',
+    PURPLE: '#C792FF',
+    BG_TOP: '#0a1628',
+    BG_BOTTOM: '#020610',
+    PANEL_BG: 'rgba(5, 12, 30, 0.88)',
+    PANEL_BORDER: 'rgba(127, 219, 255, 0.25)',
+    TEXT_PRIMARY: '#E8F0FF',
+    TEXT_DIM: 'rgba(200, 215, 240, 0.55)',
+    LINE_CYAN: 'rgba(127, 219, 255, 0.6)',
+    LINE_GLOW: 'rgba(127, 219, 255, 0.15)',
+};
+
+// === FAKE GAME STATE (background) ===
+const bgStars = [];
+for (let i = 0; i < 60; i++) {
+    bgStars.push({
+        x: Math.random() * 1920,
+        y: Math.random() * 1080,
+        s: Math.random() * 1.5 + 0.5,
+        a: Math.random() * 0.3 + 0.1
+    });
+}
+
+const bgEnemies = [];
+for (let i = 0; i < 18; i++) {
+    bgEnemies.push({
+        x: Math.random() * 1920,
+        y: Math.random() * 1080,
+        rot: Math.random() * Math.PI * 2,
+        size: 12 + Math.random() * 10,
+        type: Math.floor(Math.random() * 3), // 0=scout, 1=diamond, 2=hex
+        color: ['#FF6B6B', '#FF8844', '#FF5577'][Math.floor(Math.random() * 3)]
+    });
+}
+
+const bgBullets = [];
+for (let i = 0; i < 25; i++) {
+    bgBullets.push({
+        x: Math.random() * 1920,
+        y: Math.random() * 1080,
+        vx: (Math.random() - 0.5) * 3,
+        vy: -2 - Math.random() * 4,
+    });
+}
+
+// === PLAYER SHIP ===
+const SHIP = { x: 960, y: 300, size: 22 };
+
+// === UPGRADE CARDS ===
+const upgrades = [
+    { name: 'Laser Cannon', desc: 'Potente rayo concentrado', level: 'Nivel 4', icon: 'laser', color: COL.PLAYER, rarity: 'RARO' },
+    { name: 'Missile Swarm', desc: 'Misiles teledirigidos x3', level: 'Nivel 2', icon: 'missile', color: COL.GOLD, rarity: 'COMÚN' },
+    { name: 'Plasma Field', desc: 'Escudo ofensivo rotante', level: 'Nivel 5', icon: 'plasma', color: COL.GREEN, rarity: 'ÉPICO' },
+];
+
+const CARD_W = 320;
+const CARD_H = 120;
+const CARD_Y = 720; // final Y position of cards
+const CARD_GAP = 60;
+const CARD_POSITIONS = [
+    { x: 960 - CARD_W - CARD_GAP, y: CARD_Y },
+    { x: 960, y: CARD_Y },
+    { x: 960 + CARD_W + CARD_GAP, y: CARD_Y },
+];
+
+// Line connection points (from ship to card top-center)
+const LINE_ORIGINS = [
+    { x: SHIP.x - 18, y: SHIP.y + 14 },
+    { x: SHIP.x, y: SHIP.y + 20 },
+    { x: SHIP.x + 18, y: SHIP.y + 14 },
+];
+
+// === ANIMATION STATE ===
+let anim = { t: 0, phase: 'idle', paused: false };
+const ANIM = {
+    blurFadeIn: 0.4,
+    lineGrow: 0.7,
+    cardFadeIn: 0.4,
+    dotPulse: 0.3,
+};
+let startTime = 0;
+let hoveredCard = -1;
+
+function replay() {
+    anim.t = 0;
+    anim.phase = 'running';
+    startTime = performance.now();
+}
+
+function togglePause() {
+    anim.paused = !anim.paused;
+}
+
+// === EASING ===
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+function easeInOutCubic(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+
+// === DRAW FUNCTIONS ===
+
+function drawBackground() {
+    // Gradient background
+    const grad = ctx.createLinearGradient(0, 0, 0, 1080);
+    grad.addColorStop(0, COL.BG_TOP);
+    grad.addColorStop(1, COL.BG_BOTTOM);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    // Stars
+    for (const s of bgStars) {
+        ctx.fillStyle = `rgba(200, 220, 255, ${s.a})`;
+        ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+}
+
+function drawFakeEnemies() {
+    for (const e of bgEnemies) {
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        ctx.rotate(e.rot);
+        ctx.strokeStyle = e.color;
+        ctx.lineWidth = 2;
+        if (e.type === 0) {
+            // Scout triangle
+            ctx.beginPath();
+            ctx.moveTo(0, -e.size);
+            ctx.lineTo(-e.size * 0.7, e.size * 0.6);
+            ctx.lineTo(e.size * 0.7, e.size * 0.6);
+            ctx.closePath();
+            ctx.stroke();
+        } else if (e.type === 1) {
+            // Diamond
+            ctx.beginPath();
+            ctx.moveTo(0, -e.size);
+            ctx.lineTo(e.size * 0.6, 0);
+            ctx.lineTo(0, e.size);
+            ctx.lineTo(-e.size * 0.6, 0);
+            ctx.closePath();
+            ctx.stroke();
+        } else {
+            // Hexagon
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i - Math.PI / 2;
+                const px = Math.cos(a) * e.size * 0.7;
+                const py = Math.sin(a) * e.size * 0.7;
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+}
+
+function drawFakeBullets() {
+    ctx.strokeStyle = COL.PLAYER;
+    ctx.lineWidth = 2;
+    for (const b of bgBullets) {
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x + b.vx * 3, b.y + b.vy * 3);
+        ctx.stroke();
+    }
+}
+
+function drawPlayerShip(x, y, size, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+
+    // Outer hull
+    ctx.strokeStyle = COL.PLAYER;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(-size * 0.75, size * 0.8);
+    ctx.lineTo(-size * 0.25, size * 0.45);
+    ctx.lineTo(size * 0.25, size * 0.45);
+    ctx.lineTo(size * 0.75, size * 0.8);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Inner detail
+    ctx.strokeStyle = COL.PLAYER_DIM;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.55);
+    ctx.lineTo(-size * 0.3, size * 0.3);
+    ctx.lineTo(size * 0.3, size * 0.3);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Thruster glow
+    ctx.strokeStyle = COL.GOLD;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.15, size * 0.5);
+    ctx.lineTo(0, size * 0.85);
+    ctx.lineTo(size * 0.15, size * 0.5);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawBlurOverlay(alpha) {
+    ctx.fillStyle = `rgba(2, 6, 16, ${alpha * 0.65})`;
+    ctx.fillRect(0, 0, 1920, 1080);
+}
+
+function drawConnectionLine(fromX, fromY, toX, toY, progress, color, glowColor) {
+    if (progress <= 0) return;
+
+    // The line goes from ship → down to a midpoint → horizontal to card x → down to card
+    const midY = fromY + (toY - fromY) * 0.35;
+    const easedP = easeOutCubic(progress);
+
+    // Calculate path points
+    const points = [];
+    points.push({ x: fromX, y: fromY });
+
+    // First segment: go down from ship
+    const seg1EndY = fromY + (midY - fromY);
+    points.push({ x: fromX, y: seg1EndY });
+
+    // Second segment: horizontal move towards card X
+    points.push({ x: toX, y: seg1EndY });
+
+    // Third segment: go down to card
+    points.push({ x: toX, y: toY });
+
+    // Calculate total path length
+    let totalLen = 0;
+    const segLens = [];
+    for (let i = 1; i < points.length; i++) {
+        const dx = points[i].x - points[i-1].x;
+        const dy = points[i].y - points[i-1].y;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        segLens.push(len);
+        totalLen += len;
+    }
+
+    const drawLen = totalLen * easedP;
+
+    // Draw glow line (wider, dimmer)
+    ctx.save();
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    drawPartialPath(points, segLens, drawLen);
+    ctx.stroke();
+
+    // Draw main line
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    drawPartialPath(points, segLens, drawLen);
+    ctx.stroke();
+
+    // Draw dot at the tip
+    if (easedP > 0.05) {
+        const tipPos = getPointAlongPath(points, segLens, drawLen);
+        const pulse = 0.6 + 0.4 * Math.sin(anim.t * 6);
+        ctx.beginPath();
+        ctx.arc(tipPos.x, tipPos.y, 4 * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    // Draw small circle at origin
+    ctx.beginPath();
+    ctx.arc(fromX, fromY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function drawPartialPath(points, segLens, drawLen) {
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    let remaining = drawLen;
+    for (let i = 0; i < segLens.length; i++) {
+        if (remaining <= 0) break;
+        if (remaining >= segLens[i]) {
+            ctx.lineTo(points[i+1].x, points[i+1].y);
+            remaining -= segLens[i];
+        } else {
+            const frac = remaining / segLens[i];
+            const nx = points[i].x + (points[i+1].x - points[i].x) * frac;
+            const ny = points[i].y + (points[i+1].y - points[i].y) * frac;
+            ctx.lineTo(nx, ny);
+            remaining = 0;
+        }
+    }
+}
+
+function getPointAlongPath(points, segLens, drawLen) {
+    let remaining = drawLen;
+    for (let i = 0; i < segLens.length; i++) {
+        if (remaining <= segLens[i] || i === segLens.length - 1) {
+            const frac = Math.min(remaining / segLens[i], 1);
+            return {
+                x: points[i].x + (points[i+1].x - points[i].x) * frac,
+                y: points[i].y + (points[i+1].y - points[i].y) * frac
+            };
+        }
+        remaining -= segLens[i];
+    }
+    return points[points.length - 1];
+}
+
+function drawUpgradeCard(x, y, upgrade, alpha, index) {
+    if (alpha <= 0) return;
+
+    const halfW = CARD_W / 2;
+    const halfH = CARD_H / 2;
+    const isHovered = hoveredCard === index;
+    const hoverScale = isHovered ? 1.04 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y + CARD_H / 2);
+    ctx.scale(hoverScale, hoverScale);
+
+    // Card background
+    const bgGrad = ctx.createLinearGradient(-halfW, -halfH, -halfW, halfH);
+    bgGrad.addColorStop(0, 'rgba(8, 18, 40, 0.92)');
+    bgGrad.addColorStop(1, 'rgba(3, 8, 20, 0.95)');
+    ctx.fillStyle = bgGrad;
+    roundRect(ctx, -halfW, -halfH, CARD_W, CARD_H, 8);
+    ctx.fill();
+
+    // Border
+    const borderColor = isHovered ? upgrade.color : COL.PANEL_BORDER;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isHovered ? 2 : 1;
+    roundRect(ctx, -halfW, -halfH, CARD_W, CARD_H, 8);
+    ctx.stroke();
+
+    // Hover glow
+    if (isHovered) {
+        ctx.shadowColor = upgrade.color;
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = upgrade.color;
+        ctx.lineWidth = 1;
+        roundRect(ctx, -halfW, -halfH, CARD_W, CARD_H, 8);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    // Connection dot at top
+    ctx.beginPath();
+    ctx.arc(0, -halfH, 4, 0, Math.PI * 2);
+    ctx.fillStyle = upgrade.color;
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+
+    // Icon area (left side)
+    const iconX = -halfW + 50;
+    const iconY = 0;
+    drawWeaponIcon(iconX, iconY, upgrade.icon, upgrade.color);
+
+    // Weapon name
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 18px "Segoe UI", system-ui';
+    ctx.fillStyle = COL.TEXT_PRIMARY;
+    ctx.fillText(upgrade.name, -halfW + 90, -8);
+
+    // Description
+    ctx.font = '13px "Segoe UI", system-ui';
+    ctx.fillStyle = COL.TEXT_DIM;
+    ctx.fillText(upgrade.desc, -halfW + 90, 14);
+
+    // Thin accent line under description
+    ctx.strokeStyle = upgrade.color + '33';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-halfW + 90, 30);
+    ctx.lineTo(halfW - 16, 30);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawWeaponIcon(x, y, type, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+
+    if (type === 'laser') {
+        // Focused beam icon
+        ctx.beginPath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(0, 16);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, -16, 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-6, 8);
+        ctx.lineTo(6, 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-4, 12);
+        ctx.lineTo(4, 12);
+        ctx.stroke();
+    } else if (type === 'missile') {
+        // Missile icon
+        ctx.beginPath();
+        ctx.moveTo(0, -14);
+        ctx.lineTo(5, 0);
+        ctx.lineTo(3, 2);
+        ctx.lineTo(5, 12);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-5, 12);
+        ctx.lineTo(-3, 2);
+        ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.stroke();
+    } else if (type === 'plasma') {
+        // Rotating shield icon
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 1.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, Math.PI * 0.5, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+// Draw "LEVEL UP" badge above ship + "CHOOSE UPGRADE" above cards
+function drawLevelUp(alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // "LEVEL UP" above the ship
+    const luY = SHIP.y - 80;
+    ctx.font = 'bold 28px "Segoe UI", system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = COL.GOLD;
+    ctx.shadowColor = COL.GOLD;
+    ctx.shadowBlur = 18;
+    ctx.fillText('LEVEL UP', 960, luY);
+    ctx.shadowBlur = 0;
+
+    // Decorative horizontal lines flanking text
+    const textW = ctx.measureText('LEVEL UP').width / 2 + 20;
+    ctx.strokeStyle = COL.GOLD + '66';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(960 - textW - 60, luY - 4);
+    ctx.lineTo(960 - textW, luY - 4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(960 + textW, luY - 4);
+    ctx.lineTo(960 + textW + 60, luY - 4);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawTitle(alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    ctx.font = 'bold 14px "Segoe UI", system-ui';
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '6px';
+    ctx.fillStyle = COL.TEXT_DIM;
+    ctx.fillText('E L I G E   M E J O R A', 960, CARD_Y - 40);
+
+    ctx.restore();
+}
+
+// === MAIN RENDER ===
+function render(timestamp) {
+    if (!anim.paused) {
+        const dt = Math.min((timestamp - (startTime || timestamp)) / 1000, 5);
+        if (!startTime) startTime = timestamp;
+
+        if (anim.phase === 'idle') {
+            anim.phase = 'running';
+            startTime = timestamp;
+        }
+        anim.t = dt;
+    }
+
+    ctx.clearRect(0, 0, 1920, 1080);
+
+    // === Phase 1: Draw game background ===
+    drawBackground();
+    drawFakeBullets();
+    drawFakeEnemies();
+
+    // Always draw the ship at base position (will be under blur)
+    drawPlayerShip(SHIP.x, SHIP.y, SHIP.size, 0.4);
+
+    // === Phase 2: Blur overlay fades in ===
+    const blurProgress = Math.min(anim.t / ANIM.blurFadeIn, 1);
+    drawBlurOverlay(easeOutCubic(blurProgress));
+
+    // === Phase 3: Sharp player ship on top ===
+    if (blurProgress > 0.1) {
+        const shipAlpha = easeOutCubic(Math.min((anim.t - 0.1) / 0.3, 1));
+
+        // Ship glow ring (subtle)
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(SHIP.x, SHIP.y, 45, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(127, 219, 255, ${0.08 * shipAlpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+
+        drawPlayerShip(SHIP.x, SHIP.y, SHIP.size * 1.3, shipAlpha);
+    }
+
+    // === Phase 4: Lines grow from ship to cards ===
+    const lineStart = ANIM.blurFadeIn * 0.6;
+    const lineDelays = [0, 0.08, 0.16]; // staggered
+
+    for (let i = 0; i < 3; i++) {
+        const lineT = Math.max(0, anim.t - lineStart - lineDelays[i]);
+        const lineProgress = Math.min(lineT / ANIM.lineGrow, 1);
+
+        const cardTopX = CARD_POSITIONS[i].x;
+        const cardTopY = CARD_POSITIONS[i].y;
+
+        drawConnectionLine(
+            LINE_ORIGINS[i].x, LINE_ORIGINS[i].y,
+            cardTopX, cardTopY,
+            lineProgress,
+            upgrades[i].color + 'CC',
+            upgrades[i].color + '20'
+        );
+    }
+
+    // === Phase 5: Cards fade in ===
+    const cardStart = lineStart + ANIM.lineGrow * 0.65;
+    const cardDelays = [0, 0.1, 0.2];
+
+    for (let i = 0; i < 3; i++) {
+        const cardT = Math.max(0, anim.t - cardStart - cardDelays[i]);
+        const cardAlpha = easeOutQuart(Math.min(cardT / ANIM.cardFadeIn, 1));
+
+        // Slight slide up effect
+        const slideOffset = (1 - cardAlpha) * 20;
+
+        drawUpgradeCard(
+            CARD_POSITIONS[i].x,
+            CARD_POSITIONS[i].y + slideOffset,
+            upgrades[i],
+            cardAlpha,
+            i
+        );
+    }
+
+    // === Phase 6: LEVEL UP + Title ===
+    const levelUpAlpha = easeOutCubic(Math.min(Math.max(0, anim.t - 0.15) / 0.35, 1));
+    drawLevelUp(levelUpAlpha);
+
+    const titleAlpha = easeOutCubic(Math.min(Math.max(0, anim.t - cardStart - 0.1) / 0.4, 1));
+    drawTitle(titleAlpha);
+
+    // === Ambient pulsing on lines (post-animation) ===
+    if (anim.t > lineStart + ANIM.lineGrow + 0.3) {
+        // Subtle scanline effect on the lines
+        const scanY = SHIP.y + ((anim.t * 80) % (CARD_Y - SHIP.y));
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = COL.PLAYER;
+        ctx.fillRect(0, scanY, 1920, 2);
+        ctx.restore();
+    }
+
+    requestAnimationFrame(render);
+}
+
+// === HOVER DETECTION ===
+C.addEventListener('mousemove', (e) => {
+    const rect = C.getBoundingClientRect();
+    const scaleX = 1920 / rect.width;
+    const scaleY = 1080 / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    hoveredCard = -1;
+    for (let i = 0; i < 3; i++) {
+        const cx = CARD_POSITIONS[i].x;
+        const cy = CARD_POSITIONS[i].y + CARD_H / 2;
+        if (mx > cx - CARD_W/2 && mx < cx + CARD_W/2 &&
+            my > cy - CARD_H/2 && my < cy + CARD_H/2) {
+            hoveredCard = i;
+        }
+    }
+    C.style.cursor = hoveredCard >= 0 ? 'pointer' : 'default';
+});
+
+// === START ===
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
