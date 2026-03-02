@@ -1,4 +1,4 @@
-# index.html Code Index (~10535 lines)
+# index.html Code Index (~10390 lines)
 
 Last updated: 2026-03-02
 
@@ -6,7 +6,7 @@ Last updated: 2026-03-02
 ```
 Lines 1-113:    HTML + CSS (styles, canvas, touch controls, upgradeCanvas)
 Lines 114-119:  HTML body (canvas#game, canvas#upgradeCanvas, joystick)
-Lines 120-10535: JavaScript IIFE
+Lines 120-10390: JavaScript IIFE
 ```
 
 ---
@@ -16,7 +16,7 @@ Lines 120-10535: JavaScript IIFE
 - L44-52: `#upgradeCanvas` — absolute positioned overlay canvas (display:none, pointer-events:none)
 - L117-119: `<body>` — gameContainer, canvas#game, canvas#upgradeCanvas, touchControls
 
-## 2. CONSTANTS (128-560)
+## 2. CONSTANTS (128-561)
 - L131-132: `CANVAS_WIDTH/HEIGHT` — 1920x1080
 - L135: `isMobile()` — device detection
 - L139-148: Physics — ROTATION_SPEED, THRUST_ACCEL, MAX_SPEED, DRAG_FACTOR, BULLET_SPEED, ORBITAL_*
@@ -33,244 +33,244 @@ Lines 120-10535: JavaScript IIFE
 - L220-221: Near-miss
 - L390-391: **Demo/Full version** — `DEMO_MAX_LEVEL = 10`, `FULLVERSION_SAVE_KEY`
 - L393-398: Shake/slowmo constants
-- L401-466: `COLORS` — full color palette
+- L401-467: `COLORS` — full color palette
 - L440-449: Shield arc constants
-- L451-465: **Segmented shield display** + **Shield break sequence** + **Life slots overlay** constants
-- L466-468: XP formula
-- L470-473: Joystick config
-- L475-477: Auto-aim
-- L479-482: Enemy spawn offset
-- L492-505: Wave system
-- L507-521: Sector/world
-- L528-555: **`WEAPONS`** object — 11 weapons x 10 linear levels (level 10 = evolution)
-- L555: `STARTING_WEAPON_IDS` — computed from WEAPONS (isStartingWeapon: true)
+- L451-466: **Segmented shield display** + **Shield break sequence** + **Life slots overlay** constants
+- L307: `SHIELD_RECHARGE_DURATION` — shield refill time after break (1.0s game-time)
+- L467-469: XP formula
+- L471-474: Joystick config
+- L476-478: Auto-aim
+- L480-483: Enemy spawn offset
+- L493-506: Wave system
+- L508-522: Sector/world
+- L529-556: **`WEAPONS`** object — 11 weapons x 10 linear levels (level 10 = evolution)
+- L556: `STARTING_WEAPON_IDS` — computed from WEAPONS (isStartingWeapon: true)
 
-## 3. GAME STATE & VARIABLES (557-740)
-- L577-580: Canvas (`ctx`), upgradeCanvas (`uCtx`), gameState (`menu | playing | paused | gameOver | skilltree | tutorial | shop | demoEnd`)
-- L571-575: Timing — `lastTime`, `deltaTime`, `timeScale`, `gameTime`, `totalKills`
-- L577-582: Wave alert system
+## 3. GAME STATE & VARIABLES (558-741)
+- L578-581: Canvas (`ctx`), upgradeCanvas (`uCtx`), gameState (`menu | playing | paused | gameOver | skilltree | tutorial | shop | demoEnd`)
+- L572-576: Timing — `lastTime`, `deltaTime`, `timeScale`, `gameTime`, `totalKills`
+- L578-583: Wave alert system
 
-## 4. META-PROGRESSION (589-810)
-- L587: `PROGRESSION_SAVE_KEY`
-- L588: `WEAPON_IDS` array
-- L594: `getDiffMultipliers()`
-- L595-600: `PERMANENT_UPGRADES`
-- L607: `getUpgradeCost(upgradeKey, currentLevel)`
-- L617: `createDefaultProgression()`
-- L645: `loadProgression()`
-- L672: `saveProgression()`
-- L681-699: **Full version flag**
-- L702-798: **Digital Goods API / Play Billing**
-- L811: `setGlow()` / L818: `clearGlow()`
+## 4. META-PROGRESSION (590-811)
+- L588: `PROGRESSION_SAVE_KEY`
+- L589: `WEAPON_IDS` array
+- L595: `getDiffMultipliers()`
+- L596-601: `PERMANENT_UPGRADES`
+- L608: `getUpgradeCost(upgradeKey, currentLevel)`
+- L618: `createDefaultProgression()`
+- L646: `loadProgression()`
+- L673: `saveProgression()`
+- L682-700: **Full version flag**
+- L703-799: **Digital Goods API / Play Billing**
+- L812: `setGlow()` / L819: `clearGlow()`
 
-## 5. GAME STATE VARIABLES continued (823-1040)
-- L851-905: Cheat codes
-- L907-910: Touch state
-- L912-913: Player
-- L915-928: Entity arrays
-- L929-938: Fusion beam state, Weapon state vars
-- L940-947: Camera system
-- L966-975: Upgrade state + `upgradeOverlay` object (no hoveredCard, no blurCanvas)
-- L982: Performance — `separationFrame`
-- L991-995: Effects — shake, flash, slowmo vars
-- L996: `currentSlowmoFactor`
-- L998: `shieldBreakState`
-- L1013: **Menu intro animation** vars
+## 5. GAME STATE VARIABLES continued (824-1042)
+- L852-906: Cheat codes
+- L908-911: Touch state
+- L913-914: Player
+- L916-929: Entity arrays
+- L930-939: Fusion beam state, Weapon state vars
+- L941-948: Camera system
+- L967-976: Upgrade state + `upgradeOverlay` object (no hoveredCard, no blurCanvas)
+- L983: Performance — `separationFrame`
+- L992-996: Effects — shake, flash, slowmo vars
+- L997: `currentSlowmoFactor`
+- L1038: `shieldBreakState`
+- L1039: `shieldRechargeTimer`
+- L1014: **Menu intro animation** vars
 
-## 6. PERFORMANCE OPTIMIZATIONS (1049-1251)
-- L1049-1117: Spatial grid
-- L1119-1215: **Object pools**
-- L1218-1227: `CULLING_DISTANCES`
-- L1238: `lerpColor()`
-- L1245: `fastRemove(array, index)`
-- L1251-1317: Performance monitor, debug overlay
+## 6. PERFORMANCE OPTIMIZATIONS (1051-1253)
+- L1051-1119: Spatial grid
+- L1121-1217: **Object pools**
+- L1220-1229: `CULLING_DISTANCES`
+- L1240: `lerpColor()`
+- L1247: `fastRemove(array, index)`
+- L1253-1319: Performance monitor, debug overlay
 
-## 7. INITIALIZATION (1320-1748)
-- L1323: `initBackgroundCache()`
-- L1380: `resetMenuAnimation()`
-- L1418: `updateMenuAnimation(dt)`
-- L1498: `init()` — calls resizeCanvas(), sets up upgradeCanvas dimensions
-- L1543: `resizeCanvas()` — also sets `upgradeCanvas.width/height`
-- L1562: `generateBackground()`
-- L1577: `startGame()`
-- L1595: `finishMenuExit()`
-- L1612: `resetGame()` — includes upgradeOverlay reset
+## 7. INITIALIZATION (1322-1750)
+- L1325: `initBackgroundCache()`
+- L1382: `resetMenuAnimation()`
+- L1420: `updateMenuAnimation(dt)`
+- L1500: `init()` — calls resizeCanvas(), sets up upgradeCanvas dimensions
+- L1545: `resizeCanvas()` — also sets `upgradeCanvas.width/height`
+- L1564: `generateBackground()`
+- L1579: `startGame()`
+- L1597: `finishMenuExit()`
+- L1642: `resetGame()` — includes upgradeOverlay reset, shieldRechargeTimer reset
 
-## 8. INPUT HANDLING (1750-2018)
-- L1763: `setupInput()` — includes canvas click handler for skilltree (no hover)
-- L1910: `updateInput()`
-- L1925: `setupTouchControls()` — routes touch to `handleUpgradeClick()` during skilltree (L1976)
+## 8. INPUT HANDLING (1752-2020)
+- L1765: `setupInput()` — includes canvas click handler for skilltree (no hover)
+- L1912: `updateInput()`
+- L1927: `setupTouchControls()` — routes touch to `handleUpgradeClick()` during skilltree (L1978)
 
-## 9. COORDINATE SYSTEM (2018-2054)
-- L2022: `worldToScreen()`
-- L2030: `screenToWorld()`
-- L2038: `isInView()`
-- L2047: `shouldRenderEntity()`
+## 9. COORDINATE SYSTEM (2020-2056)
+- L2024: `worldToScreen()`
+- L2032: `screenToWorld()`
+- L2040: `isInView()`
+- L2049: `shouldRenderEntity()`
 
-## 10. SECTOR BOUNDARY SYSTEM (2055-2185)
-- L2058: `checkSectorBoundary()`
-- L2092: `transportEntities()`
+## 10. SECTOR BOUNDARY SYSTEM (2057-2187)
+- L2060: `checkSectorBoundary()`
+- L2094: `transportEntities()`
 
-## 11. CAMERA UPDATE (2186-2208)
-- L2189: `updateCamera()`
+## 11. CAMERA UPDATE (2188-2210)
+- L2191: `updateCamera()`
 
-## 12. GAME LOOP (2209-2341)
-- L2220: `gameLoop(timestamp)` — updates upgradeOverlay.animTime during skilltree state
-- L2269: `update(rawDt)`
+## 12. GAME LOOP (2211-2343)
+- L2222: `gameLoop(timestamp)` — updates upgradeOverlay.animTime during skilltree state
+- L2271: `update(rawDt)`
 
-## 13. SHIELD ARC STATE MACHINE (2344-2409)
-- L2347: `updateShieldArcState(deltaTime)`
+## 13. SHIELD ARC STATE MACHINE (2346-2411)
+- L2367: `updateShieldArcState(deltaTime)`
 
-## 14. PLAYER SYSTEM (2410-3460)
-- L2421: `updatePlayer()`
-- L2556: `getWeaponStats()`
-- L2907: `hasEnemyInAimCone()`
-- L2929: `fireBullet()`
-- L3066: `fireNovaBeam()`
-- L3121: `fireRocket()`
-- L3212: `fireArmageddonMissile()`
-- L3276: `fireLightning()`
-- L3402: `spawnAlienDrone()`
-- L3437: `spawnThrusterParticle()`
+## 14. PLAYER SYSTEM (2412-3468)
+- L2433: `updatePlayer()` — includes shield recharge animation logic (L2493-2502)
+- L2564: `getWeaponStats()`
+- L2915: `hasEnemyInAimCone()`
+- L2937: `fireBullet()`
+- L3074: `fireNovaBeam()`
+- L3129: `fireRocket()`
+- L3220: `fireArmageddonMissile()`
+- L3284: `fireLightning()`
+- L3410: `spawnAlienDrone()`
+- L3445: `spawnThrusterParticle()`
 
-## 15. BULLETS (3460-3600)
-- L3462: `updateBullets()`
+## 15. BULLETS (3468-3608)
+- L3470: `updateBullets()`
 
-## 16. ALIEN DRONES (3600-3754)
-- L3602: `updateDrones()`
+## 16. ALIEN DRONES (3608-3762)
+- L3610: `updateDrones()`
 
-## 17. ENEMIES (3754-4215)
-- L3756: `updateSpawnSystem()`
-- L3793: `spawnWave()`
-- L3866: `getSpawnType()`
-- L3899: `spawnEnemy()`
-- L3947: `updateEnemies()`
-- L4104: `updateEnemyBullets()`
-- L4126: `killEnemy(enemy)` — **mark-and-sweep**
-- L4204: `sweepDeadEnemies()`
+## 17. ENEMIES (3762-4223)
+- L3764: `updateSpawnSystem()`
+- L3801: `spawnWave()`
+- L3874: `getSpawnType()`
+- L3907: `spawnEnemy()`
+- L3955: `updateEnemies()`
+- L4112: `updateEnemyBullets()`
+- L4134: `killEnemy(enemy)` — **mark-and-sweep**
+- L4212: `sweepDeadEnemies()`
 
-## 18. PICKUPS (4215-4323)
-- L4217: `spawnPickup()`
-- L4240: `updatePickups()`
+## 18. PICKUPS (4223-4331)
+- L4225: `spawnPickup()`
+- L4248: `updatePickups()`
 
-## 19. XP & LEVEL SYSTEM (4323-5001)
-- L4325: `collectXP(amount)`
-- L4359: `levelUp(levelsGained)`
-- L4377: `getAvailableUpgrades()`
-- L4435: `allSkillsUnlocked()`
-- L4454: `generateUpgradeOptions()`
-- L4471: `drawSkillIcon(ctx, icon, cx, cy, color)` — large icon library (~500 lines), takes ctx as parameter
+## 19. XP & LEVEL SYSTEM (4331-5009)
+- L4333: `collectXP(amount)`
+- L4367: `levelUp(levelsGained)`
+- L4385: `getAvailableUpgrades()`
+- L4443: `allSkillsUnlocked()`
+- L4462: `generateUpgradeOptions()`
+- L4479: `drawSkillIcon(ctx, icon, cx, cy, color)` — large icon library (~500 lines), takes ctx as parameter
 
-## 20. CANVAS UPGRADE OVERLAY (5003-5607) — Two-Canvas Architecture
-- L5008: `easeOutCubic()`, `easeOutQuart()` — easing functions
-- L5012: `showUpgradePanel()` — generates options, calculates card positions, applies CSS blur on game canvas, shows upgradeCanvas
-- L5056: `renderUpgradeOverlay()` — draws on `uCtx` (overlay canvas): ship, lines, cards. Called directly from render() during skilltree
-- L5207: `drawUpgradeConnectionLine()` — animated blueprint-style lines (uCtx)
-- L5279: `drawUpgradePartialPath()` — partial path drawing helper (uCtx)
-- L5299: `getUpgradePathPoint()` — point along path helper
-- L5315: `renderWeaponInventoryBar()` — active weapons display in header (uCtx)
-- L5378: `renderUpgradeCard()` — vertical card layout, unified for all screens (uCtx)
-- L5531: `handleUpgradeClick()` — click/tap on cards
-- L5547: `selectUpgrade(option)` — applies upgrade, celebration particles
-- L5596: `hideUpgradePanel()` — removes CSS filter, hides overlay canvas, resumes game
+## 20. CANVAS UPGRADE OVERLAY (5011-5615) — Two-Canvas Architecture
+- L5016: `easeOutCubic()`, `easeOutQuart()` — easing functions
+- L5020: `showUpgradePanel()` — generates options, calculates card positions, applies CSS blur on game canvas, shows upgradeCanvas
+- L5064: `renderUpgradeOverlay()` — draws on `uCtx` (overlay canvas): ship, lines, cards. Called directly from render() during skilltree
+- L5215: `drawUpgradeConnectionLine()` — animated blueprint-style lines (uCtx)
+- L5287: `drawUpgradePartialPath()` — partial path drawing helper (uCtx)
+- L5307: `getUpgradePathPoint()` — point along path helper
+- L5323: `renderWeaponInventoryBar()` — active weapons display in header (uCtx)
+- L5386: `renderUpgradeCard()` — vertical card layout, unified for all screens (uCtx)
+- L5539: `handleUpgradeClick()` — click/tap on cards
+- L5555: `selectUpgrade(option)` — applies upgrade, celebration particles
+- L5604: `hideUpgradePanel()` — removes CSS filter, hides overlay canvas, resumes game
 
-## 21. WEAPON SYSTEMS (5608-5877)
-- L5612: `updateWeapons()`
-- L5663: `updateLightningEffects()`
-- L5674: `updateNovaBeamEffects()`
-- L5684: `updateOrbitals()`
-- L5748: `updateAura()`
-- L5811: `triggerAnnihilationExplosion()`
+## 21. WEAPON SYSTEMS (5616-5885)
+- L5620: `updateWeapons()`
+- L5671: `updateLightningEffects()`
+- L5682: `updateNovaBeamEffects()`
+- L5692: `updateOrbitals()`
+- L5756: `updateAura()`
+- L5819: `triggerAnnihilationExplosion()`
 
-## 22. VOID BLADE SYSTEM (5877-6070)
-- L5880: `updateVoidBlade()`
-- L5955: `performBlastDamage()`
-- L6024: `updateRiftZones()`
-- L6056: `updateSlashEffects()`
+## 22. VOID BLADE SYSTEM (5885-6078)
+- L5888: `updateVoidBlade()`
+- L5963: `performBlastDamage()`
+- L6032: `updateRiftZones()`
+- L6064: `updateSlashEffects()`
 
-## 23. WARP SNARE SYSTEM (6071-6205)
-- L6074: `updateWarpSnares()`
+## 23. WARP SNARE SYSTEM (6079-6213)
+- L6082: `updateWarpSnares()`
 
-## 24. GRAVITY MINES SYSTEM (6206-6431)
-- L6272: `updateGravityMines()`
+## 24. GRAVITY MINES SYSTEM (6214-6439)
+- L6280: `updateGravityMines()`
 
-## 25. SENTRY TURRET SYSTEM (6432-6624)
-- L6435: `updateSentryTurrets()`
+## 25. SENTRY TURRET SYSTEM (6440-6632)
+- L6443: `updateSentryTurrets()`
 
-## 26. FUSION BEAM SYSTEM (6625-6786)
-- L6628: `updateFusionBeam()`
-- L6762: `handleBeamKill(enemy, stats)`
+## 26. FUSION BEAM SYSTEM (6633-6794)
+- L6636: `updateFusionBeam()`
+- L6770: `handleBeamKill(enemy, stats)`
 
-## 27. ROCKET EXPLOSION (6786-6866)
-- L6789: `explodePlayerRocket()`
+## 27. ROCKET EXPLOSION (6794-6874)
+- L6797: `explodePlayerRocket()`
 
-## 28. COLLISIONS (6867-7043)
-- L6872: `lineCircleCollision()`
-- L6905: `checkCollisions()`
+## 28. COLLISIONS (6875-7035)
+- L6880: `lineCircleCollision()`
+- L6913: `checkCollisions()`
 
-## 29. PLAYER DAMAGE & DEATH (7043-7296)
-- L7046: `damagePlayer()`
-- L7074: `triggerShieldBreak()`
-- L7098: `updateShieldBreakSequence(rawDt)`
-- L7191: `triggerNearMiss()`
-- L7211: `gameOver()`
-- L7257: `spawnDeathExplosion()`
+## 29. PLAYER DAMAGE & DEATH (7035-7310)
+- L7037: `damagePlayer()` — shield set to 0 on break (recharge animation fills it)
+- L7065: `triggerShieldBreak()`
+- L7089: `updateShieldBreakSequence(rawDt)` — lifeslots phase 0.95s with pop animation timeline
+- L7184: `triggerNearMiss()`
+- L7204: `gameOver()`
+- L7250: `spawnDeathExplosion()`
 
-## 30. PARTICLES & EFFECTS (7294-7416)
-- L7297-7298: `MAX_PARTICLES = 600`, `MAX_FLOATING_TEXTS = 150`
-- L7301: `spawnRing(x, y, color, maxSize)`
-- L7317: `spawnFloatingText()`
-- L7329: `updateParticles()`
-- L7362: `updateFloatingTexts()`
-- L7376: `updateEffects()`
-- L7397: `triggerShake()`
-- L7403: `triggerFlash()`
-- L7410: `triggerSlowmo()`
+## 30. PARTICLES & EFFECTS (7308-7430)
+- L7311-7312: `MAX_PARTICLES = 600`, `MAX_FLOATING_TEXTS = 150`
+- L7315: `spawnRing(x, y, color, maxSize)`
+- L7331: `spawnFloatingText()`
+- L7343: `updateParticles()`
+- L7376: `updateFloatingTexts()`
+- L7390: `updateEffects()`
+- L7411: `triggerShake()`
+- L7417: `triggerFlash()`
+- L7424: `triggerSlowmo()`
 
-## 31. RENDERING (7403-9227)
-- L7407: `render()` — during skilltree: early return, calls `renderUpgradeOverlay()` directly on uCtx (game canvas stays frozen with CSS blur)
-- L7483: `renderBackground()`
-- L7558: `renderShieldArc()` — **segmented bars**
-- L7620: `renderShieldBreakEffects()`
-- L7701: `renderPlayer()`
-- L7741: `renderAura()`
-- L7801: `renderFusionBeam()`
-- L7928: `renderOrbitals()`
-- L7949: `renderLightning()`
-- L7989: `renderNovaBeam()`
-- L8021: `renderBullets()`
-- L8246: `renderEnemyBullets()`
-- L8264: `renderDrones()`
-- L8361: `renderEnemies()`
-- L8506: `renderPickups()`
-- L8550: `renderParticles()`
-- L8628: `renderFloatingTexts()`
-- L8652: `renderTurrets()`
-- L8746: `renderMines()`
-- L8867: `renderSnares()`
-- L8931: `renderSlashEffects()`
-- L8982: `renderRiftZones()`
-- L9010: `drawUpgradeIcon(ctx, upgradeKey, cx, cy, color, size)`
-- L9076: `drawVerticalProgressBars()`
-- L9085: `drawWeaponIconAt()`
+## 31. RENDERING (7414-9243)
+- L7414: `render()` — during skilltree: early return, calls `renderUpgradeOverlay()` directly on uCtx (game canvas stays frozen with CSS blur)
+- L7497: `renderBackground()`
+- L7565: `renderShieldArc()` — **segmented bars**, guards for shieldRechargeTimer
+- L7627: `renderShieldBreakEffects()` — pop animation on lost life slot (scale up → shrink + fade to red)
+- L7717: `renderPlayer()`
+- L7757: `renderAura()`
+- L7817: `renderFusionBeam()`
+- L7944: `renderOrbitals()`
+- L7965: `renderLightning()`
+- L8005: `renderNovaBeam()`
+- L8037: `renderBullets()`
+- L8262: `renderEnemyBullets()`
+- L8280: `renderDrones()`
+- L8377: `renderEnemies()`
+- L8522: `renderPickups()`
+- L8566: `renderParticles()`
+- L8644: `renderFloatingTexts()`
+- L8668: `renderTurrets()`
+- L8762: `renderMines()`
+- L8883: `renderSnares()`
+- L8947: `renderSlashEffects()`
+- L8998: `renderRiftZones()`
+- L9026: `drawUpgradeIcon(ctx, upgradeKey, cx, cy, color, size)`
+- L9092: `drawVerticalProgressBars()`
+- L9101: `drawWeaponIconAt()`
 
-## 32. UI RENDERING (9230-10514)
-- L9230: `renderUI()` — calls `renderUpgradeOverlay()` during skilltree (but render() now calls it directly instead)
-- L9254: `renderMenu()`
-- L9604: `renderArsenalGallery()`
-- L9692: `renderControlsHelp(startY)`
-- L9728: `renderHUD()`
-- L9935: `renderTutorial()`
-- L10036: `renderShop()`
-- L10231: `handleShopClick(clickX, clickY)`
-- L10266: `handleMenuClick(clickX, clickY)`
-- L10312: `renderDemoEnd()`
-- L10399: `handleDemoEndClick(clickX, clickY)`
-- L10417: `renderPauseOverlay()`
-- L10432: `renderGameOver()`
+## 32. UI RENDERING (9246-10320)
+- L9246: `renderUI()`
+- L9270: `renderMenu()` — includes inline shop (`menuMode === 'shop'`)
+- L9666: `renderArsenalGallery()`
+- L9754: `renderControlsHelp(startY)`
+- L9790: `renderHUD()` — life icons with lineWidth 3
+- L9997: `renderTutorial()`
+- L10119: `handleMenuClick(clickX, clickY)`
+- L10165: `renderDemoEnd()`
+- L10252: `handleDemoEndClick(clickX, clickY)`
+- L10270: `renderPauseOverlay()`
+- L10285: `renderGameOver()`
 
-## 33. UTILITIES (10513-10524)
-- L10514: `normalizeAngle(angle)`
+## 33. UTILITIES (10367-10376)
+- L10367: `normalizeAngle(angle)`
 
-## 34. START GAME (10524-10535)
-- L10524: `init()` call
+## 34. START GAME (10376-10388)
+- L10376: `init()` call

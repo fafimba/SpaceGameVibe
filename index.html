@@ -304,6 +304,7 @@
         const SHIELD_BREAK_FREEZE_DURATION = 0.25; // seconds to ease from normal to frozen
         const SHIELD_BREAK_RESUME_DURATION = 0.4;  // seconds to ease from frozen back to normal
         const SHIELD_BREAK_INVULN_DURATION = 2.0;
+        const SHIELD_RECHARGE_DURATION = 1.0; // seconds (game-time) for shield to refill after break
 
         // Life Slots Overlay (in-world, anchored to player)
         const LIFE_SLOT_OFFSET_Y = -70;
@@ -356,7 +357,7 @@
         const WEAPONS = {
             'laser_cannon': {
                 name: 'LASER CANNON',
-                color: '#FF6B5B',
+                color: '#7FDBFF',
                 icon: 'laser',
                 description: 'Auto-fire laser cannon',
                 shopPrice: 0,
@@ -1007,7 +1008,6 @@
         let permSpeedMulti = 1;
         let permXPMulti = 1;
         let permCrystalMulti = 1;
-        let shopReturnState = 'menu'; // Where to go when leaving shop
 
         // Performance
         let separationFrame = 0;
@@ -1035,6 +1035,7 @@
 
         // Shield Break Sequence state
         let shieldBreakState = null;
+        let shieldRechargeTimer = 0;
 
         
         // Background
@@ -1706,6 +1707,7 @@
 
             // Shield break sequence reset
             shieldBreakState = null;
+            shieldRechargeTimer = 0;
             currentSlowmoFactor = SLOWMO_FACTOR;
 
             // Wave alert reset
@@ -1847,9 +1849,6 @@
                 }
 
                 // Shop navigation
-                if (gameState === 'shop' && (e.code === 'Escape' || e.code === 'KeyS')) {
-                    gameState = shopReturnState || 'menu';
-                }
                 if (gameState === 'menu' && (e.code === 'KeyS' || (e.code === 'Escape' && menuMode === 'shop'))) {
                     menuMode = menuMode === 'main' ? 'shop' : 'main';
                 }
@@ -1899,8 +1898,6 @@
 
                 if (gameState === 'skilltree') {
                     handleUpgradeClick(clickX, clickY);
-                } else if (gameState === 'shop') {
-                    handleShopClick(clickX, clickY);
                 } else if (gameState === 'tutorial') {
                     handleTutorialClick(clickX, clickY);
                 } else if (gameState === 'demoEnd') {
@@ -1958,12 +1955,6 @@
                 if (gameState === 'menu' || gameState === 'gameOver') {
                     const coords = touchToCanvas(e.touches[0]);
                     handleMenuClick(coords.x, coords.y);
-                    return;
-                }
-
-                if (gameState === 'shop') {
-                    const coords = touchToCanvas(e.touches[0]);
-                    handleShopClick(coords.x, coords.y);
                     return;
                 }
 
@@ -2487,10 +2478,21 @@
             // Invulnerability
             player.invulnerable = Math.max(0, player.invulnerable - deltaTime);
 
-            // Shield regeneration
+            // Shield recharge animation (after shield break)
+            if (shieldRechargeTimer > 0) {
+                shieldRechargeTimer -= deltaTime;
+                const rechargeProgress = 1 - Math.max(0, shieldRechargeTimer) / SHIELD_RECHARGE_DURATION;
+                player.shield = PLAYER_MAX_SHIELD * rechargeProgress;
+                if (shieldRechargeTimer <= 0) {
+                    shieldRechargeTimer = 0;
+                    player.shield = PLAYER_MAX_SHIELD;
+                }
+            }
+
+            // Shield regeneration (normal, skipped during recharge)
             player.shieldFlashTimer = Math.max(0, player.shieldFlashTimer - deltaTime);
             player.shieldRegenTimer += deltaTime;
-            if (player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD) {
+            if (shieldRechargeTimer <= 0 && player.shieldRegenTimer >= SHIELD_REGEN_DELAY && player.shield < PLAYER_MAX_SHIELD) {
                 player.shield = Math.min(PLAYER_MAX_SHIELD, player.shield + SHIELD_REGEN_RATE * deltaTime);
             }
 
@@ -2566,7 +2568,7 @@
             // === LASER CANNON === (Lv1-3: rate/spread/pierce, Lv4-6: rate/spread/pierce, Lv7-9: rate/spread/pierce, Lv10: Nova Beam)
             let hasLaser = activeWeapons.includes('laser_cannon');
             let damage = hasLaser ? 10 : 8;
-            let fireRate = 0.35;
+            let fireRate = 0.20;
             let pierce = 0;
             let pierceInfinite = false;
             let spreadCount = 0;
@@ -2574,13 +2576,13 @@
 
             if (hasLaser) {
                 const lvl = upgradeLevels['laser_cannon'] || 0;
-                if (lvl >= 1) fireRate = 0.28;
+                if (lvl >= 1) fireRate = 0.16;
                 if (lvl >= 2) spreadCount = 3;
                 if (lvl >= 3) pierce = 2;
-                if (lvl >= 4) fireRate = 0.22;
+                if (lvl >= 4) fireRate = 0.12;
                 if (lvl >= 5) spreadCount = 5;
                 if (lvl >= 6) { pierce = 3; damage = 14; }
-                if (lvl >= 7) fireRate = 0.16;
+                if (lvl >= 7) fireRate = 0.09;
                 if (lvl >= 8) spreadCount = 7;
                 if (lvl >= 9) { pierce = 4; damage = 18; }
             }
@@ -3101,7 +3103,6 @@
             });
 
             // Juice
-            triggerFlash('#FFE4B5', 0.1, 100);
             triggerShake(6, 200);
             triggerSlowmo(30);
 
@@ -7036,7 +7037,7 @@
             // Shield depleted - consume hull and restore shield
             if (player.shield <= 0) {
                 player.hp--;
-                player.shield = PLAYER_MAX_SHIELD;
+                player.shield = 0;
 
                 if (player.hp <= 0) {
                     player.shield = 0; // Stay at 0 for death
@@ -7088,6 +7089,8 @@
                 if (s.freezeProgress >= 1) {
                     timeScale = 0;
                     s.phase = 'shockwave';
+                    shakeDuration = 0;
+                    shakeIntensity = 0;
                 } else {
                     // Ease-out: decelerates to zero
                     const t = s.freezeProgress;
@@ -7129,26 +7132,28 @@
 
                 // 0.00–0.12s: fade in
                 // 0.12–0.30s: hold
-                // 0.30–0.50s: lost slot breaks
-                // 0.50–0.65s: hold remaining
-                // 0.65–0.80s: fade out
+                // 0.30–0.65s: lost slot pop + break (0.35s)
+                // 0.65–0.80s: hold remaining
+                // 0.80–0.95s: fade out
                 if (s.phaseTimer < 0.12) {
                     s.lifeSlotAlpha = s.phaseTimer / 0.12;
                 } else if (s.phaseTimer < 0.30) {
                     s.lifeSlotAlpha = 1.0;
                     s.lostSlotProgress = 0;
-                } else if (s.phaseTimer < 0.50) {
-                    s.lifeSlotAlpha = 1.0;
-                    s.lostSlotProgress = (s.phaseTimer - 0.30) / 0.20;
                 } else if (s.phaseTimer < 0.65) {
                     s.lifeSlotAlpha = 1.0;
-                    s.lostSlotProgress = 1.0;
+                    s.lostSlotProgress = (s.phaseTimer - 0.30) / 0.35;
                 } else if (s.phaseTimer < 0.80) {
-                    s.lifeSlotAlpha = 1.0 - (s.phaseTimer - 0.65) / 0.15;
+                    s.lifeSlotAlpha = 1.0;
+                    s.lostSlotProgress = 1.0;
+                } else if (s.phaseTimer < 0.95) {
+                    s.lifeSlotAlpha = 1.0 - (s.phaseTimer - 0.80) / 0.15;
                     s.lostSlotProgress = 1.0;
                 } else {
                     s.phase = 'resume';
                     s.resumeProgress = 0;
+                    shieldRechargeTimer = SHIELD_RECHARGE_DURATION;
+                    player.shieldArcOpacity = SHIELD_ARC_REGEN_OPACITY;
                 }
             }
 
@@ -7547,7 +7552,7 @@
         // ============================================================
 
         function renderShieldArc() {
-            if (!player || player.shield <= 0) return;
+            if (!player || (player.shield <= 0 && shieldRechargeTimer <= 0)) return;
             // Hide arc during shockwave phase (the shockwave IS the visual)
             if (shieldBreakState && shieldBreakState.phase === 'shockwave') return;
 
@@ -7654,10 +7659,19 @@
                     let scale = LIFE_SLOT_SCALE;
 
                     if (isLost) {
-                        alpha *= (1 - s.lostSlotProgress);
-                        scale *= (1 - s.lostSlotProgress * 0.5);
-                        ctx.strokeStyle = s.lostSlotProgress > 0.1 && s.lostSlotProgress < 0.5
-                            ? '#FFFFFF' : COLORS.HUD_CYAN_DIM;
+                        const p = s.lostSlotProgress;
+                        if (p < 0.35) {
+                            // Pop up — scale 1.0 → 1.6, white flash
+                            const popT = easeOutCubic(p / 0.35);
+                            scale *= (1.0 + 0.6 * popT);
+                            ctx.strokeStyle = '#FFFFFF';
+                        } else {
+                            // Shrink away — scale 1.6 → 0, fade out, white → red
+                            const shrinkT = easeOutCubic((p - 0.35) / 0.65);
+                            scale *= 1.6 * (1 - shrinkT);
+                            alpha *= (1 - shrinkT);
+                            ctx.strokeStyle = lerpColor('#FFFFFF', COLORS.HUD_RED, shrinkT);
+                        }
                     } else if (isActive) {
                         ctx.strokeStyle = COLORS.PLAYER;
                     } else {
@@ -7671,7 +7685,7 @@
                     ctx.scale(scale, scale);
                     ctx.rotate(-Math.PI / 2);
 
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
                     ctx.beginPath();
                     ctx.moveTo(22, 0);
                     ctx.lineTo(-12, -16);
@@ -9237,8 +9251,6 @@
                 renderDemoEnd();
             } else if (gameState === 'tutorial') {
                 renderTutorial();
-            } else if (gameState === 'shop') {
-                renderShop();
             }
         }
 
@@ -9309,25 +9321,33 @@
             ctx.textAlign = 'center';
             ctx.globalAlpha = menuUIAlpha;
 
-            // Title
-            ctx.font = mobile ? 'bold 72px "Segoe UI", sans-serif' : 'bold 64px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.PLAYER;
-            ctx.shadowColor = COLORS.PLAYER;
-            ctx.shadowBlur = 20;
-            const titleY = mobile ? CANVAS_HEIGHT * 0.1 : CANVAS_HEIGHT * 0.13;
-            ctx.fillText('SPACE SURVIVOR', cx, titleY);
+            // Title — two lines: SPACE (white) + SURVIVOR (cyan)
+            const titleY = mobile ? CANVAS_HEIGHT * 0.08 : CANVAS_HEIGHT * 0.10;
+            const titleSize1 = mobile ? 90 : 80;
+            const titleSize2 = mobile ? 100 : 90;
+            const titleGap = mobile ? 8 : 4;
+
+            // "SPACE" in white
+            ctx.font = `900 ${titleSize1}px "Segoe UI", Arial, sans-serif`;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.shadowColor = 'rgba(200, 220, 255, 0.5)';
+            ctx.shadowBlur = 15;
+            ctx.fillText('SPACE', cx, titleY);
             ctx.shadowBlur = 0;
 
-            // Tagline
-            ctx.font = mobile ? '22px "Segoe UI", sans-serif' : '18px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('Drift. Survive. Swarm the stars.', cx, titleY + (mobile ? 45 : 40));
+            // "SURVIVOR" in cyan
+            ctx.font = `900 ${titleSize2}px "Segoe UI", Arial, sans-serif`;
+            ctx.fillStyle = COLORS.PLAYER;
+            ctx.shadowColor = COLORS.PLAYER;
+            ctx.shadowBlur = 25;
+            ctx.fillText('SURVIVOR', cx, titleY + titleSize1 + titleGap);
+            ctx.shadowBlur = 0;
 
             // Version indicator
             if (!isFullVersion) {
                 ctx.font = mobile ? 'bold 16px "Segoe UI", sans-serif' : 'bold 12px "Segoe UI", sans-serif';
                 ctx.fillStyle = 'rgba(255, 221, 87, 0.5)';
-                ctx.fillText('FREE VERSION', cx, titleY + (mobile ? 75 : 62));
+                ctx.fillText('FREE VERSION', cx, titleY + titleSize1 + titleGap + (mobile ? 35 : 30));
             }
 
             // --- Weapon selector (only after ship arrives) ---
@@ -9380,39 +9400,79 @@
             }
 
             if (menuMode === 'main') {
-                // PLAY button
-                const playW = mobile ? 500 : 360;
-                const playH = mobile ? 80 : 60;
-                const playX = cx - playW / 2;
-                const playY = mobile ? CANVAS_HEIGHT - 320 : CANVAS_HEIGHT - 200;
-                const pulse = Math.sin(Date.now() / 300) * 0.15 + 0.85;
+                // --- Bottom action area: PLAY (large) + UPGRADES (below) ---
+                const playR = mobile ? 80 : 60;
+                const btnAreaBottom = mobile ? CANVAS_HEIGHT - 180 : CANVAS_HEIGHT - 130;
+                const playCY = btnAreaBottom - (mobile ? 80 : 55);
+                const pulse = Math.sin(Date.now() / 300) * 0.08 + 0.92;
+
+                // Play circle — solid cyan, pulsing
                 ctx.globalAlpha = menuUIAlpha * pulse;
                 ctx.fillStyle = COLORS.PLAYER;
                 ctx.beginPath();
-                ctx.roundRect(playX, playY, playW, playH, 10);
+                ctx.arc(cx, playCY, playR, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.globalAlpha = menuUIAlpha;
-                ctx.fillStyle = '#000';
-                ctx.font = mobile ? 'bold 36px "Segoe UI", sans-serif' : 'bold 26px "Segoe UI", sans-serif';
-                ctx.fillText(mobile ? 'PLAY' : 'PLAY  (ENTER)', cx, playY + (mobile ? 53 : 40));
-                menuBtns.push({ type: 'play', x: playX, y: playY, w: playW, h: playH });
 
-                // SHOP button
-                const shopW = mobile ? 400 : 280;
-                const shopH = mobile ? 60 : 46;
-                const shopX = cx - shopW / 2;
-                const shopY = playY + playH + (mobile ? 24 : 20);
-                ctx.fillStyle = 'rgba(224, 240, 255, 0.1)';
-                ctx.strokeStyle = 'rgba(224, 240, 255, 0.3)';
-                ctx.lineWidth = 1;
+                // Thin outline ring (subtle depth)
+                ctx.globalAlpha = menuUIAlpha * 0.25;
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                ctx.roundRect(shopX, shopY, shopW, shopH, 8);
+                ctx.arc(cx, playCY, playR + 4, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Play triangle — optically centered (shifted right ~12%)
+                ctx.globalAlpha = menuUIAlpha;
+                ctx.fillStyle = '#0a1628';
+                ctx.beginPath();
+                const tOff = playR * 0.08;
+                const tH = playR * 0.45;
+                const tW = playR * 0.4;
+                ctx.moveTo(cx - tW + tOff, playCY - tH);
+                ctx.lineTo(cx - tW + tOff, playCY + tH);
+                ctx.lineTo(cx + tW * 1.1 + tOff, playCY);
+                ctx.closePath();
+                ctx.fill();
+
+                menuBtns.push({ type: 'play', x: cx - playR - 10, y: playCY - playR - 10, w: (playR + 10) * 2, h: (playR + 10) * 2 });
+
+                // Upgrades button — outline circle, centered below play
+                const shopR = mobile ? 40 : 30;
+                const shopGap = mobile ? 30 : 22;
+                const shopCY = playCY + playR + shopGap + shopR;
+
+                ctx.globalAlpha = menuUIAlpha * 0.9;
+                ctx.fillStyle = 'rgba(127, 219, 255, 0.06)';
+                ctx.strokeStyle = 'rgba(127, 219, 255, 0.5)';
+                ctx.lineWidth = mobile ? 2 : 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, shopCY, shopR, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
-                ctx.fillStyle = '#E0F0FF';
-                ctx.font = mobile ? 'bold 26px "Segoe UI", sans-serif' : 'bold 18px "Segoe UI", sans-serif';
-                ctx.fillText((mobile ? 'SHOP  ' : 'SHOP  (S)  ') + '\u25C6 ' + (prog.crystals || 0), cx, shopY + (mobile ? 40 : 31));
-                menuBtns.push({ type: 'shop', x: shopX, y: shopY, w: shopW, h: shopH });
+
+                // Arrow-up icon
+                ctx.globalAlpha = menuUIAlpha;
+                ctx.strokeStyle = COLORS.PLAYER;
+                ctx.lineWidth = mobile ? 3.5 : 2.5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                const aS = shopR * 0.38;
+                ctx.beginPath();
+                ctx.moveTo(cx, shopCY + aS);
+                ctx.lineTo(cx, shopCY - aS);
+                ctx.moveTo(cx - aS * 0.75, shopCY - aS * 0.25);
+                ctx.lineTo(cx, shopCY - aS);
+                ctx.lineTo(cx + aS * 0.75, shopCY - aS * 0.25);
+                ctx.stroke();
+                ctx.lineCap = 'butt';
+                ctx.lineJoin = 'miter';
+
+                // Crystal count below upgrade button
+                ctx.font = mobile ? 'bold 22px "Segoe UI", sans-serif' : 'bold 14px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(224, 240, 255, 0.5)';
+                ctx.fillText('\u25C6 ' + (prog.crystals || 0), cx, shopCY + shopR + (mobile ? 28 : 20));
+
+                menuBtns.push({ type: 'shop', x: cx - shopR - 10, y: shopCY - shopR - 10, w: (shopR + 10) * 2, h: (shopR + 10) * 2 });
 
             } else if (menuMode === 'shop') {
                 // --- Inline shop: upgrade cards + BACK ---
@@ -9429,8 +9489,9 @@
                     const puCols = 3;
                     const puCardGap = 14;
                     const puCardW = (CANVAS_WIDTH - 80 - (puCols - 1) * puCardGap) / puCols;
-                    const puCardH = 140;
+                    const puCardH = 170;
                     const puY = crystalY + 12;
+                    const uColor = COLORS.PLAYER;
 
                     for (let i = 0; i < puKeys.length; i++) {
                         const key = puKeys[i];
@@ -9453,7 +9514,7 @@
 
                         // Card background
                         ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
-                        ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
+                        ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? uColor : 'rgba(255,255,255,0.15)');
                         ctx.lineWidth = canAfford ? 2 : 1;
                         ctx.beginPath();
                         ctx.roundRect(x, y, puCardW, puCardH, 8);
@@ -9461,7 +9522,7 @@
                         if (canAfford) {
                             ctx.save();
                             ctx.globalAlpha = 0.05;
-                            ctx.fillStyle = def.color;
+                            ctx.fillStyle = uColor;
                             ctx.fill();
                             ctx.restore();
                         }
@@ -9470,15 +9531,26 @@
                         const ccx = x + puCardW / 2;
 
                         // Icon
-                        drawUpgradeIcon(ctx, key, ccx, y + 36, def.color, 22);
+                        drawUpgradeIcon(ctx, key, ccx, y + 34, uColor, 20);
+
+                        // Name
+                        ctx.textAlign = 'center';
+                        ctx.font = 'bold 13px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#E0F0FF';
+                        ctx.fillText(def.name, ccx, y + 66);
+
+                        // Description
+                        ctx.font = '11px "Segoe UI", sans-serif';
+                        ctx.fillStyle = 'rgba(224, 240, 255, 0.5)';
+                        ctx.fillText(def.description, ccx, y + 82);
 
                         // Vertical progress bars
-                        ctx.textAlign = 'center';
                         const barsW = puCardW - 40;
                         const barsX = x + 20;
-                        const barsY = y + 62;
-                        drawVerticalProgressBars(ctx, barsX, barsY, barsW, 28, level, def.maxLevel, def.color);
+                        const barsY = y + 94;
+                        drawVerticalProgressBars(ctx, barsX, barsY, barsW, 24, level, def.maxLevel, uColor);
 
+                        // Cost or MAX
                         if (isMaxed) {
                             ctx.font = 'bold 16px "Segoe UI", sans-serif';
                             ctx.fillStyle = '#39FF14';
@@ -9515,8 +9587,9 @@
                     const puCardGap = 12;
                     const totalW = CANVAS_WIDTH - 160;
                     const puCardW = (totalW - (puKeys.length - 1) * puCardGap) / puKeys.length;
-                    const puCardH = 170;
+                    const puCardH = 200;
                     const puY = crystalY + 14;
+                    const uColor = COLORS.PLAYER;
 
                     for (let i = 0; i < puKeys.length; i++) {
                         const key = puKeys[i];
@@ -9529,7 +9602,7 @@
 
                         // Card background
                         ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
-                        ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
+                        ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? uColor : 'rgba(255,255,255,0.15)');
                         ctx.lineWidth = canAfford ? 2 : 1;
                         ctx.beginPath();
                         ctx.roundRect(x, puY, puCardW, puCardH, 8);
@@ -9537,7 +9610,7 @@
                         if (canAfford) {
                             ctx.save();
                             ctx.globalAlpha = 0.05;
-                            ctx.fillStyle = def.color;
+                            ctx.fillStyle = uColor;
                             ctx.fill();
                             ctx.restore();
                         }
@@ -9546,23 +9619,34 @@
                         const ccx = x + puCardW / 2;
 
                         // Icon
-                        drawUpgradeIcon(ctx, key, ccx, puY + 40, def.color, 24);
+                        drawUpgradeIcon(ctx, key, ccx, puY + 38, uColor, 24);
+
+                        // Name
+                        ctx.textAlign = 'center';
+                        ctx.font = 'bold 13px "Segoe UI", sans-serif';
+                        ctx.fillStyle = '#E0F0FF';
+                        ctx.fillText(def.name, ccx, puY + 72);
+
+                        // Description
+                        ctx.font = '11px "Segoe UI", sans-serif';
+                        ctx.fillStyle = 'rgba(224, 240, 255, 0.5)';
+                        ctx.fillText(def.description, ccx, puY + 90);
 
                         // Vertical progress bars
-                        ctx.textAlign = 'center';
                         const barsW = puCardW - 40;
                         const barsX = x + 20;
-                        const barsY = puY + 70;
-                        drawVerticalProgressBars(ctx, barsX, barsY, barsW, 32, level, def.maxLevel, def.color);
+                        const barsY = puY + 104;
+                        drawVerticalProgressBars(ctx, barsX, barsY, barsW, 28, level, def.maxLevel, uColor);
 
+                        // Cost or MAX
                         if (isMaxed) {
                             ctx.font = 'bold 14px "Segoe UI", sans-serif';
                             ctx.fillStyle = '#39FF14';
-                            ctx.fillText('MAX', ccx, puY + puCardH - 18);
+                            ctx.fillText('MAX', ccx, puY + puCardH - 20);
                         } else {
                             ctx.font = '13px "Segoe UI", sans-serif';
                             ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
-                            ctx.fillText('\u25C6 ' + cost, ccx, puY + puCardH - 18);
+                            ctx.fillText('\u25C6 ' + cost, ccx, puY + puCardH - 20);
                             if (canAfford) {
                                 menuBtns.push({ type: 'upgrade', id: key, x: x, y: puY, w: puCardW, h: puCardH });
                             }
@@ -9596,7 +9680,7 @@
             const mobile = isMobile();
 
             const ARSENAL_WEAPONS = [
-                { id: 'laser_cannon', name: 'LASER CANNON', icon: 'laser', color: '#FF6B5B' },
+                { id: 'laser_cannon', name: 'LASER CANNON', icon: 'laser', color: '#7FDBFF' },
                 { id: 'orbital_shield', name: 'ORBITAL SHIELD', icon: 'orbital', color: '#00DFFF' },
                 { id: 'missile_launcher', name: 'MISSILE LAUNCHER', icon: 'rocket', color: '#FFD93D' },
                 { id: 'lightning_ray', name: 'LIGHTNING RAY', icon: 'lightning', color: '#9F7AEA' },
@@ -9809,7 +9893,7 @@
                 ctx.scale(shipScale, shipScale);
                 ctx.rotate(-Math.PI / 2);
 
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 3;
                 ctx.beginPath();
                 ctx.moveTo(22, 0);
                 ctx.lineTo(-12, -16);
@@ -10019,229 +10103,9 @@
         }
 
         // ============================================================
-        // SHOP SCREEN
-        // ============================================================
-        let shopScroll = 0;
-        let shopHover = -1; // Index of hovered item for click handling
-
-        function renderShop() {
-            ctx.fillStyle = 'rgba(5, 8, 18, 0.95)';
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            ctx.textAlign = 'center';
-
-            const prog = loadProgression();
-            const mobile = isMobile();
-
-            // Header
-            ctx.font = mobile ? 'bold 52px "Segoe UI", sans-serif' : 'bold 42px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('SHOP', CANVAS_WIDTH / 2, mobile ? 55 : 60);
-
-            // Crystal balance
-            ctx.font = mobile ? 'bold 30px "Segoe UI", sans-serif' : 'bold 22px "Segoe UI", sans-serif';
-            ctx.fillStyle = '#E0F0FF';
-            ctx.fillText('\u25C6 ' + (prog.crystals || 0), CANVAS_WIDTH / 2, mobile ? 90 : 95);
-
-            let shopButtons = [];
-
-            if (mobile) {
-                // === PERMANENT UPGRADES SECTION (mobile) ===
-                const puStartY = 130;
-                ctx.font = 'bold 28px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.HUD_CYAN;
-                ctx.textAlign = 'left';
-                ctx.fillText('UPGRADES', 60, puStartY);
-
-                const puKeys = Object.keys(PERMANENT_UPGRADES);
-                const puCols = 3;
-                const puCardGap = 20;
-                const puCardW = (CANVAS_WIDTH - 120 - (puCols - 1) * puCardGap) / puCols;
-                const puCardH = 155;
-                const puY = puStartY + 16;
-
-                for (let i = 0; i < puKeys.length; i++) {
-                    const key = puKeys[i];
-                    const def = PERMANENT_UPGRADES[key];
-                    const level = (prog.permanentUpgrades && prog.permanentUpgrades[key]) || 0;
-                    const cost = getUpgradeCost(key, level);
-                    const canAfford = (prog.crystals || 0) >= cost && level < def.maxLevel;
-                    const isMaxed = level >= def.maxLevel;
-
-                    const col = i < puCols ? i : (i - puCols);
-                    const row = i < puCols ? 0 : 1;
-                    // Center the second row if it has fewer items
-                    let rowStartX = 60;
-                    if (row === 1) {
-                        const itemsInRow = puKeys.length - puCols;
-                        const rowW = itemsInRow * puCardW + (itemsInRow - 1) * puCardGap;
-                        rowStartX = (CANVAS_WIDTH - rowW) / 2;
-                    }
-                    const x = rowStartX + col * (puCardW + puCardGap);
-                    const y = puY + row * (puCardH + puCardGap);
-
-                    // Card
-                    ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
-                    ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
-                    ctx.lineWidth = canAfford ? 2 : 1;
-                    ctx.beginPath();
-                    ctx.roundRect(x, y, puCardW, puCardH, 8);
-                    ctx.fill();
-                    if (canAfford) {
-                        ctx.save();
-                        ctx.globalAlpha = 0.05;
-                        ctx.fillStyle = def.color;
-                        ctx.fill();
-                        ctx.restore();
-                    }
-                    ctx.stroke();
-
-                    ctx.textAlign = 'center';
-                    const cx = x + puCardW / 2;
-
-                    // Icon
-                    drawUpgradeIcon(ctx, key, cx, y + 42, def.color, 26);
-
-                    // Vertical progress bars
-                    const barsW = puCardW - 50;
-                    const barsX = x + 25;
-                    const barsY = y + 74;
-                    drawVerticalProgressBars(ctx, barsX, barsY, barsW, 32, level, def.maxLevel, def.color);
-
-                    if (isMaxed) {
-                        ctx.font = 'bold 18px "Segoe UI", sans-serif';
-                        ctx.fillStyle = '#39FF14';
-                        ctx.fillText('MAX', cx, y + puCardH - 16);
-                    } else {
-                        ctx.font = 'bold 16px "Segoe UI", sans-serif';
-                        ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
-                        ctx.fillText('\u25C6 ' + cost, cx, y + puCardH - 16);
-                        if (canAfford) {
-                            shopButtons.push({ type: 'upgrade', id: key, x: x, y: y, w: puCardW, h: puCardH });
-                        }
-                    }
-                }
-
-                // BACK button (mobile)
-                const backW = 300;
-                const backH = 55;
-                const backX = (CANVAS_WIDTH - backW) / 2;
-                const backY = CANVAS_HEIGHT - backH - 15;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.roundRect(backX, backY, backW, backH, 8);
-                ctx.fill();
-                ctx.stroke();
-                ctx.textAlign = 'center';
-                ctx.font = 'bold 26px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.UI_SECONDARY;
-                ctx.fillText('BACK', CANVAS_WIDTH / 2, backY + 37);
-                shopButtons.push({ type: 'back', x: backX, y: backY, w: backW, h: backH });
-
-            } else {
-                // Desktop layout
-                const wGap = 16;
-                const puStartY = 140;
-                ctx.font = 'bold 20px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.HUD_CYAN;
-                ctx.textAlign = 'left';
-                ctx.fillText('PERMANENT UPGRADES', 80, puStartY);
-
-                const puKeys = Object.keys(PERMANENT_UPGRADES);
-                const puCardW = (CANVAS_WIDTH - 160 - (puKeys.length - 1) * 12) / puKeys.length;
-                const puCardH = 200;
-                const puY = puStartY + 20;
-
-                for (let i = 0; i < puKeys.length; i++) {
-                    const key = puKeys[i];
-                    const def = PERMANENT_UPGRADES[key];
-                    const level = (prog.permanentUpgrades && prog.permanentUpgrades[key]) || 0;
-                    const cost = getUpgradeCost(key, level);
-                    const canAfford = (prog.crystals || 0) >= cost && level < def.maxLevel;
-                    const isMaxed = level >= def.maxLevel;
-                    const x = 80 + i * (puCardW + 12);
-
-                    ctx.fillStyle = 'rgba(20, 25, 40, 0.8)';
-                    ctx.strokeStyle = isMaxed ? 'rgba(57, 255, 20, 0.4)' : (canAfford ? def.color : 'rgba(255,255,255,0.15)');
-                    ctx.lineWidth = canAfford ? 2 : 1;
-                    ctx.beginPath();
-                    ctx.roundRect(x, puY, puCardW, puCardH, 8);
-                    ctx.fill();
-                    if (canAfford) {
-                        ctx.save();
-                        ctx.globalAlpha = 0.05;
-                        ctx.fillStyle = def.color;
-                        ctx.fill();
-                        ctx.restore();
-                    }
-                    ctx.stroke();
-
-                    ctx.textAlign = 'center';
-                    const cx = x + puCardW / 2;
-
-                    // Icon
-                    drawUpgradeIcon(ctx, key, cx, puY + 50, def.color, 28);
-
-                    // Vertical progress bars
-                    const barsW = puCardW - 40;
-                    const barsX = x + 20;
-                    const barsY = puY + 84;
-                    drawVerticalProgressBars(ctx, barsX, barsY, barsW, 40, level, def.maxLevel, def.color);
-
-                    if (isMaxed) {
-                        ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                        ctx.fillStyle = '#39FF14';
-                        ctx.fillText('MAX', cx, puY + puCardH - 22);
-                    } else {
-                        ctx.font = '13px "Segoe UI", sans-serif';
-                        ctx.fillStyle = canAfford ? '#E0F0FF' : 'rgba(224, 240, 255, 0.4)';
-                        ctx.fillText('\u25C6 ' + cost, cx, puY + puCardH - 22);
-                        if (canAfford) {
-                            shopButtons.push({ type: 'upgrade', id: key, x: x, y: puY, w: puCardW, h: puCardH });
-                        }
-                    }
-                }
-
-                // Back instruction (desktop)
-                ctx.textAlign = 'center';
-                ctx.font = '16px "Segoe UI", sans-serif';
-                ctx.fillStyle = COLORS.UI_SECONDARY;
-                ctx.fillText('Press ESC or S to go back', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
-            }
-
-            // Store buttons for click handling
-            currentShopButtons = shopButtons;
-        }
-
-        let currentShopButtons = [];
         let currentTutorialButtons = [];
         let currentMenuButtons = [];
         let currentDemoEndButtons = [];
-
-        function handleShopClick(clickX, clickY) {
-            for (const btn of currentShopButtons) {
-                if (clickX >= btn.x && clickX <= btn.x + btn.w &&
-                    clickY >= btn.y && clickY <= btn.y + btn.h) {
-                    if (btn.type === 'back') {
-                        gameState = shopReturnState || 'menu';
-                        return true;
-                    }
-                    const prog = loadProgression();
-                    if (btn.type === 'upgrade') {
-                        const level = (prog.permanentUpgrades[btn.id]) || 0;
-                        const cost = getUpgradeCost(btn.id, level);
-                        if ((prog.crystals || 0) >= cost && level < PERMANENT_UPGRADES[btn.id].maxLevel) {
-                            prog.crystals -= cost;
-                            prog.permanentUpgrades[btn.id] = level + 1;
-                            saveProgression(prog);
-                        }
-                    }
-                    return true;
-                }
-            }
-            return false;
-        }
 
         function handleTutorialClick(clickX, clickY) {
             for (const btn of currentTutorialButtons) {
