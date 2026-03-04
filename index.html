@@ -279,6 +279,40 @@
             HUD_PANEL_BORDER: 'rgba(127, 219, 255, 0.15)'
         };
 
+        // Weapon color themes — starting weapon determines the entire player color palette
+        const WEAPON_THEMES = {
+            'laser_cannon':  { primary: '#7FDBFF', outline: '#3A9AD9', shieldBg: '#1A4A6A' },
+            'void_blade':    { primary: '#5CE0D6', outline: '#2E8F89', shieldBg: '#164A45' },
+            'fusion_beam':   { primary: '#00FFCC', outline: '#00B38F', shieldBg: '#0A4A3F' }
+        };
+
+        function hexToRGBA(hex, alpha) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function applyWeaponTheme(weaponId) {
+            const theme = WEAPON_THEMES[weaponId] || WEAPON_THEMES['laser_cannon'];
+            COLORS.PLAYER = theme.primary;
+            COLORS.PLAYER_OUTLINE = theme.outline;
+            COLORS.BULLET = theme.primary;
+            COLORS.SHIELD = theme.outline;
+            COLORS.SHIELD_BG = theme.shieldBg;
+            COLORS.HUD_CYAN = theme.primary;
+            COLORS.HUD_CYAN_DIM = theme.outline;
+            COLORS.HUD_CYAN_GLOW = hexToRGBA(theme.primary, 0.4);
+            COLORS.HUD_SHIELD = theme.primary;
+            COLORS.HUD_SHIELD_DIM = theme.outline;
+            COLORS.HUD_SHIELD_GLOW = hexToRGBA(theme.primary, 0.35);
+            COLORS.HUD_SHIELD_REGEN = theme.primary;
+            COLORS.HUD_PANEL_BORDER = hexToRGBA(theme.primary, 0.15);
+            for (const id in WEAPONS) {
+                WEAPONS[id].color = theme.primary;
+            }
+        }
+
         // Shield Arc Constants (around player)
         const SHIELD_ARC_RADIUS = 42;
         const SHIELD_ARC_STROKE = 3;
@@ -377,7 +411,7 @@
             },
             'missile_launcher': {
                 name: 'MISSILE LAUNCHER',
-                color: '#FFD93D',
+                color: '#7FDBFF',
                 icon: 'rocket',
                 description: 'Homing missile system',
                 shopPrice: 150,
@@ -396,7 +430,7 @@
             },
             'orbital_shield': {
                 name: 'ORBITAL SHIELD',
-                color: '#00DFFF',
+                color: '#7FDBFF',
                 icon: 'orbital',
                 description: '3 orbiting damage orbs',
                 shopPrice: 150,
@@ -415,7 +449,7 @@
             },
             'lightning_ray': {
                 name: 'LIGHTNING RAY',
-                color: '#9F7AEA',
+                color: '#7FDBFF',
                 icon: 'lightning',
                 description: 'Chain lightning between enemies',
                 shopPrice: 200,
@@ -453,7 +487,7 @@
             },
             'alien_drone': {
                 name: 'ALIEN DRONE',
-                color: '#39FF14',
+                color: '#7FDBFF',
                 icon: 'drone',
                 description: 'Kamikaze drones from killed enemies',
                 shopPrice: 250,
@@ -492,7 +526,7 @@
             },
             'warp_snare': {
                 name: 'WARP SNARE',
-                color: '#FFB020',
+                color: '#7FDBFF',
                 icon: 'snare',
                 description: 'Persistent traps that slow and damage',
                 shopPrice: 200,
@@ -811,6 +845,61 @@
                     spawnFloatingText(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 'Purchase failed', '#FF4444');
                 }
             }
+        }
+
+        function drawShipPath(c, weaponId) {
+            c.beginPath();
+            if (weaponId === 'fusion_beam') {
+                c.moveTo(-12, -12);
+                c.lineTo(10, -12);
+                c.quadraticCurveTo(24, -12, 24, 0);
+                c.quadraticCurveTo(24, 12, 10, 12);
+                c.lineTo(-12, 12);
+                c.closePath();
+            } else if (weaponId === 'void_blade') {
+                c.moveTo(22, -10);
+                c.lineTo(22, 10);
+                c.lineTo(-12, 18);
+                c.lineTo(-18, 14);
+                c.lineTo(-4, 0);
+                c.lineTo(-18, -14);
+                c.lineTo(-12, -18);
+                c.closePath();
+            } else {
+                c.moveTo(22, 0);
+                c.lineTo(-12, -16);
+                c.lineTo(-10, 0);
+                c.lineTo(-12, 16);
+                c.closePath();
+            }
+        }
+
+        // Draw ship pointing up with an upward arrow (for upgrade UI)
+        function drawShipUpgradeIcon(ctx, weaponId, cx, cy, scale, color) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(scale, scale);
+
+            // Ship rotated -90deg to point upward
+            ctx.save();
+            ctx.rotate(-Math.PI / 2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5 / scale;
+            drawShipPath(ctx, weaponId);
+            ctx.stroke();
+            ctx.restore();
+
+            // Small upward chevron arrow above the ship
+            const arrowY = -20;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2 / scale;
+            ctx.beginPath();
+            ctx.moveTo(-5, arrowY + 5);
+            ctx.lineTo(0, arrowY);
+            ctx.lineTo(5, arrowY + 5);
+            ctx.stroke();
+
+            ctx.restore();
         }
 
         // Performance monitoring
@@ -1427,19 +1516,58 @@
         }
 
         function spawnMenuThrusterParticle(cx, shipY) {
-            const spread = (Math.random() - 0.5) * 0.1;
             const angle = Math.PI / 2;
-            menuParticles.push({
-                x: cx + (Math.random() - 0.5) * 4,
-                y: shipY + 15,
-                vx: Math.cos(angle + spread) * (700 + Math.random() * 5),
-                vy: Math.sin(angle + spread) * (700 + Math.random() * 5),
-                life: 0.2 + Math.random() * 0.2,
-                maxLife: 0.6,
-                size: 12 + Math.random() * 15,
-                rotation: Math.random() * Math.PI * 2,
-                rotationSpeed: (Math.random() - 0.5) * 2
-            });
+            const weaponId = STARTING_WEAPON_IDS[menuWeaponIndex];
+
+            if (weaponId === 'void_blade') {
+                // Two smaller particles from wing thrusters (ship rotated -90°, so local Y maps to screen X)
+                for (let sign = -1; sign <= 1; sign += 2) {
+                    const spread = (Math.random() - 0.5) * 0.15;
+                    menuParticles.push({
+                        x: cx + sign * 16,
+                        y: shipY + 15,
+                        vx: Math.cos(angle + spread) * (600 + Math.random() * 5),
+                        vy: Math.sin(angle + spread) * (600 + Math.random() * 5),
+                        life: 0.15 + Math.random() * 0.15,
+                        maxLife: 0.5,
+                        size: 8 + Math.random() * 10,
+                        thrusterShape: 'square',
+                        rotation: Math.random() * Math.PI * 2,
+                        rotationSpeed: (Math.random() - 0.5) * 2
+                    });
+                }
+            } else if (weaponId === 'fusion_beam') {
+                // One particle randomly from one of the 4 thrusters
+                const offsets = [-10, -3, 3, 10];
+                const idx = Math.floor(Math.random() * 4);
+                const isInner = (idx === 1 || idx === 2);
+                const spread = (Math.random() - 0.5) * 0.1;
+                menuParticles.push({
+                    x: cx + offsets[idx],
+                    y: shipY + 12,
+                    vx: Math.cos(angle + spread) * (600 + Math.random() * 5),
+                    vy: Math.sin(angle + spread) * (600 + Math.random() * 5),
+                    life: 0.15 + Math.random() * 0.15,
+                    maxLife: 0.5,
+                    size: isInner ? (8 + Math.random() * 10) : (5 + Math.random() * 7),
+                    thrusterShape: 'circle',
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 2
+                });
+            } else {
+                const spread = (Math.random() - 0.5) * 0.1;
+                menuParticles.push({
+                    x: cx + (Math.random() - 0.5) * 4,
+                    y: shipY + 15,
+                    vx: Math.cos(angle + spread) * (700 + Math.random() * 5),
+                    vy: Math.sin(angle + spread) * (700 + Math.random() * 5),
+                    life: 0.2 + Math.random() * 0.2,
+                    maxLife: 0.6,
+                    size: 12 + Math.random() * 15,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 2
+                });
+            }
         }
 
         function updateMenuAnimation(dt) {
@@ -1550,6 +1678,7 @@
             setupInput();
             setupTouchControls();
             resizeCanvas();
+            applyWeaponTheme(STARTING_WEAPON_IDS[menuWeaponIndex] || 'laser_cannon');
             resetMenuAnimation();
             window.addEventListener('resize', resizeCanvas);
 
@@ -1725,6 +1854,7 @@
             // Upgrade system reset
             skillPoints = 0;
             activeWeapons = [selectedStartingWeapon];
+            applyWeaponTheme(selectedStartingWeapon);
             upgradeLevels = {};
             // activeEvolutions removed — evolution tracked via upgradeLevels[weaponId] >= 10
             crystalsThisRun = 0;
@@ -1838,8 +1968,10 @@
                 if (gameState === 'menu') {
                     if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
                         menuWeaponIndex = (menuWeaponIndex - 1 + STARTING_WEAPON_IDS.length) % STARTING_WEAPON_IDS.length;
+                        applyWeaponTheme(STARTING_WEAPON_IDS[menuWeaponIndex]);
                     } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
                         menuWeaponIndex = (menuWeaponIndex + 1) % STARTING_WEAPON_IDS.length;
+                        applyWeaponTheme(STARTING_WEAPON_IDS[menuWeaponIndex]);
                     }
                 }
 
@@ -2772,7 +2904,7 @@
 
             // === FUSION BEAM === (Lv1-3: targets/ramp/range, ...)
             let hasFusionBeam = activeWeapons.includes('fusion_beam');
-            let beamDPS = 26;
+            let beamDPS = 52;
             let beamTickRate = 0.1;
             let beamRange = 350;
             let beamWidth = 6;
@@ -3453,24 +3585,75 @@
         }
 
         function spawnThrusterParticle() {
-            const rad = (player.angle + 180) * Math.PI / 180;
-            const spread = (Math.random() - 0.5) * 0.1;
-            const tailOffset = 20 + PLAYER_PIVOT_OFFSET;
+            const angleRad = player.angle * Math.PI / 180;
+            const backRad = angleRad + Math.PI;
+            const perpX = -Math.sin(angleRad);
+            const perpY = Math.cos(angleRad);
 
-            const p = pools.particle.acquire();
-            p.x = player.x + Math.cos(rad) * tailOffset;
-            p.y = player.y + Math.sin(rad) * tailOffset;
-            p.vx = Math.cos(rad + spread) * (400 + Math.random() * 5);
-            p.vy = Math.sin(rad + spread) * (400 + Math.random() * 5);
-            p.life = 0.2 + Math.random() * 0.2;
-            p.maxLife = 0.6;
-            p.size = 12 + Math.random() * 15;
-            p.color = COLORS.PLAYER;
-            p.type = 'thruster';
-            p.rotation = Math.random() * Math.PI * 2;
-            p.rotationSpeed = (Math.random() - 0.5) * 2;
-
-            particles.push(p);
+            if (selectedStartingWeapon === 'void_blade') {
+                // Two particles from wing thrusters at (-15, ±16) in local space
+                for (let sign = -1; sign <= 1; sign += 2) {
+                    const localX = -15, localY = sign * 16;
+                    const wx = player.x + Math.cos(angleRad) * localX + perpX * localY;
+                    const wy = player.y + Math.sin(angleRad) * localX + perpY * localY;
+                    const spread = (Math.random() - 0.5) * 0.15;
+                    const p = pools.particle.acquire();
+                    p.x = wx;
+                    p.y = wy;
+                    p.vx = Math.cos(backRad + spread) * (350 + Math.random() * 5);
+                    p.vy = Math.sin(backRad + spread) * (350 + Math.random() * 5);
+                    p.life = 0.15 + Math.random() * 0.15;
+                    p.maxLife = 0.5;
+                    p.size = 8 + Math.random() * 10;
+                    p.color = COLORS.PLAYER;
+                    p.type = 'thruster';
+                    p.thrusterShape = 'square';
+                    p.rotation = Math.random() * Math.PI * 2;
+                    p.rotationSpeed = (Math.random() - 0.5) * 2;
+                    particles.push(p);
+                }
+            } else if (selectedStartingWeapon === 'fusion_beam') {
+                // Four particles from thrusters at (-12, -10), (-12, -3), (-12, 3), (-12, 10)
+                const offsets = [-10, -3, 3, 10];
+                const idx = Math.floor(Math.random() * 4);
+                const localY = offsets[idx];
+                const localX = -12;
+                const wx = player.x + Math.cos(angleRad) * localX + perpX * localY;
+                const wy = player.y + Math.sin(angleRad) * localX + perpY * localY;
+                const spread = (Math.random() - 0.5) * 0.1;
+                const isInner = (idx === 1 || idx === 2);
+                const p = pools.particle.acquire();
+                p.x = wx;
+                p.y = wy;
+                p.vx = Math.cos(backRad + spread) * (350 + Math.random() * 5);
+                p.vy = Math.sin(backRad + spread) * (350 + Math.random() * 5);
+                p.life = 0.15 + Math.random() * 0.15;
+                p.maxLife = 0.5;
+                p.size = isInner ? (8 + Math.random() * 10) : (5 + Math.random() * 7);
+                p.color = COLORS.PLAYER;
+                p.type = 'thruster';
+                p.thrusterShape = 'circle';
+                p.rotation = Math.random() * Math.PI * 2;
+                p.rotationSpeed = (Math.random() - 0.5) * 2;
+                particles.push(p);
+            } else {
+                const rad = backRad;
+                const spread = (Math.random() - 0.5) * 0.1;
+                const tailOffset = 20 + PLAYER_PIVOT_OFFSET;
+                const p = pools.particle.acquire();
+                p.x = player.x + Math.cos(rad) * tailOffset;
+                p.y = player.y + Math.sin(rad) * tailOffset;
+                p.vx = Math.cos(rad + spread) * (400 + Math.random() * 5);
+                p.vy = Math.sin(rad + spread) * (400 + Math.random() * 5);
+                p.life = 0.2 + Math.random() * 0.2;
+                p.maxLife = 0.6;
+                p.size = 12 + Math.random() * 15;
+                p.color = COLORS.PLAYER;
+                p.type = 'thruster';
+                p.rotation = Math.random() * Math.PI * 2;
+                p.rotationSpeed = (Math.random() - 0.5) * 2;
+                particles.push(p);
+            }
         }
         
         // ============================================================
@@ -5018,6 +5201,9 @@
 
         // Show the upgrade selection overlay (canvas-based)
         function showUpgradePanel() {
+            // Don't open if player is dead or dying
+            if (!player || player._dead) return;
+
             upgradeOptions = generateUpgradeOptions();
             if (upgradeOptions.length === 0) return;
 
@@ -5098,12 +5284,7 @@
                 uCtx.translate(-PLAYER_PIVOT_OFFSET, 0);
                 uCtx.strokeStyle = COLORS.PLAYER;
                 uCtx.lineWidth = 3;
-                uCtx.beginPath();
-                uCtx.moveTo(22, 0);
-                uCtx.lineTo(-12, -16);
-                uCtx.lineTo(-10, 0);
-                uCtx.lineTo(-12, 16);
-                uCtx.closePath();
+                drawShipPath(uCtx, selectedStartingWeapon);
                 uCtx.stroke();
                 uCtx.restore();
             }
@@ -5174,7 +5355,7 @@
             // --- Phase 6: "CHOOSE UPGRADE" title ---
             const titleStart = lineStart + lineDuration * 0.7;
             const titleAlpha = easeOutCubic(Math.min(Math.max(0, t - titleStart) / 0.4, 1));
-            const titleY = invY + 45;
+            const titleY = invY + 65;
             if (titleAlpha > 0) {
                 uCtx.save();
                 uCtx.globalAlpha = titleAlpha;
@@ -5317,20 +5498,55 @@
             return points[points.length - 1];
         }
 
-        // Render weapon inventory bar showing active weapons
+        // Render weapon inventory bar: ship slot on top (bigger), 3 weapon slots below
         function renderWeaponInventoryBar(cx, y, alpha) {
             uCtx.save();
             uCtx.globalAlpha = alpha;
 
-            const slotSize = 34;
-            const gap = 8;
-            const totalW = MAX_ACTIVE_WEAPONS * slotSize + (MAX_ACTIVE_WEAPONS - 1) * gap;
-            const startX = cx - totalW / 2;
+            const shipSlotSize = 44;
+            const weaponSlotSize = 34;
+            const rowGap = 14;
+            const weaponGap = 8;
+            const totalH = shipSlotSize + rowGap + weaponSlotSize;
+            const topRowY = y - totalH / 2;
+            const bottomRowY = topRowY + shipSlotSize + rowGap;
 
-            for (let i = 0; i < MAX_ACTIVE_WEAPONS; i++) {
-                const sx = startX + i * (slotSize + gap);
-                const sy = y - slotSize / 2;
-                const weaponId = activeWeapons[i];
+            // === TOP ROW: Ship slot (starting weapon) ===
+            const shipWeaponId = activeWeapons[0];
+            const shipWeapon = WEAPONS[shipWeaponId];
+            const shipLvl = upgradeLevels[shipWeaponId] || 0;
+            const shipSx = cx - shipSlotSize / 2;
+
+            uCtx.fillStyle = 'rgba(15, 20, 35, 0.8)';
+            uCtx.beginPath();
+            uCtx.roundRect(shipSx, topRowY, shipSlotSize, shipSlotSize, 8);
+            uCtx.fill();
+
+            uCtx.strokeStyle = shipWeapon.color;
+            uCtx.lineWidth = 2;
+            uCtx.beginPath();
+            uCtx.roundRect(shipSx, topRowY, shipSlotSize, shipSlotSize, 8);
+            uCtx.stroke();
+
+            drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, topRowY + shipSlotSize / 2 + 2, 0.85, shipWeapon.color);
+
+            const shipLvlText = shipLvl >= 10 ? 'MAX' : 'Lv.' + shipLvl;
+            const shipLvlColor = shipLvl >= 10 ? COLORS.GOLD : shipWeapon.color;
+            uCtx.font = 'bold 8px "Segoe UI", system-ui, sans-serif';
+            uCtx.textAlign = 'center';
+            uCtx.textBaseline = 'top';
+            uCtx.fillStyle = shipLvlColor;
+            uCtx.fillText(shipLvlText, cx, topRowY + shipSlotSize + 2);
+
+            // === BOTTOM ROW: 3 weapon slots ===
+            const numWeaponSlots = MAX_ACTIVE_WEAPONS - 1;
+            const weaponTotalW = numWeaponSlots * weaponSlotSize + (numWeaponSlots - 1) * weaponGap;
+            const weaponStartX = cx - weaponTotalW / 2;
+
+            for (let i = 0; i < numWeaponSlots; i++) {
+                const sx = weaponStartX + i * (weaponSlotSize + weaponGap);
+                const sy = bottomRowY;
+                const weaponId = activeWeapons[i + 1];
 
                 if (weaponId && WEAPONS[weaponId]) {
                     const weapon = WEAPONS[weaponId];
@@ -5338,17 +5554,17 @@
 
                     uCtx.fillStyle = 'rgba(15, 20, 35, 0.8)';
                     uCtx.beginPath();
-                    uCtx.roundRect(sx, sy, slotSize, slotSize, 6);
+                    uCtx.roundRect(sx, sy, weaponSlotSize, weaponSlotSize, 6);
                     uCtx.fill();
 
                     uCtx.strokeStyle = weapon.color;
                     uCtx.lineWidth = 1.5;
                     uCtx.beginPath();
-                    uCtx.roundRect(sx, sy, slotSize, slotSize, 6);
+                    uCtx.roundRect(sx, sy, weaponSlotSize, weaponSlotSize, 6);
                     uCtx.stroke();
 
                     uCtx.save();
-                    uCtx.translate(sx + slotSize / 2, sy + slotSize / 2);
+                    uCtx.translate(sx + weaponSlotSize / 2, sy + weaponSlotSize / 2);
                     uCtx.scale(0.7, 0.7);
                     drawSkillIcon(uCtx, weapon.icon, 0, 0, weapon.color);
                     uCtx.restore();
@@ -5359,13 +5575,13 @@
                     uCtx.textAlign = 'center';
                     uCtx.textBaseline = 'top';
                     uCtx.fillStyle = lvlColor;
-                    uCtx.fillText(lvlText, sx + slotSize / 2, sy + slotSize + 2);
+                    uCtx.fillText(lvlText, sx + weaponSlotSize / 2, sy + weaponSlotSize + 2);
                 } else {
                     uCtx.strokeStyle = 'rgba(100, 100, 140, 0.2)';
                     uCtx.lineWidth = 1;
                     uCtx.setLineDash([4, 4]);
                     uCtx.beginPath();
-                    uCtx.roundRect(sx, sy, slotSize, slotSize, 6);
+                    uCtx.roundRect(sx, sy, weaponSlotSize, weaponSlotSize, 6);
                     uCtx.stroke();
                     uCtx.setLineDash([]);
 
@@ -5373,7 +5589,7 @@
                     uCtx.font = '14px "Segoe UI", system-ui, sans-serif';
                     uCtx.textAlign = 'center';
                     uCtx.textBaseline = 'middle';
-                    uCtx.fillText('+', sx + slotSize / 2, sy + slotSize / 2);
+                    uCtx.fillText('+', sx + weaponSlotSize / 2, sy + weaponSlotSize / 2);
                 }
             }
 
@@ -5416,6 +5632,7 @@
             }
 
             // Icon centered at top
+            const isStartingWeaponUpgrade = option.type === 'upgrade' && !option.isEvolution && WEAPONS[option.id]?.isStartingWeapon;
             const iconR = 30;
             const iconY = curY + iconR + 8;
             uCtx.beginPath();
@@ -5426,11 +5643,15 @@
             uCtx.lineWidth = 1.5;
             uCtx.stroke();
 
-            uCtx.save();
-            uCtx.translate(cx, iconY);
-            uCtx.scale(1.6, 1.6);
-            drawSkillIcon(uCtx, option.icon, 0, 0, color);
-            uCtx.restore();
+            if (isStartingWeaponUpgrade) {
+                drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, iconY + 2, 0.75, color);
+            } else {
+                uCtx.save();
+                uCtx.translate(cx, iconY);
+                uCtx.scale(1.6, 1.6);
+                drawSkillIcon(uCtx, option.icon, 0, 0, color);
+                uCtx.restore();
+            }
             curY = iconY + iconR + 16;
 
             // Weapon name (centered)
@@ -5438,7 +5659,7 @@
             uCtx.textBaseline = 'top';
             uCtx.font = 'bold 16px "Segoe UI", system-ui, sans-serif';
             uCtx.fillStyle = nameColor;
-            let displayName = option.name;
+            let displayName = isStartingWeaponUpgrade ? 'Upgrade Ship' : option.name;
             const maxNameW = w - innerPad * 2;
             while (uCtx.measureText(displayName).width > maxNameW && displayName.length > 5) {
                 displayName = displayName.slice(0, -1);
@@ -5910,7 +6131,7 @@
                     arc: halfArc,
                     life: 0.22,
                     maxLife: 0.22,
-                    color: WEAPONS['void_blade'].color,
+                    color: COLORS.PLAYER,
                     vx: player.vx || 0,
                     vy: player.vy || 0
                 });
@@ -5929,7 +6150,7 @@
                         maxLife: 3.0,
                         dps: 15,
                         tickTimer: 0,
-                        color: WEAPONS['void_blade'].color
+                        color: COLORS.PLAYER
                     });
                 }
 
@@ -5968,8 +6189,8 @@
                     const vulnMult = e.vulnerability || 0;
                     const totalDmg = Math.round(dmg * (1 + vulnMult));
                     e.hp -= totalDmg;
-                    spawnFloatingText(e.x, e.y - 15, totalDmg.toString(), WEAPONS['void_blade'].color);
-                    spawnRing(e.x, e.y, WEAPONS['void_blade'].color);
+                    spawnFloatingText(e.x, e.y - 15, totalDmg.toString(), COLORS.PLAYER);
+                    spawnRing(e.x, e.y, COLORS.PLAYER);
 
                     if (stats.bladeVulnerability > 0) {
                         e.vulnerability = stats.bladeVulnerability;
@@ -5996,11 +6217,11 @@
                         for (const n of nearby) {
                             if (n !== e && n.hp > 0 && !n.dead) {
                                 n.hp -= 20;
-                                spawnFloatingText(n.x, n.y - 10, '20', WEAPONS['void_blade'].color);
+                                spawnFloatingText(n.x, n.y - 10, '20', COLORS.PLAYER);
                                 if (n.hp <= 0) killEnemy(n);
                             }
                         }
-                        spawnRing(e.x, e.y, WEAPONS['void_blade'].color, 80);
+                        spawnRing(e.x, e.y, COLORS.PLAYER, 80);
                     }
                     killEnemy(e);
                 }
@@ -7203,6 +7424,11 @@
             if (gameState === 'gameOver' || player._dead) return;
             player._dead = true;
 
+            // Close upgrade panel if it was open (die during level-up)
+            if (upgradeOverlay.active) {
+                hideUpgradePanel();
+            }
+
             // Crystal calculation
             const killBonus = Math.floor(totalKills / 50);
             const baseCrystals = crystalsThisRun + killBonus;
@@ -7594,7 +7820,7 @@
             // Draw empty (dim track) bars
             ctx.lineWidth = SHIELD_BAR_WIDTH;
             ctx.lineCap = 'butt';
-            ctx.strokeStyle = 'rgba(68, 200, 255, 0.08)';
+            ctx.strokeStyle = hexToRGBA(COLORS.HUD_SHIELD, 0.08);
             for (let i = 0; i < SHIELD_SEGMENT_COUNT; i++) {
                 const angle = -Math.PI / 2 + i * stepRad;
                 const cos = Math.cos(angle);
@@ -7694,12 +7920,7 @@
                     ctx.rotate(-Math.PI / 2);
 
                     ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(22, 0);
-                    ctx.lineTo(-12, -16);
-                    ctx.lineTo(-10, 0);
-                    ctx.lineTo(-12, 16);
-                    ctx.closePath();
+                    drawShipPath(ctx, selectedStartingWeapon);
                     ctx.stroke();
 
                     ctx.restore();
@@ -7723,28 +7944,70 @@
             if (p.thrusterScale > 0) {
                 ctx.fillStyle = COLORS.PLAYER;
                 ctx.globalAlpha = 0.8;
-                ctx.beginPath();
                 const flameLength = 10 + p.thrusterScale * (5 + p.thrustEffort * 25);
-                ctx.moveTo(-12, -6);
-                ctx.lineTo(-12 - flameLength, 0);
-                ctx.lineTo(-12, 6);
-                ctx.closePath();
-                ctx.fill();
+                if (selectedStartingWeapon === 'void_blade') {
+                    const fl = flameLength * 0.8;
+                    ctx.beginPath();
+                    ctx.moveTo(-10, -19);
+                    ctx.lineTo(-18 - fl, -16);
+                    ctx.lineTo(-20, -12);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-20, 12);
+                    ctx.lineTo(-18 - fl, 16);
+                    ctx.lineTo(-10, 19);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (selectedStartingWeapon === 'fusion_beam') {
+                    const fl = flameLength * 0.7;
+                    const fls = flameLength * 0.4;
+                    // Outer top
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -12);
+                    ctx.lineTo(-12 - fls, -10);
+                    ctx.lineTo(-12, -8);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Inner top
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -6);
+                    ctx.lineTo(-12 - fl, -3);
+                    ctx.lineTo(-12, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Inner bottom
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 0);
+                    ctx.lineTo(-12 - fl, 3);
+                    ctx.lineTo(-12, 6);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Outer bottom
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 8);
+                    ctx.lineTo(-12 - fls, 10);
+                    ctx.lineTo(-12, 12);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -6);
+                    ctx.lineTo(-12 - flameLength, 0);
+                    ctx.lineTo(-12, 6);
+                    ctx.closePath();
+                    ctx.fill();
+                }
                 ctx.globalAlpha = 1;
             }
             
-            // Ship body (triangle) - outline only style
+            // Ship body - outline only style (shape varies by starting weapon)
             ctx.strokeStyle = COLORS.PLAYER;
             ctx.lineWidth = 3;
             ctx.shadowColor = COLORS.PLAYER;
             ctx.shadowBlur = 20;
-            
-            ctx.beginPath();
-            ctx.moveTo(22, 0);
-            ctx.lineTo(-12, -16);
-            ctx.lineTo(-10, 0);
-            ctx.lineTo(-12, 16);
-            ctx.closePath();
+
+            drawShipPath(ctx, selectedStartingWeapon);
             ctx.stroke();
             
             ctx.shadowBlur = 0;
@@ -7821,12 +8084,21 @@
 
             // Origin circle around player (always visible when fusion beam equipped)
             const circlePulse = 0.25 + Math.sin(Date.now() / 600) * 0.1;
-            ctx.strokeStyle = '#00FFCC';
-            ctx.lineWidth = hasTargets ? 3 : 2;
-            ctx.globalAlpha = hasTargets ? circlePulse + 0.15 : circlePulse;
+            ctx.strokeStyle = COLORS.PLAYER;
+            ctx.lineWidth = stats.beamWidth;
+            ctx.globalAlpha = hasTargets ? 0.6 : circlePulse;
             ctx.beginPath();
             ctx.arc(player.x, player.y, BEAM_ORIGIN_RADIUS, 0, Math.PI * 2);
             ctx.stroke();
+            // Inner white core (matches beam visual)
+            if (hasTargets) {
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = stats.beamWidth * 0.4;
+                ctx.globalAlpha = 0.8;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, BEAM_ORIGIN_RADIUS, 0, Math.PI * 2);
+                ctx.stroke();
+            }
 
             if (!hasTargets) { ctx.restore(); return; }
 
@@ -7841,14 +8113,12 @@
                 const originX = player.x + Math.cos(angle) * BEAM_ORIGIN_RADIUS;
                 const originY = player.y + Math.sin(angle) * BEAM_ORIGIN_RADIUS;
 
-                const isPrimary = i === 0;
                 const rampFactor = 1 + t.rampCurrent * 0.3;
-                const baseWidth = stats.beamWidth * rampFactor;
-                const width = isPrimary ? baseWidth : baseWidth * 0.5;
-                const alpha = isPrimary ? 0.6 : 0.4;
+                const width = stats.beamWidth * rampFactor;
+                const alpha = 0.6;
 
                 // Main beam line
-                ctx.strokeStyle = '#00FFCC';
+                ctx.strokeStyle = COLORS.PLAYER;
                 ctx.lineWidth = width;
                 ctx.globalAlpha = alpha;
                 ctx.beginPath();
@@ -7859,7 +8129,7 @@
                 // Inner white core
                 ctx.strokeStyle = '#FFFFFF';
                 ctx.lineWidth = width * 0.4;
-                ctx.globalAlpha = isPrimary ? 0.8 : 0.5;
+                ctx.globalAlpha = 0.8;
                 ctx.beginPath();
                 ctx.moveTo(originX, originY);
                 ctx.lineTo(t.enemy.x, t.enemy.y);
@@ -7868,7 +8138,7 @@
                 // Impact point flash
                 const flashSize = 4 + Math.sin(Date.now() / 80) * 2;
                 ctx.globalAlpha = 0.7;
-                ctx.fillStyle = '#00FFCC';
+                ctx.fillStyle = COLORS.PLAYER;
                 ctx.beginPath();
                 ctx.arc(t.enemy.x, t.enemy.y, flashSize, 0, Math.PI * 2);
                 ctx.fill();
@@ -7878,7 +8148,7 @@
                     for (const ce of t.chainTargets) {
                         if (!ce || ce.hp <= 0 || ce.dead) continue;
                         // Chain beam line (thinner, slightly dimmer)
-                        ctx.strokeStyle = '#00FFCC';
+                        ctx.strokeStyle = COLORS.PLAYER;
                         ctx.lineWidth = 3;
                         ctx.globalAlpha = 0.4;
                         ctx.beginPath();
@@ -7915,7 +8185,7 @@
                 const lifeRatio = sb.duration / 2.0;
                 for (const st of sb.targets) {
                     if (!st.enemy || st.enemy.hp <= 0) continue;
-                    ctx.strokeStyle = '#00FFCC';
+                    ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 3;
                     ctx.globalAlpha = 0.4 * lifeRatio;
                     ctx.beginPath();
@@ -7983,11 +8253,11 @@
                         ctx.lineWidth = 1.5;
                     } else if (layer === 1) {
                         // Mid: purple
-                        ctx.strokeStyle = `rgba(159, 122, 234, ${alpha * 0.8})`;
+                        ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, alpha * 0.8);
                         ctx.lineWidth = 3;
                     } else {
                         // Outer: blue glow
-                        ctx.strokeStyle = `rgba(99, 179, 237, ${alpha * 0.5})`;
+                        ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, alpha * 0.5);
                         ctx.lineWidth = 6;
                     }
 
@@ -8102,21 +8372,29 @@
                 ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 10 : 0;
 
                 for (const b of byType.rocket) {
-                    // Draw trail as fading line
+                    // Draw trail with gap and width ramp
                     if (b.trail && b.trail.length > 1) {
-                        for (let t = 0; t < b.trail.length - 1; t++) {
-                            const alpha = (t + 1) / b.trail.length;
-                            const width = 2 * alpha;
-                            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
-                            ctx.lineWidth = width;
-                            ctx.beginPath();
-                            ctx.moveTo(b.trail[t].x, b.trail[t].y);
-                            ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
-                            ctx.stroke();
+                        const gap = 4, ramp = 6, maxW = 2.5, alphaMax = 0.6;
+                        const lastDrawn = b.trail.length - 1 - gap;
+                        if (lastDrawn >= 1) {
+                            for (let t = 0; t < lastDrawn; t++) {
+                                const baseFade = (t + 1) / lastDrawn;
+                                const pointsFromEnd = lastDrawn - 1 - t;
+                                const rampFactor = pointsFromEnd < ramp ? pointsFromEnd / ramp : 1.0;
+                                const alpha = alphaMax * baseFade * rampFactor;
+                                const width = maxW * baseFade * rampFactor;
+                                if (alpha < 0.02) continue;
+                                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                                ctx.lineWidth = width;
+                                ctx.beginPath();
+                                ctx.moveTo(b.trail[t].x, b.trail[t].y);
+                                ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
+                                ctx.stroke();
+                            }
                         }
                     }
 
-                    // Draw rocket
+                    // Draw rocket — narrow capsule shape (rounded nose, flat back)
                     ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 2;
                     const angle = Math.atan2(b.vy, b.vx);
@@ -8124,10 +8402,10 @@
                     ctx.translate(b.x, b.y);
                     ctx.rotate(angle);
                     ctx.beginPath();
-                    ctx.moveTo(10, 0);
-                    ctx.lineTo(-6, -5);
-                    ctx.lineTo(-4, 0);
-                    ctx.lineTo(-6, 5);
+                    ctx.moveTo(-8, -1.8);
+                    ctx.lineTo(6.2, -1.8);
+                    ctx.arc(6.2, 0, 1.8, -Math.PI / 2, Math.PI / 2, false);
+                    ctx.lineTo(-8, 1.8);
                     ctx.closePath();
                     ctx.stroke();
                     ctx.restore();
@@ -8140,21 +8418,29 @@
                 ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 6 : 0;
 
                 for (const b of byType.mini_rocket) {
-                    // Draw trail as fading line
+                    // Draw trail with gap and width ramp
                     if (b.trail && b.trail.length > 1) {
-                        for (let t = 0; t < b.trail.length - 1; t++) {
-                            const alpha = (t + 1) / b.trail.length;
-                            const width = 1.5 * alpha;
-                            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
-                            ctx.lineWidth = width;
-                            ctx.beginPath();
-                            ctx.moveTo(b.trail[t].x, b.trail[t].y);
-                            ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
-                            ctx.stroke();
+                        const gap = 3, ramp = 4, maxW = 1.8, alphaMax = 0.5;
+                        const lastDrawn = b.trail.length - 1 - gap;
+                        if (lastDrawn >= 1) {
+                            for (let t = 0; t < lastDrawn; t++) {
+                                const baseFade = (t + 1) / lastDrawn;
+                                const pointsFromEnd = lastDrawn - 1 - t;
+                                const rampFactor = pointsFromEnd < ramp ? pointsFromEnd / ramp : 1.0;
+                                const alpha = alphaMax * baseFade * rampFactor;
+                                const width = maxW * baseFade * rampFactor;
+                                if (alpha < 0.02) continue;
+                                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                                ctx.lineWidth = width;
+                                ctx.beginPath();
+                                ctx.moveTo(b.trail[t].x, b.trail[t].y);
+                                ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
+                                ctx.stroke();
+                            }
                         }
                     }
 
-                    // Draw mini rocket
+                    // Draw mini rocket — narrow capsule shape
                     ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 1.5;
                     const angle = Math.atan2(b.vy, b.vx);
@@ -8164,10 +8450,10 @@
                     ctx.rotate(angle);
                     ctx.scale(scale, scale);
                     ctx.beginPath();
-                    ctx.moveTo(8, 0);
-                    ctx.lineTo(-5, -4);
-                    ctx.lineTo(-3, 0);
-                    ctx.lineTo(-5, 4);
+                    ctx.moveTo(-6.5, -1.5);
+                    ctx.lineTo(5, -1.5);
+                    ctx.arc(5, 0, 1.5, -Math.PI / 2, Math.PI / 2, false);
+                    ctx.lineTo(-6.5, 1.5);
                     ctx.closePath();
                     ctx.stroke();
                     ctx.restore();
@@ -8177,21 +8463,29 @@
             // Batch render armageddon rockets with thick orange trail
             if (byType.armageddon_rocket.length > 0) {
                 for (const b of byType.armageddon_rocket) {
-                    // Draw thick orange trail
+                    // Draw thick orange trail with gap and width ramp
                     if (b.trail && b.trail.length > 1) {
-                        for (let t = 0; t < b.trail.length - 1; t++) {
-                            const alpha = (t + 1) / b.trail.length;
-                            const width = 4 * alpha;
-                            ctx.strokeStyle = `rgba(255, 107, 0, ${alpha * 0.7})`;
-                            ctx.lineWidth = width;
-                            ctx.beginPath();
-                            ctx.moveTo(b.trail[t].x, b.trail[t].y);
-                            ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
-                            ctx.stroke();
+                        const gap = 5, ramp = 8, maxW = 5, alphaMax = 0.7;
+                        const lastDrawn = b.trail.length - 1 - gap;
+                        if (lastDrawn >= 1) {
+                            for (let t = 0; t < lastDrawn; t++) {
+                                const baseFade = (t + 1) / lastDrawn;
+                                const pointsFromEnd = lastDrawn - 1 - t;
+                                const rampFactor = pointsFromEnd < ramp ? pointsFromEnd / ramp : 1.0;
+                                const alpha = alphaMax * baseFade * rampFactor;
+                                const width = maxW * baseFade * rampFactor;
+                                if (alpha < 0.02) continue;
+                                ctx.strokeStyle = `rgba(255, 107, 0, ${alpha})`;
+                                ctx.lineWidth = width;
+                                ctx.beginPath();
+                                ctx.moveTo(b.trail[t].x, b.trail[t].y);
+                                ctx.lineTo(b.trail[t + 1].x, b.trail[t + 1].y);
+                                ctx.stroke();
+                            }
                         }
                     }
 
-                    // Draw mega rocket (2x scale)
+                    // Draw mega rocket (2x scale) — narrow capsule shape
                     ctx.strokeStyle = '#FF6B00';
                     ctx.lineWidth = 3;
                     const angle = Math.atan2(b.vy, b.vx);
@@ -8200,20 +8494,20 @@
                     ctx.rotate(angle);
                     ctx.scale(2, 2);
                     ctx.beginPath();
-                    ctx.moveTo(10, 0);
-                    ctx.lineTo(-6, -5);
-                    ctx.lineTo(-4, 0);
-                    ctx.lineTo(-6, 5);
+                    ctx.moveTo(-8, -1.8);
+                    ctx.lineTo(6.2, -1.8);
+                    ctx.arc(6.2, 0, 1.8, -Math.PI / 2, Math.PI / 2, false);
+                    ctx.lineTo(-8, 1.8);
                     ctx.closePath();
                     ctx.stroke();
-                    // Inner detail stroke
+                    // Inner detail capsule
                     ctx.lineWidth = 1.5;
                     ctx.strokeStyle = '#FFD700';
                     ctx.beginPath();
-                    ctx.moveTo(6, 0);
-                    ctx.lineTo(-2, -3);
-                    ctx.lineTo(-1, 0);
-                    ctx.lineTo(-2, 3);
+                    ctx.moveTo(-5, -1);
+                    ctx.lineTo(5.2, -1);
+                    ctx.arc(5.2, 0, 1, -Math.PI / 2, Math.PI / 2, false);
+                    ctx.lineTo(-5, 1);
                     ctx.closePath();
                     ctx.stroke();
                     ctx.restore();
@@ -8231,7 +8525,7 @@
                 }
             }
 
-            // Batch render turret rockets (small cyan triangles, no glow)
+            // Batch render turret rockets — capsule shape, no trail
             if (byType.turret_rocket.length > 0) {
                 ctx.shadowBlur = 0;
                 ctx.strokeStyle = COLORS.PLAYER;
@@ -8242,10 +8536,10 @@
                     ctx.translate(b.x, b.y);
                     ctx.rotate(angle);
                     ctx.beginPath();
-                    ctx.moveTo(8, 0);
-                    ctx.lineTo(-5, -4);
-                    ctx.lineTo(-3, 0);
-                    ctx.lineTo(-5, 4);
+                    ctx.moveTo(-6.5, -1.5);
+                    ctx.lineTo(5, -1.5);
+                    ctx.arc(5, 0, 1.5, -Math.PI / 2, Math.PI / 2, false);
+                    ctx.lineTo(-6.5, 1.5);
                     ctx.closePath();
                     ctx.stroke();
                     ctx.restore();
@@ -8590,18 +8884,26 @@
                     ctx.stroke();
                     ctx.restore();
                 } else if (p.type === 'thruster') {
-                    // Triangle flame particle (filled)
                     ctx.save();
                     ctx.translate(p.x, p.y);
                     ctx.rotate(p.rotation || 0);
                     ctx.fillStyle = p.color;
                     const s = p.size;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -s * 0.6);
-                    ctx.lineTo(s * 0.5, s * 0.4);
-                    ctx.lineTo(-s * 0.5, s * 0.4);
-                    ctx.closePath();
-                    ctx.fill();
+                    if (p.thrusterShape === 'square') {
+                        const hs = s * 0.4;
+                        ctx.fillRect(-hs, -hs, hs * 2, hs * 2);
+                    } else if (p.thrusterShape === 'circle') {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, s * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else {
+                        ctx.beginPath();
+                        ctx.moveTo(0, -s * 0.6);
+                        ctx.lineTo(s * 0.5, s * 0.4);
+                        ctx.lineTo(-s * 0.5, s * 0.4);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
                     ctx.restore();
                 } else if (p.type === 'ring') {
                     // Expanding ring for drone explosions (efficient)
@@ -8956,10 +9258,10 @@
 
                 // Continuous gradient trail — filled sector fading from center outward
                 const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, currentR);
-                grad.addColorStop(0, 'rgba(92, 224, 214, 0)');
-                grad.addColorStop(0.5, 'rgba(92, 224, 214, ' + (alpha * 0.06) + ')');
-                grad.addColorStop(0.85, 'rgba(92, 224, 214, ' + (alpha * 0.18) + ')');
-                grad.addColorStop(1, 'rgba(92, 224, 214, ' + (alpha * 0.3) + ')');
+                grad.addColorStop(0, hexToRGBA(COLORS.PLAYER, 0));
+                grad.addColorStop(0.5, hexToRGBA(COLORS.PLAYER, alpha * 0.06));
+                grad.addColorStop(0.85, hexToRGBA(COLORS.PLAYER, alpha * 0.18));
+                grad.addColorStop(1, hexToRGBA(COLORS.PLAYER, alpha * 0.3));
                 ctx.globalAlpha = 1;
                 ctx.fillStyle = grad;
                 ctx.beginPath();
@@ -8999,7 +9301,7 @@
 
                 ctx.save();
                 ctx.globalAlpha = alpha;
-                ctx.strokeStyle = WEAPONS['void_blade'].color;
+                ctx.strokeStyle = COLORS.PLAYER;
                 ctx.setLineDash([8, 6]);
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -9009,7 +9311,7 @@
 
                 // Fill area
                 ctx.globalAlpha = alpha * 0.08;
-                ctx.fillStyle = WEAPONS['void_blade'].color;
+                ctx.fillStyle = COLORS.PLAYER;
                 ctx.beginPath();
                 ctx.moveTo(rift.x, rift.y);
                 ctx.arc(rift.x, rift.y, rift.radius, rift.angle - rift.arc, rift.angle + rift.arc);
@@ -9274,12 +9576,21 @@
                 ctx.rotate(p.rotation || 0);
                 ctx.fillStyle = COLORS.PLAYER;
                 const s = p.size;
-                ctx.beginPath();
-                ctx.moveTo(0, -s * 0.6);
-                ctx.lineTo(s * 0.5, s * 0.4);
-                ctx.lineTo(-s * 0.5, s * 0.4);
-                ctx.closePath();
-                ctx.fill();
+                if (p.thrusterShape === 'square') {
+                    const hs = s * 0.4;
+                    ctx.fillRect(-hs, -hs, hs * 2, hs * 2);
+                } else if (p.thrusterShape === 'circle') {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -s * 0.6);
+                    ctx.lineTo(s * 0.5, s * 0.4);
+                    ctx.lineTo(-s * 0.5, s * 0.4);
+                    ctx.closePath();
+                    ctx.fill();
+                }
                 ctx.restore();
             }
             ctx.globalAlpha = 1;
@@ -9292,29 +9603,70 @@
 
             // Thruster flame
             if (menuThrusterScale > 0) {
+                const menuWeaponId = STARTING_WEAPON_IDS[menuWeaponIndex];
                 ctx.fillStyle = COLORS.PLAYER;
                 ctx.globalAlpha = 0.8 * menuThrusterScale;
-                ctx.beginPath();
                 const flameLength = menuThrusterScale * 35;
-                ctx.moveTo(-12, -6 * menuThrusterScale);
-                ctx.lineTo(-12 - flameLength, 0);
-                ctx.lineTo(-12, 6 * menuThrusterScale);
-                ctx.closePath();
-                ctx.fill();
+                if (menuWeaponId === 'void_blade') {
+                    const fl = flameLength * 0.8;
+                    const ts = menuThrusterScale;
+                    ctx.beginPath();
+                    ctx.moveTo(-10, -19 * ts);
+                    ctx.lineTo(-18 - fl, -16 * ts);
+                    ctx.lineTo(-20, -12 * ts);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-20, 12 * ts);
+                    ctx.lineTo(-18 - fl, 16 * ts);
+                    ctx.lineTo(-10, 19 * ts);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (menuWeaponId === 'fusion_beam') {
+                    const fl = flameLength * 0.7;
+                    const fls = flameLength * 0.4;
+                    const ts = menuThrusterScale;
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -12 * ts);
+                    ctx.lineTo(-12 - fls, -10 * ts);
+                    ctx.lineTo(-12, -8 * ts);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -6 * ts);
+                    ctx.lineTo(-12 - fl, -3 * ts);
+                    ctx.lineTo(-12, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 0);
+                    ctx.lineTo(-12 - fl, 3 * ts);
+                    ctx.lineTo(-12, 6 * ts);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 8 * ts);
+                    ctx.lineTo(-12 - fls, 10 * ts);
+                    ctx.lineTo(-12, 12 * ts);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -6 * menuThrusterScale);
+                    ctx.lineTo(-12 - flameLength, 0);
+                    ctx.lineTo(-12, 6 * menuThrusterScale);
+                    ctx.closePath();
+                    ctx.fill();
+                }
                 ctx.globalAlpha = 1;
             }
 
-            // Ship body (outline)
+            // Ship body (outline - shape varies by starting weapon)
             ctx.strokeStyle = COLORS.PLAYER;
             ctx.lineWidth = 3;
             ctx.shadowColor = COLORS.PLAYER;
             ctx.shadowBlur = 20;
-            ctx.beginPath();
-            ctx.moveTo(22, 0);       // Nose
-            ctx.lineTo(-12, -16);    // Top wing
-            ctx.lineTo(-10, 0);      // Back indent
-            ctx.lineTo(-12, 16);     // Bottom wing
-            ctx.closePath();
+            drawShipPath(ctx, STARTING_WEAPON_IDS[menuWeaponIndex]);
             ctx.stroke();
             ctx.shadowBlur = 0;
             ctx.restore();
@@ -9664,16 +10016,9 @@
             const mobile = isMobile();
 
             const ARSENAL_WEAPONS = [
-                { id: 'laser_cannon', name: 'LASER CANNON', icon: 'laser', color: '#7FDBFF' },
-                { id: 'orbital_shield', name: 'ORBITAL SHIELD', icon: 'orbital', color: '#00DFFF' },
-                { id: 'missile_launcher', name: 'MISSILE LAUNCHER', icon: 'rocket', color: '#FFD93D' },
-                { id: 'lightning_ray', name: 'LIGHTNING RAY', icon: 'lightning', color: '#9F7AEA' },
-                { id: 'plasma_field', name: 'PLASMA FIELD', icon: 'aura', color: '#7FDBFF' },
-                { id: 'alien_drone', name: 'ALIEN DRONE', icon: 'drone', color: '#39FF14' },
-                { id: 'fusion_beam', name: 'FUSION BEAM', icon: 'fusionbeam', color: '#00FFCC' },
-                { id: 'gravity_mines', name: 'GRAVITY MINES', icon: 'mine', color: '#7FDBFF' },
-                { id: 'sentry_turret', name: 'SENTRY TURRET', icon: 'turret', color: '#7FDBFF' }
-            ];
+                'laser_cannon', 'orbital_shield', 'missile_launcher', 'lightning_ray',
+                'plasma_field', 'alien_drone', 'fusion_beam', 'gravity_mines', 'sentry_turret'
+            ].map(id => ({ id, name: WEAPONS[id].name, icon: WEAPONS[id].icon, color: WEAPONS[id].color }));
 
             const cols = mobile ? 2 : 3;
             const rows = mobile ? 5 : 3;
@@ -9878,12 +10223,7 @@
                 ctx.rotate(-Math.PI / 2);
 
                 ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(22, 0);
-                ctx.lineTo(-12, -16);
-                ctx.lineTo(-10, 0);
-                ctx.lineTo(-12, 16);
-                ctx.closePath();
+                drawShipPath(ctx, selectedStartingWeapon);
 
                 if (isActive) {
                     ctx.strokeStyle = COLORS.PLAYER;
@@ -10136,10 +10476,12 @@
                     }
                     if (btn.type === 'prevWeapon') {
                         menuWeaponIndex = (menuWeaponIndex - 1 + STARTING_WEAPON_IDS.length) % STARTING_WEAPON_IDS.length;
+                        applyWeaponTheme(STARTING_WEAPON_IDS[menuWeaponIndex]);
                         return true;
                     }
                     if (btn.type === 'nextWeapon') {
                         menuWeaponIndex = (menuWeaponIndex + 1) % STARTING_WEAPON_IDS.length;
+                        applyWeaponTheme(STARTING_WEAPON_IDS[menuWeaponIndex]);
                         return true;
                     }
                 }

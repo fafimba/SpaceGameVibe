@@ -68,9 +68,35 @@ The game supports both desktop (keyboard/mouse) and mobile (touch/joystick). Eve
 - Click handlers must account for canvas scaling (`getBoundingClientRect` + scale factors)
 - Touch-friendly hit targets (large enough buttons, no hover-only interactions)
 
-## Rule 8: No Build System
+## Rule 8: No Build System (Web) + TWA for Android
 
-Single HTML file, no npm/bundler/tests. To verify changes: open `index.html` in a browser.
+Single HTML file, no npm/bundler/tests. To verify web changes: open `index.html` in a browser.
+
+### Android Distribution — TWA (Trusted Web Activity)
+
+The game is packaged as a native Android app via **TWA** (not Capacitor). TWA wraps the GitHub Pages-hosted game (`https://fafimba.github.io/SpaceGameVibe/index.html`) inside Chrome, making it appear as a native app with no browser UI.
+
+**Project structure**:
+- `app/` — TWA project (the one we build and publish to Google Play)
+- `android/` — Capacitor project (kept as backup, **not used** currently — ignore it)
+
+**Key TWA files**:
+- `app/build.gradle` — `twaManifest` config (host, colors, splash, signing)
+- `app/src/main/AndroidManifest.xml` — activities, display mode (`immersive`), Digital Asset Links
+- `app/src/main/java/io/github/fafimba/twa/LauncherActivity.java` — launch + fullscreen setup
+- `.well-known/assetlinks.json` — Digital Asset Links (deployed to GitHub Pages, must match signing key fingerprint)
+- `manifest.json` — PWA manifest (display: fullscreen, orientation: portrait)
+- `keystore.properties` — signing credentials (references `stellar-swarm-release.keystore`)
+
+**Building**:
+```bash
+./gradlew bundleRelease    # → app/build/outputs/bundle/release/app-release.aab
+./gradlew assembleRelease  # → app/build/outputs/apk/release/app-release.apk
+```
+
+**IMPORTANT — Bump version before every build uploaded to Google Play**: Google Play rejects AABs with a previously used `versionCode`. Before building, increment `versionCode` (integer, must always go up) and `versionName` (display string) in `app/build.gradle` → `defaultConfig`.
+
+**Game updates don't require a new APK** — just push to GitHub Pages. TWA loads the live website. Only rebuild the APK/AAB when changing native config (splash, icons, manifest, signing, etc.).
 
 ## Rule 9: Architecture Quick Reference
 

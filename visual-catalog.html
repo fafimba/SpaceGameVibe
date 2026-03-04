@@ -190,35 +190,110 @@ h2 {
     // === DRAW FUNCTIONS ===
     // Each: (ctx, cx, cy, scale, time)
 
-    function drawPlayer(ctx, cx, cy, s, t) {
+    function drawShipBody(ctx, variant) {
+        ctx.beginPath();
+        if (variant === 'fusion_beam') {
+            ctx.moveTo(-12, -12);
+            ctx.lineTo(10, -12);
+            ctx.quadraticCurveTo(24, -12, 24, 0);
+            ctx.quadraticCurveTo(24, 12, 10, 12);
+            ctx.lineTo(-12, 12);
+            ctx.closePath();
+        } else if (variant === 'void_blade') {
+            ctx.moveTo(22, -10);
+            ctx.lineTo(22, 10);
+            ctx.lineTo(-12, 18);
+            ctx.lineTo(-18, 14);
+            ctx.lineTo(-4, 0);
+            ctx.lineTo(-18, -14);
+            ctx.lineTo(-12, -18);
+            ctx.closePath();
+        } else {
+            ctx.moveTo(22, 0);
+            ctx.lineTo(-12, -16);
+            ctx.lineTo(-10, 0);
+            ctx.lineTo(-12, 16);
+            ctx.closePath();
+        }
+    }
+
+    function drawPlayerShip(ctx, cx, cy, s, t, variant, color) {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(s, s);
         // Thruster flame
-        ctx.fillStyle = COLORS.PLAYER;
+        ctx.fillStyle = color;
         ctx.globalAlpha = 0.8;
         const flameLen = 15 + Math.sin(t * 6) * 10;
-        ctx.beginPath();
-        ctx.moveTo(-12, -6);
-        ctx.lineTo(-12 - flameLen, 0);
-        ctx.lineTo(-12, 6);
-        ctx.closePath();
-        ctx.fill();
+        if (variant === 'void_blade') {
+            const fl = flameLen * 0.8;
+            ctx.beginPath();
+            ctx.moveTo(-10, -19);
+            ctx.lineTo(-18 - fl, -16);
+            ctx.lineTo(-20, -12);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-20, 12);
+            ctx.lineTo(-18 - fl, 16);
+            ctx.lineTo(-10, 19);
+            ctx.closePath();
+            ctx.fill();
+        } else if (variant === 'fusion_beam') {
+            const fl = flameLen * 0.7;
+            const fls = flameLen * 0.4;
+            ctx.beginPath();
+            ctx.moveTo(-12, -12);
+            ctx.lineTo(-12 - fls, -10);
+            ctx.lineTo(-12, -8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-12, -6);
+            ctx.lineTo(-12 - fl, -3);
+            ctx.lineTo(-12, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-12, 0);
+            ctx.lineTo(-12 - fl, 3);
+            ctx.lineTo(-12, 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-12, 8);
+            ctx.lineTo(-12 - fls, 10);
+            ctx.lineTo(-12, 12);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(-12, -6);
+            ctx.lineTo(-12 - flameLen, 0);
+            ctx.lineTo(-12, 6);
+            ctx.closePath();
+            ctx.fill();
+        }
         ctx.globalAlpha = 1;
         // Ship body
-        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 3;
-        ctx.shadowColor = COLORS.PLAYER;
+        ctx.shadowColor = color;
         ctx.shadowBlur = 20;
-        ctx.beginPath();
-        ctx.moveTo(22, 0);
-        ctx.lineTo(-12, -16);
-        ctx.lineTo(-10, 0);
-        ctx.lineTo(-12, 16);
-        ctx.closePath();
+        drawShipBody(ctx, variant);
         ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.restore();
+    }
+
+    function drawPlayer(ctx, cx, cy, s, t) {
+        drawPlayerShip(ctx, cx, cy, s, t, 'laser_cannon', COLORS.PLAYER);
+    }
+    function drawPlayerFusion(ctx, cx, cy, s, t) {
+        drawPlayerShip(ctx, cx, cy, s, t, 'fusion_beam', '#00FFCC');
+    }
+    function drawPlayerVoid(ctx, cx, cy, s, t) {
+        drawPlayerShip(ctx, cx, cy, s, t, 'void_blade', '#5CE0D6');
     }
 
     function drawScout(ctx, cx, cy, s, t) {
@@ -353,15 +428,16 @@ h2 {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(s, s);
+        // Narrow capsule shape (rounded nose, flat back)
         ctx.strokeStyle = COLORS.PLAYER;
         ctx.shadowColor = COLORS.PLAYER;
         ctx.shadowBlur = 10;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(-6, -5);
-        ctx.lineTo(-4, 0);
-        ctx.lineTo(-6, 5);
+        ctx.moveTo(-8, -1.8);
+        ctx.lineTo(6.2, -1.8);
+        ctx.arc(6.2, 0, 1.8, -Math.PI / 2, Math.PI / 2, false);
+        ctx.lineTo(-8, 1.8);
         ctx.closePath();
         ctx.stroke();
         ctx.shadowBlur = 0;
@@ -377,10 +453,10 @@ h2 {
         ctx.shadowBlur = 6;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(8, 0);
-        ctx.lineTo(-5, -4);
-        ctx.lineTo(-3, 0);
-        ctx.lineTo(-5, 4);
+        ctx.moveTo(-6.5, -1.5);
+        ctx.lineTo(5, -1.5);
+        ctx.arc(5, 0, 1.5, -Math.PI / 2, Math.PI / 2, false);
+        ctx.lineTo(-6.5, 1.5);
         ctx.closePath();
         ctx.stroke();
         ctx.shadowBlur = 0;
@@ -391,24 +467,24 @@ h2 {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(s * 2, s * 2);
-        // Outer
+        // Outer narrow capsule
         ctx.strokeStyle = '#FF6B00';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(-6, -5);
-        ctx.lineTo(-4, 0);
-        ctx.lineTo(-6, 5);
+        ctx.moveTo(-8, -1.8);
+        ctx.lineTo(6.2, -1.8);
+        ctx.arc(6.2, 0, 1.8, -Math.PI / 2, Math.PI / 2, false);
+        ctx.lineTo(-8, 1.8);
         ctx.closePath();
         ctx.stroke();
-        // Inner detail
+        // Inner detail capsule
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = '#FFD700';
         ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(-2, -3);
-        ctx.lineTo(-1, 0);
-        ctx.lineTo(-2, 3);
+        ctx.moveTo(-5, -1);
+        ctx.lineTo(5.2, -1);
+        ctx.arc(5.2, 0, 1, -Math.PI / 2, Math.PI / 2, false);
+        ctx.lineTo(-5, 1);
         ctx.closePath();
         ctx.stroke();
         ctx.restore();
@@ -826,10 +902,10 @@ h2 {
         ctx.strokeStyle = '#7FDBFF';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(8, 0);
-        ctx.lineTo(-5, -4);
-        ctx.lineTo(-3, 0);
-        ctx.lineTo(-5, 4);
+        ctx.moveTo(-6.5, -1.5);
+        ctx.lineTo(5, -1.5);
+        ctx.arc(5, 0, 1.5, -Math.PI / 2, Math.PI / 2, false);
+        ctx.lineTo(-6.5, 1.5);
         ctx.closePath();
         ctx.stroke();
         ctx.restore();
@@ -963,7 +1039,9 @@ h2 {
     // === ENTITY CATALOG ===
     const CATALOG = [
         { category: 'Player', entries: [
-            { name: 'Player Ship', w: 160, h: 120, scale: 2.5, draw: drawPlayer, animated: true, colors: ['#7FDBFF'] },
+            { name: 'Laser Cannon Ship', w: 160, h: 120, scale: 2.5, draw: drawPlayer, animated: true, colors: ['#7FDBFF'] },
+            { name: 'Fusion Beam Ship', w: 160, h: 120, scale: 2.5, draw: drawPlayerFusion, animated: true, colors: ['#00FFCC'] },
+            { name: 'Void Blade Ship', w: 160, h: 120, scale: 2.5, draw: drawPlayerVoid, animated: true, colors: ['#5CE0D6'] },
         ]},
         { category: 'Enemies', entries: [
             { name: 'Scout', w: 100, h: 100, scale: 2.5, draw: drawScout, animated: false, colors: ['#FF6B6B'] },
