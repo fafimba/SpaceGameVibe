@@ -28,6 +28,8 @@ When the task involves **visual/aesthetic changes** (UI panels, menus, colors, l
 
 When the task involves **gameplay mechanics or progression** (weapons, enemies, upgrades, balancing, difficulty, game loop, scoring, XP, crystal economy), use the `/game-design` skill before implementing.
 
+When the task involves **gameplay implementation or optimization** (game loop, physics, collision detection, rendering, controls, audio, performance optimization, Canvas/WebGL, entity systems, spawning, movement), use the `/game-engine` skill (`.claude/skills/game-engine/SKILL.md`) before implementing.
+
 ## Rule 4: Visual Style — Neon Geometric Outline
 
 The game has a strict visual identity. All new visual elements MUST follow it:

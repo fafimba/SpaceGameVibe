@@ -1,4 +1,4 @@
-# index.html Code Index (~10759 lines)
+# index.html Code Index (~10731 lines)
 
 Last updated: 2026-03-04
 
@@ -163,114 +163,114 @@ Lines 120-10407: JavaScript IIFE
 - L4654: `generateUpgradeOptions()`
 - L4662: `drawSkillIcon(ctx, icon, cx, cy, color)` — large icon library (~500 lines), takes ctx as parameter
 
-## 20. CANVAS UPGRADE OVERLAY (5194-5828) — Two-Canvas Architecture
-- L5199: `easeOutCubic()`, `easeOutQuart()` — easing functions
-- L5203: `showUpgradePanel()` — guards for dead player, generates options, calculates card positions, applies CSS blur on game canvas, shows upgradeCanvas
-- L5249: `renderUpgradeOverlay()` — draws on `uCtx` (overlay canvas): ship (via `drawShipPath`), lines, cards
-- L5393: `drawUpgradeConnectionLine()` — animated blueprint-style lines (uCtx)
-- L5465: `drawUpgradePartialPath()` — partial path drawing helper (uCtx)
-- L5485: `getUpgradePathPoint()` — point along path helper
-- L5501: `renderWeaponInventoryBar()` — **two-row layout**: ship slot on top (44px, uses `drawShipUpgradeIcon`), 3 weapon slots below (34px) (uCtx)
-- L5599: `renderUpgradeCard()` — vertical card layout, starting weapon shows ship icon + "Upgrade Ship" name (uCtx)
-- L5751: `handleUpgradeClick()` — click/tap on cards
-- L5767: `selectUpgrade(option)` — applies upgrade, celebration particles
-- L5816: `hideUpgradePanel()` — removes CSS filter, hides overlay canvas, resumes game
+## 20. CANVAS UPGRADE OVERLAY (5194-5829) — Two-Canvas Architecture
+- L5221: `easeOutCubic()`, `easeOutQuart()` — easing functions
+- L5229: `showUpgradePanel()` — generates options, calculates card positions (cardH=420, gap=14, bottom margin 60)
+- L5276: `renderUpgradeOverlay()` — draws on `uCtx`: LEVEL UP title (44px), horizontal inventory bar at y=150, ship, connection lines, cards (no subtitle)
+- L5408: `drawUpgradeConnectionLine()` — animated blueprint-style lines (uCtx)
+- L5480: `drawUpgradePartialPath()` — partial path drawing helper (uCtx)
+- L5500: `getUpgradePathPoint()` — point along path helper
+- L5516: `renderWeaponInventoryBar()` — **horizontal single row**: 4 slots (50px each), ship + 3 weapons side by side (uCtx)
+- L5593: `renderUpgradeCard()` — badge on every card (NEW/UPGRADE/EVOLUTION/BONUS), icon 42px, name 22px, desc 18px, 10-segment progress bar (uCtx)
+- L5752: `handleUpgradeClick()` — click/tap on cards
+- L5768: `selectUpgrade(option)` — applies upgrade, celebration particles
+- L5817: `hideUpgradePanel()` — removes CSS filter, hides overlay canvas, resumes game
 
-## 21. WEAPON SYSTEMS (5832-6085)
-- L5832: `updateWeapons()`
-- L5883: `updateLightningEffects()`
-- L5894: `updateNovaBeamEffects()`
-- L5904: `updateOrbitals()`
-- L5968: `updateAura()`
-- L6031: `triggerAnnihilationExplosion()`
+## 21. WEAPON SYSTEMS (5833-6086)
+- L5833: `updateWeapons()`
+- L5870: `updateLightningEffects()`
+- L5881: `updateNovaBeamEffects()`
+- L5891: `updateOrbitals()`
+- L5955: `updateAura()`
+- L6018: `triggerAnnihilationExplosion()`
 
-## 22. VOID BLADE SYSTEM (6086-6279)
-- L6086: `updateVoidBlade()`
-- L6161: `performBlastDamage()`
-- L6232: `updateRiftZones()`
-- L6264: `updateSlashEffects()`
+## 22. VOID BLADE SYSTEM (6087-6280)
+- L6087: `updateVoidBlade()`
+- L6162: `performBlastDamage()`
+- L6231: `updateRiftZones()`
+- L6263: `updateSlashEffects()`
 
-## 23. WARP SNARE SYSTEM (6280-6414)
-- L6280: `updateWarpSnares()`
+## 23. WARP SNARE SYSTEM (6281-6478)
+- L6281: `updateWarpSnares()`
 
-## 24. GRAVITY MINES SYSTEM (6478-6640)
-- L6478: `updateGravityMines()`
+## 24. GRAVITY MINES SYSTEM (6479-6641)
+- L6479: `updateGravityMines()`
 
-## 25. SENTRY TURRET SYSTEM (6641-6833)
-- L6641: `updateSentryTurrets()`
+## 25. SENTRY TURRET SYSTEM (6642-6834)
+- L6642: `updateSentryTurrets()`
 
-## 26. FUSION BEAM SYSTEM (6834-6995)
-- L6834: `updateFusionBeam()`
-- L6968: `handleBeamKill(enemy, stats)`
+## 26. FUSION BEAM SYSTEM (6835-6995)
+- L6835: `updateFusionBeam()`
+- L6969: `handleBeamKill(enemy, stats)`
 
-## 27. ROCKET EXPLOSION (6995-7075)
-- L6995: `explodePlayerRocket()`
+## 27. ROCKET EXPLOSION (6996-7078)
+- L6996: `explodePlayerRocket()`
 
-## 28. COLLISIONS (7076-7236)
-- L7080: `lineCircleCollision()`
-- L7111: `checkCollisions()`
+## 28. COLLISIONS (7079-7237)
+- L7079: `lineCircleCollision()`
+- L7112: `checkCollisions()`
 
-## 29. PLAYER DAMAGE & DEATH (7236-7532)
-- L7252: `damagePlayer()` — shield set to 0 on break (recharge animation fills it)
-- L7280: `triggerShieldBreak()`
-- L7304: `updateShieldBreakSequence(rawDt)` — lifeslots phase 0.95s with pop animation timeline
-- L7399: `triggerNearMiss()`
+## 29. PLAYER DAMAGE & DEATH (7237-7533)
+- L7253: `damagePlayer()` — shield set to 0 on break (recharge animation fills it)
+- L7281: `triggerShieldBreak()`
+- L7305: `updateShieldBreakSequence(rawDt)` — lifeslots phase 0.95s with pop animation timeline
+- L7402: `triggerNearMiss()`
 - L7422: `gameOver()` — closes upgrade panel if open, prevents level-up during death
 - L7473: `spawnDeathExplosion()`
 
-## 30. PARTICLES & EFFECTS (7532-7652)
-- L7535-7536: `MAX_PARTICLES = 600`, `MAX_FLOATING_TEXTS = 150`
-- L7539: `spawnRing(x, y, color, maxSize)`
-- L7555: `spawnFloatingText()`
-- L7567: `updateParticles()`
-- L7600: `updateFloatingTexts()`
-- L7614: `updateEffects()`
-- L7635: `triggerShake()`
-- L7641: `triggerFlash()`
-- L7648: `triggerSlowmo()`
+## 30. PARTICLES & EFFECTS (7533-7636)
+- L7515-7516: `MAX_PARTICLES = 600`, `MAX_FLOATING_TEXTS = 150`
+- L7517: `spawnRing(x, y, color, maxSize)`
+- L7533: `spawnFloatingText()`
+- L7545: `updateParticles()`
+- L7578: `updateFloatingTexts()`
+- L7592: `updateEffects()`
+- L7613: `triggerShake()`
+- L7619: `triggerFlash()`
+- L7626: `triggerSlowmo()`
 
-## 31. RENDERING (7636-9587)
-- L7636: `render()` — during skilltree: early return, calls `renderUpgradeOverlay()` directly on uCtx
-- L7712: `renderBackground()`
-- L7787: `renderShieldArc()` — **segmented bars**, guards for shieldRechargeTimer
-- L7849: `renderShieldBreakEffects()` — pop animation on lost life slot (uses `drawShipPath`)
-- L7934: `renderPlayer()` — uses `drawShipPath(ctx, selectedStartingWeapon)`
-- L8016: `renderAura()`
-- L8075: `renderFusionBeam()` — uses `COLORS.PLAYER` (dynamic via theme)
-- L8209: `renderOrbitals()`
-- L8230: `renderLightning()` — mid/outer layers use `hexToRGBA(COLORS.PLAYER, ...)`
-- L8270: `renderNovaBeam()`
-- L8302: `renderBullets()` — rockets use capsule shape + detached trail with width ramp + pulsating center light
-- L8595: `renderEnemyBullets()`
-- L8613: `renderDrones()`
-- L8710: `renderEnemies()`
-- L8855: `renderPickups()`
-- L8899: `renderParticles()`
-- L8985: `renderFloatingTexts()`
-- L9009: `renderTurrets()`
-- L9103: `renderMines()`
-- L9224: `renderSnares()`
-- L9288: `renderSlashEffects()` — gradient uses `hexToRGBA(COLORS.PLAYER, ...)`
-- L9339: `renderRiftZones()` — uses `COLORS.PLAYER` (dynamic via theme)
-- L9367: `drawUpgradeIcon(ctx, upgradeKey, cx, cy, color, size)`
-- L9433: `drawVerticalProgressBars()`
-- L9442: `drawWeaponIconAt()`
+## 31. RENDERING (7637-9563)
+- L7637: `render()` — during skilltree: early return, calls `renderUpgradeOverlay()` directly on uCtx
+- L7713: `renderBackground()`
+- L7788: `renderShieldArc()` — **segmented bars**, guards for shieldRechargeTimer
+- L7850: `renderShieldBreakEffects()` — pop animation on lost life slot (uses `drawShipPath`)
+- L7935: `renderPlayer()` — uses `drawShipPath(ctx, selectedStartingWeapon)`
+- L8017: `renderAura()`
+- L8076: `renderFusionBeam()` — uses `COLORS.PLAYER` (dynamic via theme)
+- L8210: `renderOrbitals()`
+- L8231: `renderLightning()` — mid/outer layers use `hexToRGBA(COLORS.PLAYER, ...)`
+- L8271: `renderNovaBeam()`
+- L8303: `renderBullets()` — rockets use capsule shape + detached trail with width ramp + pulsating center light
+- L8552: `renderEnemyBullets()`
+- L8570: `renderDrones()`
+- L8667: `renderEnemies()`
+- L8812: `renderPickups()`
+- L8856: `renderParticles()`
+- L8942: `renderFloatingTexts()`
+- L8966: `renderTurrets()`
+- L9060: `renderMines()`
+- L9181: `renderSnares()`
+- L9245: `renderSlashEffects()` — gradient uses `hexToRGBA(COLORS.PLAYER, ...)`
+- L9296: `renderRiftZones()` — uses `COLORS.PLAYER` (dynamic via theme)
+- L9324: `drawUpgradeIcon(ctx, upgradeKey, cx, cy, color, size)`
+- L9390: `drawVerticalProgressBars()`
+- L9399: `drawWeaponIconAt()`
 
-## 32. UI RENDERING (9587-10687)
-- L9587: `renderUI()`
-- L9609: `renderMenu()` — includes inline shop (`menuMode === 'shop'`), uses `drawShipPath` for ship
-- L10058: `renderArsenalGallery()` — uses dynamic `WEAPONS[id].color`
-- L10139: `renderControlsHelp(startY)`
-- L10175: `renderHUD()` — life icons via `drawShipPath`
-- L10377: `renderTutorial()`
-- L10488: `handleMenuClick(clickX, clickY)` — weapon cycling calls `applyWeaponTheme()`
-- L10536: `renderDemoEnd()`
-- L10623: `handleDemoEndClick(clickX, clickY)`
-- L10641: `renderPauseOverlay()`
-- L10656: `renderGameOver()`
+## 32. UI RENDERING (9563-10714)
+- L9563: `renderUI()`
+- L9585: `renderMenu()` — includes inline shop (`menuMode === 'shop'`), uses `drawShipPath` for ship
+- L10034: `renderArsenalGallery()` — uses dynamic `WEAPONS[id].color`
+- L10115: `renderControlsHelp(startY)`
+- L10151: `renderHUD()` — life icons via `drawShipPath`
+- L10353: `renderTutorial()`
+- L10464: `handleMenuClick(clickX, clickY)` — weapon cycling calls `applyWeaponTheme()`
+- L10512: `renderDemoEnd()`
+- L10599: `handleDemoEndClick(clickX, clickY)`
+- L10617: `renderPauseOverlay()`
+- L10632: `renderGameOver()`
 
-## 33. UTILITIES (10738-10747)
-- L10738: `normalizeAngle(angle)`
+## 33. UTILITIES (10714-10723)
+- L10714: `normalizeAngle(angle)`
 
-## 34. START GAME (10748-10759)
-- L10748: `init()` call
+## 34. START GAME (10724-10735)
+- L10724: `init()` call

@@ -3899,7 +3899,11 @@
 
                             d.hitCooldown = 0.3;
                         } else {
-                            // KAMIKAZE: explode and die
+                            // KAMIKAZE: deal damage, explode and die
+                            hitEnemy.hp -= d.damage;
+                            spawnFloatingText(hitEnemy.x, hitEnemy.y - hitConfig.radius, d.damage.toString(), droneColor);
+                            if (hitEnemy.hp <= 0) killEnemy(hitEnemy);
+
                             if (d.explosionChance > 0 && Math.random() < d.explosionChance) {
                                 spawnRing(d.x, d.y, droneColor, 30);
                                 const kamiSplash = spatialGrid.queryRadius(d.x, d.y, d.explosionRadius);
@@ -4682,9 +4686,16 @@
             } else if (icon === 'rocket') {
                 ctx.beginPath();
                 ctx.moveTo(cx, cy - 10);
-                ctx.lineTo(cx + 5, cy + 8);
-                ctx.lineTo(cx, cy + 5);
-                ctx.lineTo(cx - 5, cy + 8);
+                ctx.lineTo(cx + 3, cy - 4);
+                ctx.lineTo(cx + 3, cy + 3);
+                ctx.lineTo(cx + 6, cy + 8);
+                ctx.lineTo(cx + 2, cy + 5);
+                ctx.lineTo(cx + 2, cy + 7);
+                ctx.lineTo(cx - 2, cy + 7);
+                ctx.lineTo(cx - 2, cy + 5);
+                ctx.lineTo(cx - 6, cy + 8);
+                ctx.lineTo(cx - 3, cy + 3);
+                ctx.lineTo(cx - 3, cy - 4);
                 ctx.closePath();
                 ctx.fill();
             } else if (icon === 'orbital') {
@@ -5154,11 +5165,26 @@
                 ctx.arc(cx, cy, 2, 0, Math.PI * 2);
                 ctx.fill();
             } else if (icon === 'turret') {
-                // Base with cannon
-                ctx.fillRect(cx - 6, cy + 2, 12, 6);
-                ctx.fillRect(cx - 2, cy - 6, 4, 8);
+                // Hexagon base (outline, like in-game)
                 ctx.beginPath();
-                ctx.arc(cx, cy - 6, 3, 0, Math.PI * 2);
+                for (let j = 0; j < 6; j++) {
+                    const a = (j / 6) * Math.PI * 2 - Math.PI / 2;
+                    const hx = cx + Math.cos(a) * 8;
+                    const hy = cy + Math.sin(a) * 8;
+                    if (j === 0) ctx.moveTo(hx, hy);
+                    else ctx.lineTo(hx, hy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+                // Barrel pointing up-right
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(-Math.PI / 4);
+                ctx.fillRect(2, -1.5, 9, 3);
+                ctx.restore();
+                // Center dot
+                ctx.beginPath();
+                ctx.arc(cx, cy, 3, 0, Math.PI * 2);
                 ctx.fill();
             } else if (icon === 'production') {
                 // Multiple small turrets (mass production)
@@ -5221,13 +5247,13 @@
             // Calculate card positions — vertical tall cards
             const numCards = upgradeOptions.length;
             const padding = 20;
-            const cardGap = 10;
+            const cardGap = 14;
             const availW = CANVAS_WIDTH - padding * 2;
             const cardW = Math.floor((availW - (numCards - 1) * cardGap) / numCards);
-            const cardH = 350;
+            const cardH = 420;
             const totalW = numCards * cardW + (numCards - 1) * cardGap;
             const startX = CANVAS_WIDTH / 2 - totalW / 2 + cardW / 2;
-            const cardY = CANVAS_HEIGHT - 120 - cardH / 2;
+            const cardY = CANVAS_HEIGHT - 60 - cardH / 2;
 
             upgradeOverlay.cardPositions = [];
             for (let i = 0; i < numCards; i++) {
@@ -5289,12 +5315,13 @@
                 uCtx.restore();
             }
 
-            // --- Phase 3: "LEVEL UP" text at top ---
+            // --- Phase 3: "LEVEL UP" header + ship icon + level ---
             const levelUpAlpha = easeOutCubic(Math.min(Math.max(0, t - 0.15) / 0.35, 1));
-            const topY = 200;
+            const topY = 90;
             if (levelUpAlpha > 0) {
                 uCtx.save();
-                uCtx.font = 'bold 24px "Segoe UI", system-ui, sans-serif';
+                // "LEVEL UP" title
+                uCtx.font = 'bold 44px "Segoe UI", system-ui, sans-serif';
                 uCtx.textAlign = 'center';
                 uCtx.textBaseline = 'middle';
                 uCtx.fillStyle = COLORS.GOLD;
@@ -5302,6 +5329,7 @@
                 uCtx.fillText('LEVEL UP', cx, topY);
                 uCtx.globalAlpha = levelUpAlpha;
                 uCtx.fillText('LEVEL UP', cx, topY);
+                // Decorative lines
                 const textW = uCtx.measureText('LEVEL UP').width / 2 + 20;
                 uCtx.strokeStyle = COLORS.GOLD;
                 uCtx.globalAlpha = levelUpAlpha * 0.4;
@@ -5314,6 +5342,7 @@
                 uCtx.moveTo(cx + textW, topY);
                 uCtx.lineTo(cx + textW + 60, topY);
                 uCtx.stroke();
+
                 uCtx.restore();
             }
 
@@ -5347,28 +5376,13 @@
             // --- Phase 5: Weapon inventory bar ---
             const invStart = lineStart + lineDuration * 0.5;
             const invAlpha = easeOutQuart(Math.min(Math.max(0, t - invStart) / 0.4, 1));
-            const invY = topY + 50;
+            const invY = 150;
             if (invAlpha > 0) {
                 renderWeaponInventoryBar(cx, invY, invAlpha);
             }
 
-            // --- Phase 6: "CHOOSE UPGRADE" title ---
-            const titleStart = lineStart + lineDuration * 0.7;
-            const titleAlpha = easeOutCubic(Math.min(Math.max(0, t - titleStart) / 0.4, 1));
-            const titleY = invY + 65;
-            if (titleAlpha > 0) {
-                uCtx.save();
-                uCtx.globalAlpha = titleAlpha;
-                uCtx.font = 'bold 13px "Segoe UI", system-ui, sans-serif';
-                uCtx.textAlign = 'center';
-                uCtx.textBaseline = 'middle';
-                uCtx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-                uCtx.fillText('C H O O S E   U P G R A D E', cx, titleY);
-                uCtx.restore();
-            }
-
-            // --- Phase 7: Cards fade-in ---
-            const cardStart = lineStart + lineDuration * 0.65;
+            // --- Phase 6: Cards fade-in ---
+            const cardStart = lineStart + lineDuration * 0.55;
             const cardDelays = [0, 0.1, 0.2];
 
             for (let i = 0; i < numCards; i++) {
@@ -5387,7 +5401,7 @@
                 );
             }
 
-            if (t >= 1.2) upgradeOverlay.animDone = true;
+            if (t >= 1.0) upgradeOverlay.animDone = true;
         }
 
         // Draw a connection line from ship to card top
@@ -5503,93 +5517,72 @@
             uCtx.save();
             uCtx.globalAlpha = alpha;
 
-            const shipSlotSize = 44;
-            const weaponSlotSize = 34;
-            const rowGap = 14;
-            const weaponGap = 8;
-            const totalH = shipSlotSize + rowGap + weaponSlotSize;
-            const topRowY = y - totalH / 2;
-            const bottomRowY = topRowY + shipSlotSize + rowGap;
+            // Horizontal single row: all 4 weapon slots side by side
+            const slotSize = 50;
+            const slotGap = 12;
+            const numSlots = MAX_ACTIVE_WEAPONS; // 4
+            const totalW = numSlots * slotSize + (numSlots - 1) * slotGap;
+            const startX = cx - totalW / 2;
+            const slotY = y - slotSize / 2;
 
-            // === TOP ROW: Ship slot (starting weapon) ===
-            const shipWeaponId = activeWeapons[0];
-            const shipWeapon = WEAPONS[shipWeaponId];
-            const shipLvl = upgradeLevels[shipWeaponId] || 0;
-            const shipSx = cx - shipSlotSize / 2;
-
-            uCtx.fillStyle = 'rgba(15, 20, 35, 0.8)';
-            uCtx.beginPath();
-            uCtx.roundRect(shipSx, topRowY, shipSlotSize, shipSlotSize, 8);
-            uCtx.fill();
-
-            uCtx.strokeStyle = shipWeapon.color;
-            uCtx.lineWidth = 2;
-            uCtx.beginPath();
-            uCtx.roundRect(shipSx, topRowY, shipSlotSize, shipSlotSize, 8);
-            uCtx.stroke();
-
-            drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, topRowY + shipSlotSize / 2 + 2, 0.85, shipWeapon.color);
-
-            const shipLvlText = shipLvl >= 10 ? 'MAX' : 'Lv.' + shipLvl;
-            const shipLvlColor = shipLvl >= 10 ? COLORS.GOLD : shipWeapon.color;
-            uCtx.font = 'bold 8px "Segoe UI", system-ui, sans-serif';
-            uCtx.textAlign = 'center';
-            uCtx.textBaseline = 'top';
-            uCtx.fillStyle = shipLvlColor;
-            uCtx.fillText(shipLvlText, cx, topRowY + shipSlotSize + 2);
-
-            // === BOTTOM ROW: 3 weapon slots ===
-            const numWeaponSlots = MAX_ACTIVE_WEAPONS - 1;
-            const weaponTotalW = numWeaponSlots * weaponSlotSize + (numWeaponSlots - 1) * weaponGap;
-            const weaponStartX = cx - weaponTotalW / 2;
-
-            for (let i = 0; i < numWeaponSlots; i++) {
-                const sx = weaponStartX + i * (weaponSlotSize + weaponGap);
-                const sy = bottomRowY;
-                const weaponId = activeWeapons[i + 1];
+            for (let i = 0; i < numSlots; i++) {
+                const sx = startX + i * (slotSize + slotGap);
+                const weaponId = activeWeapons[i];
+                const slotCx = sx + slotSize / 2;
+                const slotCy = slotY + slotSize / 2;
 
                 if (weaponId && WEAPONS[weaponId]) {
                     const weapon = WEAPONS[weaponId];
                     const lvl = upgradeLevels[weaponId] || 0;
+                    const isShip = (i === 0);
 
+                    // Slot background
                     uCtx.fillStyle = 'rgba(15, 20, 35, 0.8)';
                     uCtx.beginPath();
-                    uCtx.roundRect(sx, sy, weaponSlotSize, weaponSlotSize, 6);
+                    uCtx.roundRect(sx, slotY, slotSize, slotSize, 8);
                     uCtx.fill();
 
+                    // Slot border
                     uCtx.strokeStyle = weapon.color;
-                    uCtx.lineWidth = 1.5;
+                    uCtx.lineWidth = 2;
                     uCtx.beginPath();
-                    uCtx.roundRect(sx, sy, weaponSlotSize, weaponSlotSize, 6);
+                    uCtx.roundRect(sx, slotY, slotSize, slotSize, 8);
                     uCtx.stroke();
 
-                    uCtx.save();
-                    uCtx.translate(sx + weaponSlotSize / 2, sy + weaponSlotSize / 2);
-                    uCtx.scale(0.7, 0.7);
-                    drawSkillIcon(uCtx, weapon.icon, 0, 0, weapon.color);
-                    uCtx.restore();
+                    // Icon (ship or weapon)
+                    if (isShip) {
+                        drawShipUpgradeIcon(uCtx, selectedStartingWeapon, slotCx, slotCy - 2, 0.95, weapon.color);
+                    } else {
+                        uCtx.save();
+                        uCtx.translate(slotCx, slotCy - 2);
+                        uCtx.scale(1.0, 1.0);
+                        drawSkillIcon(uCtx, weapon.icon, 0, 0, weapon.color);
+                        uCtx.restore();
+                    }
 
+                    // Level text below slot
                     const lvlText = lvl >= 10 ? 'MAX' : 'Lv.' + lvl;
                     const lvlColor = lvl >= 10 ? COLORS.GOLD : weapon.color;
-                    uCtx.font = 'bold 7px "Segoe UI", system-ui, sans-serif';
+                    uCtx.font = 'bold 13px "Segoe UI", system-ui, sans-serif';
                     uCtx.textAlign = 'center';
                     uCtx.textBaseline = 'top';
                     uCtx.fillStyle = lvlColor;
-                    uCtx.fillText(lvlText, sx + weaponSlotSize / 2, sy + weaponSlotSize + 2);
+                    uCtx.fillText(lvlText, slotCx, slotY + slotSize + 4);
                 } else {
-                    uCtx.strokeStyle = 'rgba(100, 100, 140, 0.2)';
-                    uCtx.lineWidth = 1;
-                    uCtx.setLineDash([4, 4]);
+                    // Empty slot
+                    uCtx.strokeStyle = 'rgba(100, 100, 140, 0.25)';
+                    uCtx.lineWidth = 1.5;
+                    uCtx.setLineDash([5, 5]);
                     uCtx.beginPath();
-                    uCtx.roundRect(sx, sy, weaponSlotSize, weaponSlotSize, 6);
+                    uCtx.roundRect(sx, slotY, slotSize, slotSize, 8);
                     uCtx.stroke();
                     uCtx.setLineDash([]);
 
                     uCtx.fillStyle = 'rgba(100, 100, 140, 0.3)';
-                    uCtx.font = '14px "Segoe UI", system-ui, sans-serif';
+                    uCtx.font = '20px "Segoe UI", system-ui, sans-serif';
                     uCtx.textAlign = 'center';
                     uCtx.textBaseline = 'middle';
-                    uCtx.fillText('+', sx + weaponSlotSize / 2, sy + weaponSlotSize / 2);
+                    uCtx.fillText('+', slotCx, slotCy);
                 }
             }
 
@@ -5616,25 +5609,25 @@
             uCtx.roundRect(cx - halfW, cy - halfH, w, h, 10);
             uCtx.stroke();
 
-            const innerPad = 14;
+            const innerPad = 16;
             let curY = cy - halfH + innerPad;
 
-            // Badge at top
-            if (option.isEvolution || option.type === 'weapon_activation') {
-                uCtx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
-                uCtx.textAlign = 'center';
-                uCtx.textBaseline = 'top';
-                uCtx.fillStyle = COLORS.GOLD;
-                uCtx.fillText(option.isEvolution ? 'EVOLUTION' : 'NEW', cx, curY);
-                curY += 20;
-            } else {
-                curY += 6;
-            }
+            // Badge at top — every card gets a type label
+            const badgeText = option.isEvolution ? 'EVOLUTION'
+                : option.type === 'weapon_activation' ? 'NEW'
+                : option.type === 'upgrade' ? 'UPGRADE'
+                : 'BONUS';
+            uCtx.font = 'bold 16px "Segoe UI", system-ui, sans-serif';
+            uCtx.textAlign = 'center';
+            uCtx.textBaseline = 'top';
+            uCtx.fillStyle = COLORS.GOLD;
+            uCtx.fillText(badgeText, cx, curY);
+            curY += 24;
 
-            // Icon centered at top
+            // Icon centered
             const isStartingWeaponUpgrade = option.type === 'upgrade' && !option.isEvolution && WEAPONS[option.id]?.isStartingWeapon;
-            const iconR = 30;
-            const iconY = curY + iconR + 8;
+            const iconR = 42;
+            const iconY = curY + iconR + 4;
             uCtx.beginPath();
             uCtx.arc(cx, iconY, iconR, 0, Math.PI * 2);
             uCtx.fillStyle = color + '10';
@@ -5644,20 +5637,20 @@
             uCtx.stroke();
 
             if (isStartingWeaponUpgrade) {
-                drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, iconY + 2, 0.75, color);
+                drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, iconY + 2, 0.85, color);
             } else {
                 uCtx.save();
                 uCtx.translate(cx, iconY);
-                uCtx.scale(1.6, 1.6);
+                uCtx.scale(2.0, 2.0);
                 drawSkillIcon(uCtx, option.icon, 0, 0, color);
                 uCtx.restore();
             }
-            curY = iconY + iconR + 16;
+            curY = iconY + iconR + 12;
 
             // Weapon name (centered)
             uCtx.textAlign = 'center';
             uCtx.textBaseline = 'top';
-            uCtx.font = 'bold 16px "Segoe UI", system-ui, sans-serif';
+            uCtx.font = 'bold 22px "Segoe UI", system-ui, sans-serif';
             uCtx.fillStyle = nameColor;
             let displayName = isStartingWeaponUpgrade ? 'Upgrade Ship' : option.name;
             const maxNameW = w - innerPad * 2;
@@ -5665,20 +5658,20 @@
                 displayName = displayName.slice(0, -1);
             }
             uCtx.fillText(displayName, cx, curY);
-            curY += 24;
+            curY += 30;
 
             // Thin accent line
-            const lineW = Math.min(w * 0.6, 100);
+            const lineW = Math.min(w * 0.6, 120);
             uCtx.strokeStyle = color + '33';
             uCtx.lineWidth = 1;
             uCtx.beginPath();
             uCtx.moveTo(cx - lineW / 2, curY);
             uCtx.lineTo(cx + lineW / 2, curY);
             uCtx.stroke();
-            curY += 12;
+            curY += 10;
 
             // Description (centered, word-wrapped)
-            uCtx.font = '15px "Segoe UI", system-ui, sans-serif';
+            uCtx.font = '18px "Segoe UI", system-ui, sans-serif';
             uCtx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
             uCtx.textAlign = 'center';
             uCtx.textBaseline = 'top';
@@ -5698,25 +5691,32 @@
             if (currentLine) lines.push(currentLine);
             for (const line of lines) {
                 uCtx.fillText(line, cx, curY);
-                curY += 19;
+                curY += 24;
             }
 
-            // Level progress dots at bottom (10 dots, 2 rows of 5)
+            // Level progress bar at bottom (10 segments, single row, full width)
             if (option.type === 'weapon_activation' || option.type === 'upgrade') {
                 const currentLevel = option.type === 'weapon_activation' ? 0 : (option.level - 1);
-                const dotSize = 7;
-                const dotGap = 5;
-                const dotsPerRow = 5;
-                const rowW = dotsPerRow * dotSize + (dotsPerRow - 1) * dotGap;
-                const dotsY = cy + halfH - 40;
+                const barPad = innerPad;
+                const barW = w - barPad * 2;
+                const segGap = 3;
+                const numSegs = 10;
+                const segW = (barW - (numSegs - 1) * segGap) / numSegs;
+                const segH = 14;
+                const barY = cy + halfH - 50;
+                const barX = cx - barW / 2;
 
-                for (let d = 0; d < 10; d++) {
-                    const row = Math.floor(d / dotsPerRow);
-                    const col = d % dotsPerRow;
-                    const dx = cx - rowW / 2 + col * (dotSize + dotGap);
-                    const dy = dotsY + row * (dotSize + dotGap);
+                // "Lv. X" label above bar
+                uCtx.font = 'bold 14px "Segoe UI", system-ui, sans-serif';
+                uCtx.textAlign = 'center';
+                uCtx.textBaseline = 'bottom';
+                uCtx.fillStyle = color;
+                uCtx.fillText('Lv. ' + currentLevel, cx, barY - 4);
+
+                for (let d = 0; d < numSegs; d++) {
+                    const sx = barX + d * (segW + segGap);
                     uCtx.beginPath();
-                    uCtx.roundRect(dx, dy, dotSize, dotSize, 2);
+                    uCtx.roundRect(sx, barY, segW, segH, 3);
 
                     if (option.isEvolution && d === 9) {
                         uCtx.fillStyle = COLORS.GOLD;
@@ -5726,19 +5726,19 @@
                         uCtx.stroke();
                     } else if (d < currentLevel) {
                         uCtx.fillStyle = color;
-                        uCtx.globalAlpha = alpha * 0.7;
+                        uCtx.globalAlpha = alpha * 0.8;
                         uCtx.fill();
                         uCtx.globalAlpha = alpha;
-                    } else if (d === currentLevel && option.type === 'upgrade') {
+                    } else if (d === currentLevel) {
                         uCtx.fillStyle = color;
                         uCtx.fill();
                         uCtx.strokeStyle = color;
-                        uCtx.lineWidth = 1;
+                        uCtx.lineWidth = 1.5;
                         uCtx.stroke();
                     } else {
-                        uCtx.fillStyle = 'rgba(100, 100, 140, 0.15)';
+                        uCtx.fillStyle = 'rgba(100, 100, 140, 0.12)';
                         uCtx.fill();
-                        uCtx.strokeStyle = 'rgba(100, 100, 140, 0.3)';
+                        uCtx.strokeStyle = 'rgba(100, 100, 140, 0.25)';
                         uCtx.lineWidth = 0.5;
                         uCtx.stroke();
                     }
@@ -9417,8 +9417,16 @@
                 case 'rocket':
                     ctx.beginPath();
                     ctx.moveTo(0, -s);
-                    ctx.lineTo(-s * 0.7, s * 0.7);
-                    ctx.lineTo(s * 0.7, s * 0.7);
+                    ctx.lineTo(s * 0.3, -s * 0.4);
+                    ctx.lineTo(s * 0.3, s * 0.3);
+                    ctx.lineTo(s * 0.65, s * 0.8);
+                    ctx.lineTo(s * 0.2, s * 0.5);
+                    ctx.lineTo(s * 0.2, s * 0.7);
+                    ctx.lineTo(-s * 0.2, s * 0.7);
+                    ctx.lineTo(-s * 0.2, s * 0.5);
+                    ctx.lineTo(-s * 0.65, s * 0.8);
+                    ctx.lineTo(-s * 0.3, s * 0.3);
+                    ctx.lineTo(-s * 0.3, -s * 0.4);
                     ctx.closePath();
                     ctx.fill();
                     break;
@@ -9529,11 +9537,22 @@
                     }
                     break;
                 case 'turret':
-                    // Base rectangular with circular cannon
-                    ctx.fillRect(-s * 0.5, s * 0.1, s, s * 0.5);
-                    ctx.fillRect(-s * 0.15, -s * 0.6, s * 0.3, s * 0.7);
+                    // Hexagon base (outline, like in-game)
                     ctx.beginPath();
-                    ctx.arc(0, -s * 0.6, s * 0.25, 0, Math.PI * 2);
+                    for (let j = 0; j < 6; j++) {
+                        const a = (j / 6) * Math.PI * 2 - Math.PI / 2;
+                        ctx.lineTo(Math.cos(a) * s * 0.7, Math.sin(a) * s * 0.7);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                    // Barrel pointing up-right
+                    ctx.save();
+                    ctx.rotate(-Math.PI / 4);
+                    ctx.fillRect(s * 0.1, -s * 0.12, s * 0.6, s * 0.24);
+                    ctx.restore();
+                    // Center dot
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s * 0.22, 0, Math.PI * 2);
                     ctx.fill();
                     break;
             }
