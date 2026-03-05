@@ -1054,6 +1054,7 @@
         let lastTurretX = 0;
         let lastTurretY = 0;
         let combatStationDmgTimer = 0;
+        let gameOverAnimStart = 0;
 
         // Camera system
         let camera = {
@@ -2351,6 +2352,8 @@
         // ============================================================
 
         function gameLoop(timestamp) {
+            _frameCounter++;
+
             // Calculate delta time
             if (lastTime === 0) lastTime = timestamp;
             const rawDt = (timestamp - lastTime) / 1000;
@@ -2703,7 +2706,15 @@
         }
         
         // Compute weapon stats from activeWeapons + upgradeLevels (weapon-keyed, 0-10)
+        // Cached per frame — call freely, recalculates only once per gameLoop tick
+        let _cachedStats = null;
+        let _statsFrameId = -1;
+        let _frameCounter = 0;
+
+        function invalidateStatsCache() { _statsFrameId = -1; }
+
         function getWeaponStats() {
+            if (_statsFrameId === _frameCounter) return _cachedStats;
             // === LASER CANNON === (Lv1-3: rate/spread/pierce, Lv4-6: rate/spread/pierce, Lv7-9: rate/spread/pierce, Lv10: Nova Beam)
             let hasLaser = activeWeapons.includes('laser_cannon');
             let damage = hasLaser ? 10 : 8;
@@ -2989,7 +3000,7 @@
             // Temp damage buff (from bonus_damage) + permanent Power Core
             const finalDamageMulti = (tempDamageMultiplier || 1) * permDamageMulti;
 
-            return {
+            const result = {
                 // Laser
                 hasLaser, damage: Math.round(damage * finalDamageMulti), fireRate, pierce, pierceInfinite, spreadCount, spreadAngle,
                 // Missiles
@@ -3053,6 +3064,9 @@
                 // Final multiplier
                 damageMultiplier: finalDamageMulti
             };
+            _cachedStats = result;
+            _statsFrameId = _frameCounter;
+            return result;
         }
 
         function hasEnemyInAimCone() {
@@ -5236,8 +5250,8 @@
             upgradeSelectionActive = true;
             gameState = 'skilltree';
 
-            // CSS blur on game canvas, show overlay canvas on top
-            canvas.style.filter = 'blur(5px)';
+            // Dim game canvas, show overlay canvas on top
+            canvas.style.opacity = '0.3';
             upgradeCanvas.style.display = 'block';
 
             // Reset joystick state (visibility handled by gameLoop)
@@ -5767,6 +5781,7 @@
         // Select an upgrade option
         function selectUpgrade(option) {
             if (!upgradeSelectionActive) return;
+            invalidateStatsCache();
 
             if (option.type === 'weapon_activation') {
                 if (activeWeapons.length >= MAX_ACTIVE_WEAPONS) return;
@@ -5819,8 +5834,8 @@
             upgradeOverlay.active = false;
             upgradeOverlay.animDone = false;
 
-            // Remove CSS blur and hide overlay canvas
-            canvas.style.filter = 'none';
+            // Restore game canvas and hide overlay canvas
+            canvas.style.opacity = '1';
             upgradeCanvas.style.display = 'none';
 
             gameState = 'playing';
@@ -7459,6 +7474,7 @@
             
             setTimeout(() => {
                 gameState = 'gameOver';
+                gameOverAnimStart = Date.now();
                 // Clear lingering effects
                 shakeIntensity = 0;
                 shakeDuration = 0;
@@ -7731,7 +7747,7 @@
             // Far layer: sparse grid, slow parallax (distant feel)
             const farSpacing = 120;
             const farSpeed = 0.15;
-            const farOpacity = 0.06;
+            const farOpacity = 0.035;
             const farLineWidth = 1;
             const farOffsetX = mod(camX * farSpeed, farSpacing);
             const farOffsetY = mod(camY * farSpeed, farSpacing);
@@ -7751,7 +7767,7 @@
             // Near layer: larger grid, faster parallax (closer feel)
             const nearSpacing = 400;
             const nearSpeed = 0.4;
-            const nearOpacity = 0.08;
+            const nearOpacity = 0.05;
             const nearLineWidth = 1.5;
             const nearOffsetX = mod(camX * nearSpeed, nearSpacing);
             const nearOffsetY = mod(camY * nearSpeed, nearSpacing);
@@ -7768,17 +7784,17 @@
             }
             ctx.stroke();
 
-            // 5. CRT Scanlines (cached pattern)
-            ctx.globalAlpha = 0.3;
+            // 5. CRT Scanlines (cached pattern) — reduced in low perf
+            ctx.globalAlpha = lowPerfMode ? 0.1 : 0.3;
             ctx.fillStyle = cachedScanlinePattern;
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.globalAlpha = 1;
 
-            // 6. Vignette (cached gradient)
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = cachedVignetteGradient;
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            ctx.globalAlpha = 1;
+            // 6. Vignette (cached gradient) — skip in low perf
+            if (!lowPerfMode) {
+                ctx.fillStyle = cachedVignetteGradient;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            }
         }
 
         // ============================================================
@@ -8973,14 +8989,16 @@
                 const lifeRatio = t.life / t.maxLife;
                 const baseAlpha = 0.4 + lifeRatio * 0.6;
 
-                // Range circle
-                ctx.beginPath();
-                ctx.arc(t.x, t.y, stats.turretRange, 0, Math.PI * 2);
-                ctx.strokeStyle = COLORS.PLAYER;
-                ctx.globalAlpha = 0.08;
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.globalAlpha = 1;
+                // Range circle (skip in low perf)
+                if (!lowPerfMode) {
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, stats.turretRange, 0, Math.PI * 2);
+                    ctx.strokeStyle = COLORS.PLAYER;
+                    ctx.globalAlpha = 0.08;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
 
                 // Hexagonal base
                 ctx.save();
@@ -9079,47 +9097,58 @@
             for (const mine of mines) {
                 if (!shouldRenderEntity(mine, CULLING_DISTANCES.particles)) continue;
 
-                // Gravity field boundary (always visible dashed circle)
                 const gravRadius = mine.isBlackHole ? 500 : stats.mineGravityRadius;
                 const ringColor = mine.isBlackHole ? '#8B00FF' : COLORS.PLAYER;
-                ctx.save();
-                ctx.globalAlpha = mine.isBlackHole ? 0.15 : 0.08;
-                ctx.strokeStyle = ringColor;
-                ctx.setLineDash([6, 8]);
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(mine.x, mine.y, gravRadius, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.setLineDash([]);
 
-                // Gravity pull rings — slow shrink from edge to center
-                const ringCount = 3;
-                const ringSpeed = 3.0; // seconds per full cycle
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = ringColor;
-                for (let r = 0; r < ringCount; r++) {
-                    const phase = ((mine.pulsePhase / 4 / ringSpeed) + r / ringCount) % 1; // 0→1 loop
-                    const radius = gravRadius * (1 - phase);
-                    // Smooth fade: peak opacity at mid-travel, fade at edges
-                    const alpha = Math.sin(phase * Math.PI) * 0.12;
-                    if (radius > 14) {
-                        ctx.globalAlpha = alpha;
+                if (!lowPerfMode) {
+                    // Gravity field boundary (dashed circle)
+                    ctx.save();
+                    ctx.globalAlpha = mine.isBlackHole ? 0.15 : 0.08;
+                    ctx.strokeStyle = ringColor;
+                    ctx.setLineDash([6, 8]);
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(mine.x, mine.y, gravRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Gravity pull rings — slow shrink from edge to center
+                    const ringCount = 3;
+                    const ringSpeed = 3.0;
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = ringColor;
+                    for (let r = 0; r < ringCount; r++) {
+                        const phase = ((mine.pulsePhase / 4 / ringSpeed) + r / ringCount) % 1;
+                        const radius = gravRadius * (1 - phase);
+                        const alpha = Math.sin(phase * Math.PI) * 0.12;
+                        if (radius > 14) {
+                            ctx.globalAlpha = alpha;
+                            ctx.beginPath();
+                            ctx.arc(mine.x, mine.y, radius, 0, Math.PI * 2);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Event horizon ring
+                    if (stats.mineEventHorizon > 0) {
+                        ctx.globalAlpha = 0.2;
+                        ctx.strokeStyle = COLORS.PLAYER;
+                        ctx.lineWidth = 1.5;
                         ctx.beginPath();
-                        ctx.arc(mine.x, mine.y, radius, 0, Math.PI * 2);
+                        ctx.arc(mine.x, mine.y, stats.mineEventHorizon, 0, Math.PI * 2);
                         ctx.stroke();
                     }
-                }
-
-                // Event horizon ring
-                if (stats.mineEventHorizon > 0) {
-                    ctx.globalAlpha = 0.2;
-                    ctx.strokeStyle = COLORS.PLAYER;
-                    ctx.lineWidth = 1.5;
+                    ctx.restore();
+                } else {
+                    // Low perf: simple solid gravity circle
+                    ctx.globalAlpha = 0.06;
+                    ctx.strokeStyle = ringColor;
+                    ctx.lineWidth = 1;
                     ctx.beginPath();
-                    ctx.arc(mine.x, mine.y, stats.mineEventHorizon, 0, Math.PI * 2);
+                    ctx.arc(mine.x, mine.y, gravRadius, 0, Math.PI * 2);
                     ctx.stroke();
+                    ctx.globalAlpha = 1;
                 }
-                ctx.restore();
 
                 // Mine body
                 const pulseR = mine.armed ? 14 + Math.sin(mine.pulsePhase) * 4 : 14;
@@ -9201,23 +9230,32 @@
                     }
                     ctx.closePath();
                     ctx.stroke();
-                    // Inner rotating hex
-                    ctx.globalAlpha = alpha * 0.3;
+                    if (!lowPerfMode) {
+                        // Inner rotating hex
+                        ctx.globalAlpha = alpha * 0.3;
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = (i / 6) * Math.PI * 2 - gameTime * 0.5;
+                            const hx = s.x + Math.cos(angle) * s.radius * 0.5;
+                            const hy = s.y + Math.sin(angle) * s.radius * 0.5;
+                            if (i === 0) ctx.moveTo(hx, hy);
+                            else ctx.lineTo(hx, hy);
+                        }
+                        ctx.closePath();
+                        ctx.stroke();
+                        // Fill
+                        ctx.globalAlpha = alpha * 0.08;
+                        ctx.fillStyle = COLORS.PLAYER;
+                        ctx.fill();
+                    }
+                } else if (lowPerfMode) {
+                    // Low perf: simple solid circle
+                    ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 1.5;
                     ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (i / 6) * Math.PI * 2 - gameTime * 0.5;
-                        const hx = s.x + Math.cos(angle) * s.radius * 0.5;
-                        const hy = s.y + Math.sin(angle) * s.radius * 0.5;
-                        if (i === 0) ctx.moveTo(hx, hy);
-                        else ctx.lineTo(hx, hy);
-                    }
-                    ctx.closePath();
+                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
                     ctx.stroke();
-                    // Fill
-                    ctx.globalAlpha = alpha * 0.08;
-                    ctx.fillStyle = COLORS.PLAYER;
-                    ctx.fill();
                 } else {
                     // Normal snare: dashed circle
                     ctx.strokeStyle = COLORS.PLAYER;
@@ -10630,80 +10668,230 @@
         }
         
         function renderGameOver() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            const t = (Date.now() - gameOverAnimStart) / 1000;
+            const cx = CANVAS_WIDTH / 2;
+            const cy = CANVAS_HEIGHT / 2;
+            const mobile = isMobile();
+
+            // Animated overlay
+            const overlayAlpha = Math.min(0.80, t * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, ' + overlayAlpha + ')';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-            const cx = CANVAS_WIDTH / 2;
-            const mobile = isMobile();
+            // Panel dimensions (same size on mobile and desktop)
+            const panelW = Math.min(CANVAS_WIDTH - 40, 680);
+            const panelH = 520;
+            const panelX = cx - panelW / 2;
+            const panelY = cy - panelH / 2;
+
+            // Panel entry animation
+            const panelProgress = easeOutCubic(Math.min(1, t / 0.5));
+            const panelScale = 0.95 + 0.05 * panelProgress;
+
+            ctx.save();
+            ctx.globalAlpha = panelProgress;
+            ctx.translate(cx, cy);
+            ctx.scale(panelScale, panelScale);
+            ctx.translate(-cx, -cy);
+
+            // Panel background
+            ctx.fillStyle = 'rgba(5, 12, 30, 0.92)';
+            ctx.beginPath();
+            ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+            ctx.fill();
+            ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, 0.15);
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Corner accents
+            const cornerLen = 22;
+            ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, 0.3);
+            ctx.lineWidth = 1.5;
+            const corners = [
+                [panelX, panelY, 1, 1],
+                [panelX + panelW, panelY, -1, 1],
+                [panelX, panelY + panelH, 1, -1],
+                [panelX + panelW, panelY + panelH, -1, -1]
+            ];
+            for (const [cxp, cyp, dx, dy] of corners) {
+                ctx.beginPath();
+                ctx.moveTo(cxp + cornerLen * dx, cyp);
+                ctx.lineTo(cxp, cyp);
+                ctx.lineTo(cxp, cyp + cornerLen * dy);
+                ctx.stroke();
+            }
+
+            ctx.textAlign = 'center';
+            let curY = panelY + 60;
+
+            // === Title ===
+            const titleAlpha = easeOutCubic(Math.min(1, Math.max(0, t - 0.2) / 0.4));
+            const titleSlide = (1 - titleAlpha) * 15;
+            ctx.save();
+            ctx.globalAlpha = panelProgress * titleAlpha;
+            ctx.font = '900 58px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#FF6B6B';
+            setGlow(ctx, '#FF6B6B', 18);
+            ctx.fillText('GAME OVER', cx, curY + titleSlide);
+            clearGlow(ctx);
+            ctx.restore();
+            curY += 36;
+
+            // Subtitle: wave + time
+            const subAlpha = easeOutCubic(Math.min(1, Math.max(0, t - 0.3) / 0.3));
+            const mins = Math.floor(gameTime / 60);
+            const secs = Math.floor(gameTime % 60);
+            const timeStr = (mins > 0 ? mins + 'm ' : '') + secs + 's';
+            ctx.save();
+            ctx.globalAlpha = panelProgress * subAlpha;
+            ctx.font = '20px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.fillText('WAVE ' + waveNumber + '  \u00B7  ' + timeStr + ' SURVIVED', cx, curY);
+            ctx.restore();
+            curY += 28;
+
+            // Divider
+            const divProgress = easeOutCubic(Math.min(1, Math.max(0, t - 0.4) / 0.2));
+            const divW = (panelW * 0.6) * divProgress;
+            ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, 0.12);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - divW / 2, curY);
+            ctx.lineTo(cx + divW / 2, curY);
+            ctx.stroke();
+            curY += 28;
+
+            // === Stats ===
+            const countT = easeOutCubic(Math.min(1, Math.max(0, t - 0.5) / 1.0));
+            const statsAlpha = easeOutCubic(Math.min(1, Math.max(0, t - 0.5) / 0.3));
+            ctx.save();
+            ctx.globalAlpha = panelProgress * statsAlpha;
+
+            const crystalTotal = lastRunCrystals ? lastRunCrystals.total : 0;
+            const crystalPicked = lastRunCrystals ? lastRunCrystals.picked : 0;
+            const crystalKillBonus = lastRunCrystals ? lastRunCrystals.killBonus : 0;
+            const crystalMulti = lastRunCrystals ? lastRunCrystals.crystalMulti : 1;
+
+            const colOffset = panelW * 0.22;
+
+            // Left column: Crystals
+            const leftX = cx - colOffset;
             ctx.textAlign = 'center';
 
-            // Game Over title
-            ctx.font = mobile ? 'bold 64px "Segoe UI", sans-serif' : 'bold 56px "Segoe UI", sans-serif';
-            ctx.fillStyle = '#FF6B6B';
-            ctx.shadowColor = '#FF6B6B';
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 15 : 0;
-            ctx.fillText('GAME OVER', cx, CANVAS_HEIGHT / 2 - 100);
-            ctx.shadowBlur = 0;
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = hexToRGBA(COLORS.HUD_GOLD, 0.6);
+            ctx.fillText('CRYSTALS EARNED', leftX, curY);
 
-            // Run stats
-            let sy = CANVAS_HEIGHT / 2 - 30;
-            const lineGap = mobile ? 42 : 36;
+            const displayCrystals = Math.floor(crystalTotal * countT);
+            ctx.font = 'bold 38px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_GOLD;
+            setGlow(ctx, COLORS.HUD_GOLD, 10);
+            ctx.fillText('\u25C6 ' + displayCrystals, leftX, curY + 40);
+            clearGlow(ctx);
 
-            // Crystals earned
-            const crystalTotal = lastRunCrystals ? lastRunCrystals.total : 0;
-            ctx.font = mobile ? 'bold 30px "Segoe UI", sans-serif' : 'bold 24px "Segoe UI", sans-serif';
-            ctx.fillStyle = '#E0F0FF';
-            ctx.shadowColor = '#E0F0FF';
-            ctx.shadowBlur = ENABLE_GLOW_EFFECTS ? 6 : 0;
-            ctx.fillText('\u25C6 ' + crystalTotal + ' CRYSTALS', cx, sy);
-            ctx.shadowBlur = 0;
-            sy += lineGap;
-
-            // Kills
-            ctx.font = mobile ? 'bold 28px "Segoe UI", sans-serif' : 'bold 22px "Segoe UI", sans-serif';
+            ctx.font = '14px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText(totalKills + ' KILLS', cx, sy);
-            sy += lineGap;
+            let breakdownText = Math.floor(crystalPicked * countT) + ' picked';
+            if (crystalKillBonus > 0) breakdownText += ' + ' + Math.floor(crystalKillBonus * countT) + ' kill bonus';
+            ctx.fillText(breakdownText, leftX, curY + 60);
+            if (crystalMulti > 1) {
+                ctx.fillStyle = '#00FFAA';
+                ctx.fillText('\u00D7' + crystalMulti.toFixed(1) + ' multiplier', leftX, curY + 78);
+            }
 
-            // Level reached
-            ctx.fillText('LEVEL ' + playerLevel, cx, sy);
-            sy += lineGap + 20;
+            // Right column: Combat stats
+            const rightX = cx + colOffset;
+            const statGap = 56;
 
-            // Buttons
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.5);
+            ctx.fillText('KILLS', rightX, curY);
+            ctx.font = 'bold 32px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.PLAYER;
+            ctx.fillText('' + Math.floor(totalKills * countT), rightX, curY + 34);
+
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.5);
+            ctx.fillText('LEVEL', rightX, curY + statGap);
+            ctx.font = 'bold 32px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.PLAYER;
+            const displayLevel = Math.max(1, Math.floor(playerLevel * countT));
+            ctx.fillText('' + displayLevel, rightX, curY + statGap + 34);
+
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.5);
+            ctx.fillText('WAVE', rightX, curY + statGap * 2);
+            ctx.font = 'bold 32px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.PLAYER;
+            ctx.fillText('' + Math.max(1, Math.floor(waveNumber * countT)), rightX, curY + statGap * 2 + 34);
+
+            ctx.restore();
+            curY += 175;
+
+            // Divider
+            ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, 0.12);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - divW / 2, curY);
+            ctx.lineTo(cx + divW / 2, curY);
+            ctx.stroke();
+            curY += 20;
+
+            // === Buttons ===
+            const btnAlpha = easeOutCubic(Math.min(1, Math.max(0, t - 0.8) / 0.3));
+            const btnSlide = (1 - btnAlpha) * 12;
             let goBtns = [];
-            const btnW = mobile ? 400 : 300;
-            const btnH = mobile ? 65 : 50;
-            const btnGap = mobile ? 20 : 16;
+            const btnW = Math.min(panelW - 60, 400);
+            const btnH = 60;
+            const btnGap = 16;
 
-            // PLAY AGAIN button (cyan, pulsing)
+            ctx.save();
+            ctx.globalAlpha = panelProgress * btnAlpha;
+
+            // PLAY AGAIN button (pulsing cyan)
             const retryX = cx - btnW / 2;
-            const retryY = sy;
+            const retryY = curY + btnSlide;
             const pulse = Math.sin(Date.now() / 300) * 0.15 + 0.85;
-            ctx.globalAlpha = pulse;
+            ctx.save();
+            ctx.globalAlpha = panelProgress * btnAlpha * pulse;
             ctx.fillStyle = COLORS.PLAYER;
             ctx.beginPath();
             ctx.roundRect(retryX, retryY, btnW, btnH, 8);
             ctx.fill();
-            ctx.globalAlpha = 1;
+            ctx.restore();
+            ctx.save();
+            ctx.globalAlpha = panelProgress * btnAlpha;
             ctx.fillStyle = '#000';
-            ctx.font = mobile ? 'bold 28px "Segoe UI", sans-serif' : 'bold 20px "Segoe UI", sans-serif';
-            ctx.fillText(mobile ? 'PLAY AGAIN' : 'PLAY AGAIN  (R)', cx, retryY + (mobile ? 43 : 33));
-            goBtns.push({ type: 'retry', x: retryX, y: retryY, w: btnW, h: btnH });
+            ctx.font = 'bold 24px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(mobile ? 'PLAY AGAIN' : 'PLAY AGAIN  (R)', cx, retryY + 39);
+            ctx.restore();
 
-            // EXIT button (subtle)
+            // EXIT button (outline)
             const exitY = retryY + btnH + btnGap;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.save();
+            ctx.globalAlpha = panelProgress * btnAlpha;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.roundRect(retryX, exitY, btnW, btnH, 8);
             ctx.fill();
             ctx.stroke();
             ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.font = mobile ? 'bold 26px "Segoe UI", sans-serif' : 'bold 18px "Segoe UI", sans-serif';
-            ctx.fillText(mobile ? 'EXIT' : 'EXIT  (ESC)', cx, exitY + (mobile ? 42 : 33));
-            goBtns.push({ type: 'exit', x: retryX, y: exitY, w: btnW, h: btnH });
+            ctx.font = 'bold 22px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(mobile ? 'EXIT' : 'EXIT  (ESC)', cx, exitY + 38);
+            ctx.restore();
 
+            ctx.restore(); // end button section
+            ctx.restore(); // end panel transform
+
+            // Button hit areas (only active after animation)
+            if (btnAlpha > 0.5) {
+                goBtns.push({ type: 'retry', x: retryX, y: retryY, w: btnW, h: btnH });
+                goBtns.push({ type: 'exit', x: retryX, y: exitY, w: btnW, h: btnH });
+            }
             currentMenuButtons = goBtns;
         }
         
