@@ -62,9 +62,9 @@ Lines 120-10645: JavaScript IIFE
 - L678: `loadProgression()`
 - L705: `saveProgression()`
 - L714-732: **Full version flag**
-- L735-831: **Digital Goods API / Play Billing**
-- L844: `setGlow()` / L851: `clearGlow()`
-- L850: **`drawShipPath(c, weaponId)`** — draws ship outline path (3 variants: laser_cannon=sharp, fusion_beam=rounded, void_blade=truncated)
+- L735-875: **Digital Goods API / Play Billing** — `initDigitalGoods()`, `checkExistingPurchases()`, `purchaseFullGame()`, `demoEndStatusText`, `cachedProduct`/`cachedProductPrice`/`billingError` state
+- L946: `setGlow()` / L953: `clearGlow()`
+- L880: **`drawShipPath(c, weaponId)`** — draws ship outline path (3 variants: laser_cannon=sharp, fusion_beam=rounded, void_blade=truncated)
 - L878: **`drawShipUpgradeIcon(ctx, weaponId, cx, cy, scale, color)`** — draws ship pointing up + upward arrow (for upgrade UI)
 
 ## 5. GAME STATE VARIABLES continued (905-1121)

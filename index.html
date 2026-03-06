@@ -752,29 +752,39 @@
 
         // Digital Goods API for Play Billing
         let digitalGoodsService = null;
+        let cachedProduct = null;
         let cachedProductPrice = null;
+        let billingError = null;
         const PRODUCT_ID = 'full_game_unlock';
 
         async function initDigitalGoods() {
             if (!('getDigitalGoodsService' in window)) {
-                console.log('Digital Goods API not available (not in TWA)');
+                console.log('[Billing] Digital Goods API not available (not in TWA)');
                 return false;
             }
             try {
                 digitalGoodsService = await window.getDigitalGoodsService('https://play.google.com/billing');
-                console.log('Digital Goods Service connected');
-                // Cache product price for UI
+                console.log('[Billing] Digital Goods Service connected');
                 try {
                     const details = await digitalGoodsService.getDetails([PRODUCT_ID]);
+                    console.log('[Billing] getDetails result:', JSON.stringify(details));
                     if (details && details.length > 0) {
+                        cachedProduct = details[0];
                         cachedProductPrice = details[0].price.value + ' ' + details[0].price.currency;
+                        console.log('[Billing] Product cached:', cachedProductPrice);
+                    } else {
+                        console.warn('[Billing] getDetails returned empty for', PRODUCT_ID);
+                        billingError = 'Product not found';
                     }
-                } catch (e) {}
-                // Check for existing purchases (user already bought or has Play Pass)
+                } catch (e) {
+                    console.warn('[Billing] getDetails error:', e);
+                    billingError = 'Product query failed: ' + e.message;
+                }
                 await checkExistingPurchases();
                 return true;
             } catch (e) {
-                console.warn('Failed to init Digital Goods:', e);
+                console.warn('[Billing] Failed to init:', e);
+                billingError = 'Service init failed: ' + e.message;
                 return false;
             }
         }
@@ -783,36 +793,54 @@
             if (!digitalGoodsService) return;
             try {
                 const purchases = await digitalGoodsService.listPurchases();
+                console.log('[Billing] listPurchases:', purchases.length, 'items');
                 for (const purchase of purchases) {
                     if (purchase.itemId === PRODUCT_ID) {
                         saveFullVersion(true);
-                        console.log('Existing purchase found, full version unlocked');
+                        console.log('[Billing] Existing purchase found, full version unlocked');
                         return;
                     }
                 }
             } catch (e) {
-                console.warn('Error checking purchases:', e);
+                console.warn('[Billing] Error checking purchases:', e);
             }
         }
 
+        let demoEndStatusText = null;
+
         async function purchaseFullGame() {
-            // If Digital Goods API not available, just unlock (for web/testing)
+            console.log('[Billing] purchaseFullGame called. service:', !!digitalGoodsService, 'cachedProduct:', !!cachedProduct);
+
             if (!digitalGoodsService) {
-                console.log('No billing service — unlocking directly (dev/web mode)');
+                console.log('[Billing] No billing service — unlocking directly (dev/web mode)');
                 saveFullVersion(true);
                 gameState = 'playing';
                 return;
             }
 
-            try {
-                const details = await digitalGoodsService.getDetails([PRODUCT_ID]);
-                if (!details || details.length === 0) {
-                    console.error('Product not found in Play Console');
-                    spawnFloatingText(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 'Purchase unavailable', '#FF4444');
+            // Use cached product to avoid async gap before request.show() (preserves user gesture)
+            let product = cachedProduct;
+            if (!product) {
+                demoEndStatusText = { text: 'Loading product...', color: COLORS.UI_SECONDARY, time: Date.now() };
+                try {
+                    const details = await digitalGoodsService.getDetails([PRODUCT_ID]);
+                    console.log('[Billing] Retry getDetails:', JSON.stringify(details));
+                    if (details && details.length > 0) {
+                        product = details[0];
+                        cachedProduct = product;
+                        cachedProductPrice = product.price.value + ' ' + product.price.currency;
+                    }
+                } catch (e) {
+                    console.error('[Billing] getDetails retry error:', e);
+                }
+                if (!product) {
+                    console.error('[Billing] Product not found:', PRODUCT_ID);
+                    demoEndStatusText = { text: 'Product unavailable — check license tester config', color: '#FF4444', time: Date.now() };
                     return;
                 }
+            }
 
-                const product = details[0];
+            try {
                 const paymentMethod = {
                     supportedMethods: 'https://play.google.com/billing',
                     data: { sku: PRODUCT_ID }
@@ -824,25 +852,27 @@
                     }
                 };
 
+                console.log('[Billing] Creating PaymentRequest...');
                 const request = new PaymentRequest([paymentMethod], paymentDetails);
+                console.log('[Billing] Calling request.show()...');
                 const response = await request.show();
+                console.log('[Billing] Payment response received');
                 const { purchaseToken } = response.details;
 
-                // Acknowledge the purchase (required by Google)
                 await digitalGoodsService.acknowledge(purchaseToken, 'onetime');
                 await response.complete('success');
 
-                // Unlock the game
                 saveFullVersion(true);
                 gameState = 'playing';
-                spawnFloatingText(player.x, player.y - 50, 'FULL GAME UNLOCKED!', '#39FF14');
-                console.log('Purchase successful!');
+                if (player) spawnFloatingText(player.x, player.y - 50, 'FULL GAME UNLOCKED!', '#39FF14');
+                console.log('[Billing] Purchase successful!');
             } catch (e) {
                 if (e.name === 'AbortError') {
-                    console.log('Purchase cancelled by user');
+                    console.log('[Billing] Purchase cancelled by user');
+                    demoEndStatusText = { text: 'Purchase cancelled', color: COLORS.UI_SECONDARY, time: Date.now() };
                 } else {
-                    console.error('Purchase error:', e);
-                    spawnFloatingText(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 'Purchase failed', '#FF4444');
+                    console.error('[Billing] Purchase error:', e.name, e.message, e);
+                    demoEndStatusText = { text: 'Purchase failed: ' + e.message, color: '#FF4444', time: Date.now() };
                 }
             }
         }
@@ -10630,6 +10660,23 @@
             ctx.font = mobile ? 'bold 26px "Segoe UI", sans-serif' : 'bold 18px "Segoe UI", sans-serif';
             ctx.fillText('BACK TO MENU', cx, backY + (mobile ? 45 : 36));
             demoBtns.push({ type: 'back', x: unlockX, y: backY, w: btnW, h: btnH });
+
+            // Status text for billing feedback (errors, loading, etc.)
+            if (demoEndStatusText && (Date.now() - demoEndStatusText.time) < 8000) {
+                ctx.font = mobile ? '20px "Segoe UI", sans-serif' : '16px "Segoe UI", sans-serif';
+                ctx.fillStyle = demoEndStatusText.color;
+                ctx.fillText(demoEndStatusText.text, cx, backY + btnH + (mobile ? 40 : 30));
+            }
+
+            // Billing debug info (small, subtle — helps diagnose issues)
+            if (!isFullVersion) {
+                ctx.font = '12px "Segoe UI", sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                const dbg = 'billing: ' + (digitalGoodsService ? 'connected' : 'unavailable')
+                    + ' | product: ' + (cachedProduct ? 'cached' : 'none')
+                    + (billingError ? ' | err: ' + billingError : '');
+                ctx.fillText(dbg, cx, CANVAS_HEIGHT - 20);
+            }
 
             currentDemoEndButtons = demoBtns;
         }
