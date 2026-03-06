@@ -42,7 +42,7 @@ def twaManifest = [
     shortcuts: [],
     // The duration of fade out animation in milliseconds to be played when removing splash screen.
     splashScreenFadeOutDuration: 1500,
-    generatorApp: 'bubblewrap-cli', // Application that generated the Android Project
+    generatorApp: 'gradle-manual',
     // The fallback strategy for when Trusted Web Activity is not available. Possible values are
     // 'customtabs' and 'webview'.
     fallbackType: 'customtabs',

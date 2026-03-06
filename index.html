@@ -770,7 +770,7 @@
                     console.log('[Billing] getDetails result:', JSON.stringify(details));
                     if (details && details.length > 0) {
                         cachedProduct = details[0];
-                        cachedProductPrice = details[0].price.value + ' ' + details[0].price.currency;
+                        cachedProductPrice = parseFloat(details[0].price.value) + ' ' + details[0].price.currency;
                         console.log('[Billing] Product cached:', cachedProductPrice);
                     } else {
                         console.warn('[Billing] getDetails returned empty for', PRODUCT_ID);
@@ -828,7 +828,7 @@
                     if (details && details.length > 0) {
                         product = details[0];
                         cachedProduct = product;
-                        cachedProductPrice = product.price.value + ' ' + product.price.currency;
+                        cachedProductPrice = parseFloat(product.price.value) + ' ' + product.price.currency;
                     }
                 } catch (e) {
                     console.error('[Billing] getDetails retry error:', e);
