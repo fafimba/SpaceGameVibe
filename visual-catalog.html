@@ -152,7 +152,9 @@ h2 {
         KAMIKAZE: { radius: 10, color: '#FF9A6B', outline: '#D86A3A' },
         SPINNER:  { radius: 14, color: '#3A9AD9', outline: '#1E6F9A' },
         TANK:     { radius: 22, color: '#C792FF', outline: '#8A5DBF' },
-        ALIEN:    { radius: 34, color: '#39FF14', outline: '#1A5C1A' }
+        ALIEN:    { radius: 34, color: '#FF3366', outline: '#B32249' },
+        BERSERKER:{ radius: 18, color: '#FF4422', outline: '#CC2200' },
+        LEVIATHAN:{ radius: 50, color: '#AA33DD', outline: '#7722AA' }
     };
     const WEAPON_COLORS = {
         void_blade: '#FF44CC',
@@ -378,17 +380,80 @@ h2 {
         ctx.beginPath();
         ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
         ctx.stroke();
-        // Inner hexagon (rotating)
+        // Inner detail circle
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+
+    function drawBerserker(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.BERSERKER;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        // Outer diamond
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(c.radius, 0);
+        ctx.lineTo(-c.radius, -c.radius * 0.7);
+        ctx.lineTo(-c.radius * 0.5, 0);
+        ctx.lineTo(-c.radius, c.radius * 0.7);
+        ctx.closePath();
+        ctx.stroke();
+        // Inner detail diamond
+        ctx.strokeStyle = c.outline;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.5;
+        const inner = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(c.radius * inner, 0);
+        ctx.lineTo(-c.radius * inner, -c.radius * 0.7 * inner);
+        ctx.lineTo(-c.radius * 0.5 * inner, 0);
+        ctx.lineTo(-c.radius * inner, c.radius * 0.7 * inner);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+
+    function drawLeviathan(ctx, cx, cy, s, t) {
+        const c = ENEMY_TYPES.LEVIATHAN;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(s, s);
+        // Outer circle
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // Middle detail ring
         ctx.strokeStyle = c.outline;
         ctx.lineWidth = 2;
-        drawHexagon(ctx, 0, 0, c.radius * 0.6, t * 2);
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.75, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Inner detail circle
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
         // Pulsing core
         ctx.fillStyle = c.color;
-        ctx.globalAlpha = 0.3 + Math.sin(t * 5) * 0.15;
+        ctx.globalAlpha = 0.25 + Math.sin(t * 3) * 0.15;
         ctx.beginPath();
-        ctx.arc(0, 0, c.radius * 0.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, c.radius * 0.25, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
         ctx.restore();
     }
 
@@ -843,7 +908,7 @@ h2 {
         // Life bar
         ctx.fillStyle = '#333';
         ctx.fillRect(-20, 30, 40, 3);
-        ctx.fillStyle = '#39FF14';
+        ctx.fillStyle = '#FF3366';
         ctx.fillRect(-20, 30, 30, 3);
 
         ctx.restore();
@@ -1048,7 +1113,9 @@ h2 {
             { name: 'Kamikaze', w: 100, h: 100, scale: 2.5, draw: drawKamikaze, animated: false, colors: ['#FF9A6B'] },
             { name: 'Spinner', w: 110, h: 110, scale: 2.2, draw: drawSpinner, animated: true, colors: ['#3A9AD9'] },
             { name: 'Tank', w: 140, h: 140, scale: 2, draw: drawTank, animated: false, colors: ['#C792FF'] },
-            { name: 'Alien', w: 180, h: 180, scale: 1.8, draw: drawAlien, animated: true, colors: ['#39FF14', '#1A5C1A'] },
+            { name: 'Alien', w: 180, h: 180, scale: 1.8, draw: drawAlien, animated: false, colors: ['#FF3366', '#B32249'] },
+            { name: 'Berserker', w: 120, h: 120, scale: 2, draw: drawBerserker, animated: false, colors: ['#FF4422', '#CC2200'] },
+            { name: 'Leviathan', w: 260, h: 260, scale: 2.2, draw: drawLeviathan, animated: true, colors: ['#AA33DD', '#7722AA'] },
         ]},
         { category: 'Projectiles', entries: [
             { name: 'Laser', w: 100, h: 60, scale: 2.5, draw: drawLaser, animated: false, colors: ['#7FDBFF'] },

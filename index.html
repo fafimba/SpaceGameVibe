@@ -214,14 +214,16 @@
             SCOUT: { radius: 10, speed: 120, turnRate: 90, hp: 6, points: 10, color: '#FF6B6B', outline: '#C04848' },
             KAMIKAZE: { radius: 10, speed: 350, turnRate: 120, hp: 5, points: 25, color: '#FF9A6B', outline: '#D86A3A' },
             TANK: { radius: 22, speed: 70, turnRate: 45, hp: 25, points: 75, color: '#C792FF', outline: '#8A5DBF' },
-            ALIEN: { radius: 34, speed: 55, turnRate: 35, hp: 120, points: 0, color: '#39FF14', outline: '#1A5C1A' }
+            ALIEN: { radius: 34, speed: 55, turnRate: 35, hp: 120, points: 0, color: '#FF3366', outline: '#B32249' },
+            BERSERKER: { radius: 18, speed: 550, turnRate: 90, hp: 80, points: 100, color: '#FF4422', outline: '#CC2200' },
+            LEVIATHAN: { radius: 50, speed: 40, turnRate: 25, hp: 350, points: 0, color: '#AA33DD', outline: '#7722AA' }
         };
         
-        const INITIAL_SPAWN_INTERVAL_MIN = 0.6;
-        const INITIAL_SPAWN_INTERVAL_MAX = 1.0;
-        const MIN_SPAWN_INTERVAL = 0.15;
-        const SPAWN_DECAY_RATE = 0.05;
-        const SPAWN_DECAY_INTERVAL = 10;
+        const INITIAL_SPAWN_INTERVAL_MIN = 0.8;
+        const INITIAL_SPAWN_INTERVAL_MAX = 1.3;
+        const MIN_SPAWN_INTERVAL = 0.20;
+        const SPAWN_DECAY_RATE = 0.035;
+        const SPAWN_DECAY_INTERVAL = 15;
         const MAX_ENEMIES = 500;
         const MAX_ENEMIES_LOW_PERF = 200;
         const HARD_MAX_ENEMIES = 1500;
@@ -364,8 +366,8 @@
         const ENEMY_SEPARATION_PADDING = 8;
 
         // Wave System - Vampire Survivors style (dense clusters around player)
-        const WAVE_INTERVAL_BASE = 2.5;       // Base seconds between waves (gets faster with level)
-        const WAVE_INTERVAL_VARIANCE = 1.5;   // Random variance in seconds
+        const WAVE_INTERVAL_BASE = 4.0;       // Base seconds between waves (gets faster with level)
+        const WAVE_INTERVAL_VARIANCE = 2.0;   // Random variance in seconds
         const WAVE_SPAWN_DIST_MIN = 1000;     // Just outside screen edge
         const WAVE_SPAWN_DIST_MAX = 1200;     // Max spawn distance
         const WAVE_CLUSTER_RADIUS = 60;       // How tight each cluster is (px)
@@ -618,18 +620,204 @@
         
         let gameState = 'menu'; // menu, playing, paused, gameOver, skilltree, tutorial, shop, demoEnd
 
-        // ── Audio System (disabled during development) ──
+        // ============================================================
+        // AUDIO SYSTEM
+        // ============================================================
+
+        const SOUND_DEFS = {
+            playerShoot: {
+                wave: 'square', freq: [880, 440], duration: 0.08, volume: 0.25,
+                decay: 'exp', noise: 0, detune: 50, category: 'sfx'
+            },
+            enemyDeath: {
+                wave: 'sine', freq: [600, 150], duration: 0.15, volume: 0.3,
+                decay: 'exp', noise: 0.2, detune: 80, category: 'sfx'
+            },
+            xpPickup: {
+                wave: 'sine', freq: [1200, 1600], duration: 0.06, volume: 0.2,
+                decay: 'linear', noise: 0, detune: 30, category: 'sfx'
+            },
+            levelUp: {
+                wave: 'square', freq: [440, 880], duration: 0.25, volume: 0.3,
+                decay: 'linear', noise: 0, detune: 0, category: 'sfx',
+                notes: [
+                    { freq: [523, 523], delay: 0, duration: 0.08 },
+                    { freq: [659, 659], delay: 0.09, duration: 0.08 },
+                    { freq: [784, 784], delay: 0.18, duration: 0.12 }
+                ]
+            },
+            playerHit: {
+                wave: 'sawtooth', freq: [300, 80], duration: 0.12, volume: 0.35,
+                decay: 'exp', noise: 0.4, detune: 30, category: 'sfx'
+            }
+        };
+
         const AudioManager = {
+            ctx: null,
             initialized: false,
-            init() {},
-            resume() {},
-            setMusicVolume() {}
+            masterGain: null,
+            sfxGain: null,
+            _volume: 1.0,
+            _muted: false,
+            _cooldowns: {},
+            MIN_COOLDOWN: 0.03,
+
+            init() {
+                if (this.initialized) return;
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.masterGain = this.ctx.createGain();
+                    this.sfxGain = this.ctx.createGain();
+                    this.sfxGain.connect(this.masterGain);
+                    this.masterGain.connect(this.ctx.destination);
+
+                    // Load saved volume settings
+                    const saved = localStorage.getItem('StellarSwarm_audio');
+                    if (saved) {
+                        try {
+                            const s = JSON.parse(saved);
+                            this._volume = s.volume ?? 1.0;
+                            this._muted = s.muted ?? false;
+                        } catch(e) {}
+                    }
+                    this.masterGain.gain.value = this._muted ? 0 : this._volume;
+
+                    this.initialized = true;
+                    if (this.ctx.state === 'suspended') this.ctx.resume();
+                } catch(e) {
+                    // Web Audio not supported — audio silently disabled
+                }
+            },
+
+            _saveSettings() {
+                localStorage.setItem('StellarSwarm_audio', JSON.stringify({
+                    volume: this._volume, muted: this._muted
+                }));
+            },
+
+            setVolume(v) {
+                this._volume = Math.max(0, Math.min(1, v));
+                if (this.masterGain && !this._muted) {
+                    this.masterGain.gain.value = this._volume;
+                }
+                this._saveSettings();
+            },
+
+            getVolume() { return this._volume; },
+
+            toggleMute() {
+                this._muted = !this._muted;
+                if (this.masterGain) {
+                    this.masterGain.gain.value = this._muted ? 0 : this._volume;
+                }
+                this._saveSettings();
+                return this._muted;
+            },
+
+            isMuted() { return this._muted; },
+
+            resume() {
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+            },
+
+            setMusicVolume() {},
+
+            play(soundId) {
+                if (!this.initialized || !this.ctx || this._muted) return;
+                const def = SOUND_DEFS[soundId];
+                if (!def) return;
+
+                // Cooldown check
+                const now = this.ctx.currentTime;
+                const lastPlayed = this._cooldowns[soundId] || 0;
+                if (now - lastPlayed < this.MIN_COOLDOWN) return;
+                this._cooldowns[soundId] = now;
+
+                // Multi-note sound (levelUp fanfare)
+                if (def.notes) {
+                    for (const note of def.notes) {
+                        this._synth({
+                            wave: def.wave,
+                            freq: note.freq,
+                            duration: note.duration,
+                            volume: def.volume,
+                            decay: def.decay,
+                            noise: def.noise || 0,
+                            detune: def.detune || 0
+                        }, now + note.delay);
+                    }
+                    return;
+                }
+
+                this._synth(def, now);
+            },
+
+            _synth(def, startTime) {
+                const ctx = this.ctx;
+                const t = startTime;
+                const dur = def.duration;
+                const endT = t + dur;
+
+                // Oscillator
+                const osc = ctx.createOscillator();
+                osc.type = def.wave;
+                const freqStart = Array.isArray(def.freq) ? def.freq[0] : def.freq;
+                const freqEnd = Array.isArray(def.freq) ? def.freq[1] : def.freq;
+                osc.frequency.setValueAtTime(freqStart, t);
+                if (freqStart !== freqEnd) {
+                    osc.frequency.linearRampToValueAtTime(freqEnd, endT);
+                }
+
+                // Random detune for variation
+                if (def.detune) {
+                    osc.detune.value = (Math.random() - 0.5) * def.detune;
+                }
+
+                // Gain envelope
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(def.volume, t);
+                if (def.decay === 'exp') {
+                    gain.gain.exponentialRampToValueAtTime(0.001, endT);
+                } else {
+                    gain.gain.linearRampToValueAtTime(0, endT);
+                }
+
+                osc.connect(gain);
+
+                // Noise mix
+                if (def.noise > 0) {
+                    const bufferSize = ctx.sampleRate * dur;
+                    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = (Math.random() * 2 - 1) * def.noise;
+                    }
+                    const noiseSrc = ctx.createBufferSource();
+                    noiseSrc.buffer = noiseBuffer;
+                    const noiseGain = ctx.createGain();
+                    noiseGain.gain.setValueAtTime(def.volume, t);
+                    if (def.decay === 'exp') {
+                        noiseGain.gain.exponentialRampToValueAtTime(0.001, endT);
+                    } else {
+                        noiseGain.gain.linearRampToValueAtTime(0, endT);
+                    }
+                    noiseSrc.connect(noiseGain);
+                    noiseGain.connect(this.sfxGain);
+                    noiseSrc.start(t);
+                    noiseSrc.stop(endT);
+                }
+
+                gain.connect(this.sfxGain);
+                osc.start(t);
+                osc.stop(endT);
+            }
         };
         let lastTime = 0;
         let deltaTime = 0;
         let timeScale = 1;
         let gameTime = 0;
         let totalKills = 0;
+        let playerSkillFactor = 1.0; // adaptive difficulty (0.75-1.25)
 
         // Wave Alert System
         let waveAlertActive = false;
@@ -644,8 +832,37 @@
         const PROGRESSION_SAVE_KEY = 'StellarSwarm_progression_v1';
         const WEAPON_IDS = ['laser_cannon', 'orbital_shield', 'missile_launcher', 'lightning_ray', 'plasma_field', 'alien_drone', 'void_blade', 'warp_snare', 'fusion_beam', 'gravity_mines', 'sentry_turret'];
 
+        function calculateSkillFactor(runHistory) {
+            if (!runHistory || runHistory.length === 0) return 1.0;
+
+            const recent = runHistory.slice(-5);
+            const avgSurvival = recent.reduce((s, r) => s + r.survivalTime, 0) / recent.length;
+            const avgWave = recent.reduce((s, r) => s + r.waveReached, 0) / recent.length;
+            const avgLevel = recent.reduce((s, r) => s + r.levelReached, 0) / recent.length;
+
+            const survivalScore = Math.min(avgSurvival / 300, 1.0) * 40;
+            const waveScore = Math.min(avgWave / 18, 1.0) * 30;
+            const levelScore = Math.min(avgLevel / 12, 1.0) * 30;
+            const compositeScore = survivalScore + waveScore + levelScore;
+
+            if (compositeScore < 30) {
+                return 0.75 + (compositeScore / 30) * 0.15;
+            } else if (compositeScore < 60) {
+                return 0.90 + ((compositeScore - 30) / 30) * 0.20;
+            } else {
+                return 1.10 + ((compositeScore - 60) / 40) * 0.15;
+            }
+        }
+
         function getDiffMultipliers() {
-            return { enemyHP: 1, enemySpeed: 1, spawnRate: 1, crystals: 1, xp: 1 };
+            const sf = playerSkillFactor;
+            return {
+                enemyHP: sf,
+                enemySpeed: 0.9 + sf * 0.1,
+                spawnRate: 0.85 + sf * 0.15,
+                crystals: 1 + (1 - sf) * 0.3,
+                xp: 1 + (1 - sf) * 0.2
+            };
         }
 
         // Permanent upgrades definition
@@ -691,7 +908,8 @@
                     crystalAttractor: 0
                 },
                 tutorialDone: true,
-                stats: { totalRuns: 0, totalKills: 0, totalCrystalsEarned: 0 }
+                stats: { totalRuns: 0, totalKills: 0, totalCrystalsEarned: 0, bestKills: 0 },
+                runHistory: []
             };
         }
 
@@ -708,6 +926,17 @@
                     if (!data.stats) data.stats = { totalRuns: 0, totalKills: 0, totalCrystalsEarned: 0 };
                     if (!data.permanentUpgrades) data.permanentUpgrades = { powerCore: 0, hullPlating: 0, engineBoost: 0, xpAmplifier: 0, crystalAttractor: 0 };
                     if (data.tutorialDone === undefined) data.tutorialDone = false;
+                    if (!data.runHistory) data.runHistory = [];
+                    // Migrate bestKills: backfill from runHistory if available
+                    if (data.stats.bestKills === undefined) {
+                        let best = 0;
+                        if (data.runHistory) {
+                            for (const run of data.runHistory) {
+                                if (run.totalKills > best) best = run.totalKills;
+                            }
+                        }
+                        data.stats.bestKills = best;
+                    }
                     // Migrate: all weapons unlocked
                     if (data.unlockedWeapons) {
                         for (const wid of Object.keys(WEAPONS)) {
@@ -1004,6 +1233,26 @@
                 upgradeLevels['gravity_mines'] = 10;
                 spawnFloatingText(player.x, player.y - 50, 'BLACK HOLE UNLOCKED', COLORS.PLAYER);
             },
+            'blade': () => {
+                if (!activeWeapons.includes('void_blade')) activeWeapons.push('void_blade');
+                upgradeLevels['void_blade'] = 10;
+                spawnFloatingText(player.x, player.y - 50, 'DIMENSIONAL RIFT UNLOCKED', '#E040FB');
+            },
+            'snare': () => {
+                if (!activeWeapons.includes('warp_snare')) activeWeapons.push('warp_snare');
+                upgradeLevels['warp_snare'] = 10;
+                spawnFloatingText(player.x, player.y - 50, 'TEMPORAL CAGE UNLOCKED', '#00E5FF');
+            },
+            'beam': () => {
+                if (!activeWeapons.includes('fusion_beam')) activeWeapons.push('fusion_beam');
+                upgradeLevels['fusion_beam'] = 10;
+                spawnFloatingText(player.x, player.y - 50, 'SIPHON NEXUS UNLOCKED', '#76FF03');
+            },
+            'turret': () => {
+                if (!activeWeapons.includes('sentry_turret')) activeWeapons.push('sentry_turret');
+                upgradeLevels['sentry_turret'] = 10;
+                spawnFloatingText(player.x, player.y - 50, 'COMBAT STATION UNLOCKED', COLORS.PLAYER);
+            },
             'full': () => {
                 for (const wid of Object.keys(WEAPONS)) {
                     if (!activeWeapons.includes(wid)) activeWeapons.push(wid);
@@ -1032,6 +1281,18 @@
             'level': () => {
                 skillPoints++;
                 levelUp(1);
+            },
+            'skip': () => {
+                waveNumber += 20;
+                waveTimer = 0;
+                spawnFloatingText(player.x, player.y - 50, '+20 WAVES → WAVE ' + waveNumber, '#FFD700');
+            },
+            'dead': () => {
+                player.hp = 0;
+                gameOver();
+            },
+            'cheat': () => {
+                showCheatOverlay = true;
             },
         };
         
@@ -1074,6 +1335,7 @@
         let snareDeployTimer = 0;
         let snareDeployAngle = 0;
         let temporalCageTimer = 0;
+        let trapHexes = []; // Temporal Cage evolution: trap hexes that root enemies
         // Gravity Mines state
         let mines = [];
         let radiationFields = [];
@@ -1085,6 +1347,13 @@
         let lastTurretY = 0;
         let combatStationDmgTimer = 0;
         let gameOverAnimStart = 0;
+        let lastRunIsNewRecord = false;
+        let lastRunBestKills = 0;
+        let showCheatOverlay = false;
+
+        // Pause menu state
+        let currentPauseButtons = [];
+        const HAMBURGER_BTN = { x: 16, y: 10, w: 50, h: 40 };
 
         // Camera system
         let camera = {
@@ -1114,7 +1383,8 @@
             startTime: 0,
             animTime: 0,
             cardPositions: [],
-            animDone: false
+            animDone: false,
+            bgSnapshot: null
         };
         let crystalsThisRun = 0;
         let tempDamageMultiplier = 1;
@@ -1140,6 +1410,10 @@
 
         // Wave system
         let waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
+        let waveCalm = 0; // seconds of calm remaining after a wave (no regular spawns)
+        let recentDamageEvents = 0;
+        let overwhelmReduction = 0; // 0-0.5, applied to spawn rate
+        let lastOverwhelmCheck = -1;
 
         // Effects
         let shakeIntensity = 0;
@@ -1156,6 +1430,9 @@
         // Shield Break Sequence state
         let shieldBreakState = null;
         let shieldRechargeTimer = 0;
+
+        // Life Gain Animation state
+        let lifeGainState = null;
 
         
         // Background
@@ -1349,8 +1626,8 @@
             ),
 
             snare: new ObjectPool(
-                () => ({ x: 0, y: 0, life: 0, maxLife: 0, radius: 80, dps: 6, slow: 0.30, tickTimer: 0, tickRate: 0.5, vulnerability: 0, rootDuration: 0, permaSlow: 0, killRefresh: false, deathBurst: false, isCage: false, stackSlow: false }),
-                (obj) => { obj.x = 0; obj.y = 0; obj.life = 0; obj.maxLife = 0; obj.radius = 80; obj.dps = 6; obj.slow = 0.30; obj.tickTimer = 0; obj.tickRate = 0.5; obj.vulnerability = 0; obj.rootDuration = 0; obj.permaSlow = 0; obj.killRefresh = false; obj.deathBurst = false; obj.isCage = false; obj.stackSlow = false; },
+                () => ({ x: 0, y: 0, life: 0, maxLife: 0, radius: 80, dps: 6, slow: 0.30, tickTimer: 0, tickRate: 0.5, vulnerability: 0, rootDuration: 0, permaSlow: 0, killRefresh: false, deathBurst: false, stackSlow: false }),
+                (obj) => { obj.x = 0; obj.y = 0; obj.life = 0; obj.maxLife = 0; obj.radius = 80; obj.dps = 6; obj.slow = 0.30; obj.tickTimer = 0; obj.tickRate = 0.5; obj.vulnerability = 0; obj.rootDuration = 0; obj.permaSlow = 0; obj.killRefresh = false; obj.deathBurst = false; obj.stackSlow = false; },
                 20
             ),
 
@@ -1544,6 +1821,7 @@
             slowmoTimer = 0;
             timeScale = 1;
             shieldBreakState = null;
+            lifeGainState = null;
         }
 
         function spawnMenuThrusterParticle(cx, shipY) {
@@ -1767,7 +2045,7 @@
             selectedStartingWeapon = STARTING_WEAPON_IDS[menuWeaponIndex] || 'laser_cannon';
 
             // From game over or demo end, skip menu animation — go straight to playing
-            if (gameState === 'gameOver' || gameState === 'demoEnd') {
+            if (gameState === 'gameOver' || gameState === 'demoEnd' || gameState === 'paused') {
                 gameState = 'playing';
                 resetGame();
                 return;
@@ -1816,6 +2094,7 @@
                 thrusterParticleTimer: 0,
                 bobOffset: 0,
                 bobTimer: 0,
+                lastChance: false,
                 // Shield Arc State
                 shieldArcOpacity: SHIELD_ARC_IDLE_OPACITY,
                 shieldArcTargetOpacity: SHIELD_ARC_IDLE_OPACITY,
@@ -1869,6 +2148,7 @@
             // Shield break sequence reset
             shieldBreakState = null;
             shieldRechargeTimer = 0;
+            lifeGainState = null;
             currentSlowmoFactor = SLOWMO_FACTOR;
 
             // Wave alert reset
@@ -1890,6 +2170,8 @@
             // activeEvolutions removed — evolution tracked via upgradeLevels[weaponId] >= 10
             crystalsThisRun = 0;
             lastRunCrystals = null;
+            lastRunIsNewRecord = false;
+            lastRunBestKills = 0;
             tempDamageMultiplier = 1;
             tempDamageTimer = 0;
             novaBeamHeat = 0;
@@ -1899,6 +2181,7 @@
             snareDeployTimer = 0;
             snareDeployAngle = 0;
             temporalCageTimer = 0;
+            trapHexes = [];
             mineDeployTimer = 0;
             blackHoleCooldown = 0;
             lastTurretX = player.x;
@@ -1915,6 +2198,7 @@
             prog.stats.totalRuns++;
             saveProgression(prog);
             cachedProgression = prog;
+            playerSkillFactor = calculateSkillFactor(prog.runHistory);
             // Apply permanent upgrades
             const pu = prog.permanentUpgrades || {};
             permDamageMulti = 1 + (pu.powerCore || 0) * 0.04;
@@ -1930,6 +2214,10 @@
             lastSpawnDecayTime = 0;
             waveNumber = 0;
             waveTimer = WAVE_INTERVAL_BASE + Math.random() * WAVE_INTERVAL_VARIANCE;
+            waveCalm = 0;
+            recentDamageEvents = 0;
+            overwhelmReduction = 0;
+            lastOverwhelmCheck = -1;
 
             shakeIntensity = 0;
             shakeDuration = 0;
@@ -1949,6 +2237,12 @@
 
                 // Init audio on first interaction
                 AudioManager.init();
+
+                // Dismiss cheat overlay on any key
+                if (showCheatOverlay) {
+                    showCheatOverlay = false;
+                    return;
+                }
 
                 // Handle cheat codes (only when playing)
                 if (gameState === 'playing' && e.key.length === 1) {
@@ -2060,7 +2354,20 @@
                 const clickX = (e.clientX - rect.left) * scaleX;
                 const clickY = (e.clientY - rect.top) * scaleY;
 
-                if (gameState === 'skilltree') {
+                if (showCheatOverlay) {
+                    showCheatOverlay = false;
+                    return;
+                }
+
+                if (gameState === 'paused') {
+                    handlePauseClick(clickX, clickY);
+                } else if (gameState === 'playing') {
+                    // Hamburger menu button
+                    if (clickX >= HAMBURGER_BTN.x && clickX <= HAMBURGER_BTN.x + HAMBURGER_BTN.w &&
+                        clickY >= HAMBURGER_BTN.y && clickY <= HAMBURGER_BTN.y + HAMBURGER_BTN.h) {
+                        gameState = 'paused';
+                    }
+                } else if (gameState === 'skilltree') {
                     handleUpgradeClick(clickX, clickY);
                 } else if (gameState === 'tutorial') {
                     handleTutorialClick(clickX, clickY);
@@ -2108,6 +2415,23 @@
                         x: (touch.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
                         y: (touch.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
                     };
+                }
+
+                if (gameState === 'paused') {
+                    const coords = touchToCanvas(e.touches[0]);
+                    handlePauseClick(coords.x, coords.y);
+                    e.preventDefault();
+                    return;
+                }
+
+                if (gameState === 'playing') {
+                    const coords = touchToCanvas(e.touches[0]);
+                    if (coords.x >= HAMBURGER_BTN.x && coords.x <= HAMBURGER_BTN.x + HAMBURGER_BTN.w &&
+                        coords.y >= HAMBURGER_BTN.y && coords.y <= HAMBURGER_BTN.y + HAMBURGER_BTN.h) {
+                        gameState = 'paused';
+                        e.preventDefault();
+                        return;
+                    }
                 }
 
                 if (gameState === 'demoEnd') {
@@ -2350,6 +2674,12 @@
             lastTurretX += offsetX;
             lastTurretY += offsetY;
 
+            // Transport trap hexes
+            for (const th of trapHexes) {
+                th.x += offsetX;
+                th.y += offsetY;
+            }
+
             // Transport siphon beam origins
             for (const sb of beamState.siphonBeams) {
                 sb.x += offsetX;
@@ -2478,6 +2808,9 @@
             checkSectorBoundary();
 
 
+            // Mid-run overwhelm detection
+            updateOverwhelmCheck();
+
             // Update spawn system
             updateSpawnSystem();
 
@@ -2511,6 +2844,9 @@
 
             // Shield break sequence (uses rawDt to bypass slowmo)
             updateShieldBreakSequence(rawDt);
+
+            // Life gain animation (uses rawDt, no slowmo needed)
+            updateLifeGainAnimation(rawDt);
 
         }
 
@@ -2920,8 +3256,8 @@
             let snarePerDeploy = 2;
             let snareLifetime = 4;
             let snareRadius = 120;
-            let snareDPS = 6;
-            let snareSlow = 0.30;
+            let snareDPS = 4;
+            let snareSlow = 0.15;
             let snareTickRate = 0.5;
             let snareVulnerability = 0;
             let snareRootDuration = 0;
@@ -2933,14 +3269,14 @@
             if (hasSnare) {
                 const lvl = upgradeLevels['warp_snare'] || 0;
                 if (lvl >= 1) { snareMaxCount = 6; snareDeployInterval = 1.2; snareLifetime = 4.5; }
-                if (lvl >= 2) { snareRadius = 165; snareSlow = 0.40; }
-                if (lvl >= 3) { snareDPS = 10; snareTickRate = 0.4; snarePerDeploy = 3; }
+                if (lvl >= 2) { snareRadius = 165; snareSlow = 0.20; }
+                if (lvl >= 3) { snareDPS = 7; snareTickRate = 0.4; snarePerDeploy = 3; }
                 if (lvl >= 4) { snareMaxCount = 8; snareDeployInterval = 1.0; snareLifetime = 5; }
-                if (lvl >= 5) { snareRadius = 210; snareSlow = 0.50; snareVulnerability = 0.10; }
-                if (lvl >= 6) { snareDPS = 16; snarePermaSlow = 0.20; snarePerDeploy = 4; }
+                if (lvl >= 5) { snareRadius = 210; snareSlow = 0.30; snareVulnerability = 0.10; }
+                if (lvl >= 6) { snareDPS = 12; snarePermaSlow = 0.05; snarePerDeploy = 4; }
                 if (lvl >= 7) { snareMaxCount = 12; snareDeployInterval = 0.8; snareLifetime = 5.5; snareStackSlow = true; }
-                if (lvl >= 8) { snareRadius = 270; snareSlow = 0.60; snareVulnerability = 0.20; snareRootDuration = 0.5; }
-                if (lvl >= 9) { snareDPS = 24; snareKillRefresh = true; snareDeathBurst = true; snarePerDeploy = 5; }
+                if (lvl >= 8) { snareRadius = 270; snareSlow = 0.40; snareVulnerability = 0.20; }
+                if (lvl >= 9) { snareDPS = 18; snareKillRefresh = true; snareDeathBurst = true; snarePerDeploy = 5; }
             }
 
             // === FUSION BEAM === (Lv1-3: targets/ramp/range, ...)
@@ -3122,6 +3458,7 @@
         }
 
         function fireBullet() {
+            AudioManager.play('playerShoot');
             const playerRad = player.angle * Math.PI / 180;
             const noseOffset = PLAYER_SIZE / 2 - PLAYER_PIVOT_OFFSET;
             const noseX = player.x + Math.cos(playerRad) * noseOffset;
@@ -4002,6 +4339,19 @@
         // ============================================================
         // ============================================================
 
+        function updateOverwhelmCheck() {
+            if (Math.floor(gameTime) % 10 === 0 && Math.floor(gameTime) !== lastOverwhelmCheck) {
+                lastOverwhelmCheck = Math.floor(gameTime);
+                if (recentDamageEvents >= 3 && enemies.length > 40) {
+                    overwhelmReduction = Math.min(overwhelmReduction + 0.15, 0.5);
+                    waveCalm = Math.max(waveCalm, 3.0);
+                } else if (recentDamageEvents <= 1) {
+                    overwhelmReduction = Math.max(overwhelmReduction - 0.1, 0);
+                }
+                recentDamageEvents = 0;
+            }
+        }
+
         function updateSpawnSystem() {
             // Decay spawn interval over time
             if (gameTime - lastSpawnDecayTime > SPAWN_DECAY_INTERVAL) {
@@ -4011,30 +4361,36 @@
                 waveNumber++;
             }
 
-            // Spawn enemies
+            // Breathing room: decrement calm timer after waves
+            if (waveCalm > 0) waveCalm -= deltaTime;
+
+            // Spawn enemies (skip during wave calm)
             spawnTimer -= deltaTime;
             // Scale max enemies with wave number (+5 enemies per wave)
             const baseMaxEnemies = lowPerfMode ? MAX_ENEMIES_LOW_PERF : MAX_ENEMIES;
             const maxEnemies = Math.min(baseMaxEnemies + (waveNumber * 5), HARD_MAX_ENEMIES);
 
-            if (spawnTimer <= 0 && enemies.length < maxEnemies) {
+            if (spawnTimer <= 0 && enemies.length < maxEnemies && waveCalm <= 0) {
                 spawnEnemy();
                 const spawnRateMult = getDiffMultipliers().spawnRate;
-                spawnTimer = (spawnInterval + Math.random() * (spawnInterval * 0.5)) / spawnRateMult;
+                spawnTimer = (spawnInterval + Math.random() * (spawnInterval * 0.5)) / (spawnRateMult * (1 - overwhelmReduction));
             }
 
-            // Wave system - starts aggressively from level 2
-            if (playerLevel >= 2) {
+            // Wave system - adaptive start level based on skill
+            const waveStartLevel = playerSkillFactor < 0.9 ? 4 : (playerSkillFactor > 1.1 ? 2 : 3);
+            const dualWaveLevel = playerSkillFactor < 0.9 ? 10 : (playerSkillFactor > 1.1 ? 6 : 8);
+            const dualWaveChance = playerSkillFactor < 0.9 ? 0.2 : (playerSkillFactor > 1.1 ? 0.4 : 0.3);
+            if (playerLevel >= waveStartLevel) {
                 waveTimer -= deltaTime;
                 if (waveTimer <= 0) {
-                    // Spawn 1-3 waves simultaneously at higher levels
-                    const simultaneousWaves = playerLevel >= 5 ? (Math.random() < 0.4 ? 2 : 1) : 1;
+                    // Spawn 1-2 waves simultaneously at higher levels
+                    const simultaneousWaves = playerLevel >= dualWaveLevel ? (Math.random() < dualWaveChance ? 2 : 1) : 1;
                     for (let w = 0; w < simultaneousWaves; w++) {
                         spawnWave();
                     }
-                    // Faster waves as level increases (minimum 1.2 seconds between waves)
-                    const levelSpeedBonus = Math.min((playerLevel - 2) * 0.25, 1.8);
-                    waveTimer = Math.max(1.2, WAVE_INTERVAL_BASE - levelSpeedBonus) + Math.random() * WAVE_INTERVAL_VARIANCE;
+                    // Faster waves as level increases (minimum 2.0 seconds between waves)
+                    const levelSpeedBonus = Math.min((playerLevel - waveStartLevel) * 0.25, 1.2);
+                    waveTimer = Math.max(2.0, WAVE_INTERVAL_BASE - levelSpeedBonus) + Math.random() * WAVE_INTERVAL_VARIANCE;
                 }
             }
         }
@@ -4049,12 +4405,12 @@
             waveAlertSubtitle = 'HOSTILES INCOMING';
 
             // Scale wave size with level (more enemies at higher levels)
-            const baseCount = 20 + Math.floor(playerLevel * 4);
-            const count = Math.min(baseCount, 80);
+            const baseCount = 15 + Math.floor(playerLevel * 3);
+            const count = Math.min(baseCount, 60);
 
             // HP scaling for wave enemies
             const waveDiffMult = getDiffMultipliers();
-            const hpMultiplier = Math.pow(1.12, playerLevel - 1) * waveDiffMult.enemyHP;
+            const hpMultiplier = Math.pow(1.09, playerLevel - 1) * waveDiffMult.enemyHP;
 
             // Generate 3-6 clusters around the player, just outside screen
             const numClusters = 3 + Math.floor(Math.random() * 4);
@@ -4110,8 +4466,11 @@
                 enemy.offScreenTime = 0;
                 enemies.push(enemy);
             }
+
+            // Breathing room: bigger waves = longer calm, struggling players get more calm
+            waveCalm = (1.5 + count / 40) * (2 - playerSkillFactor);
         }
-        
+
         function getSpawnType() {
             let type = 'SCOUT';
             const r = Math.random();
@@ -4136,11 +4495,26 @@
                 if (r < 0.05) type = 'ALIEN';
                 else if (r < 0.32) type = 'TANK';
                 else if (r < 0.52) type = 'KAMIKAZE';
+            } else if (t < 720) {
+                // 8-12min: berserkers start appearing (3%)
+                if (r < 0.03) type = 'BERSERKER';
+                else if (r < 0.13) type = 'ALIEN';
+                else if (r < 0.41) type = 'TANK';
+                else if (r < 0.61) type = 'KAMIKAZE';
+            } else if (t < 960) {
+                // 12-16min: leviathans appear (2%), berserkers grow (5%)
+                if (r < 0.02) type = 'LEVIATHAN';
+                else if (r < 0.07) type = 'BERSERKER';
+                else if (r < 0.19) type = 'ALIEN';
+                else if (r < 0.44) type = 'TANK';
+                else if (r < 0.62) type = 'KAMIKAZE';
             } else {
-                // 8min+: late game, aliens grow (10%), tanks abundant (28%), kamikazes (20%)
-                if (r < 0.10) type = 'ALIEN';
-                else if (r < 0.38) type = 'TANK';
-                else if (r < 0.58) type = 'KAMIKAZE';
+                // 16min+: endgame, leviathans (4%), berserkers (8%)
+                if (r < 0.04) type = 'LEVIATHAN';
+                else if (r < 0.12) type = 'BERSERKER';
+                else if (r < 0.26) type = 'ALIEN';
+                else if (r < 0.48) type = 'TANK';
+                else if (r < 0.63) type = 'KAMIKAZE';
             }
             return type;
         }
@@ -4148,8 +4522,8 @@
         function spawnEnemy() {
             if (!player) return;
 
-            // Spawn a mini-group of 3-5 enemies from the same direction
-            const groupSize = 3 + Math.floor(Math.random() * 3);
+            // Spawn a mini-group of 2-4 enemies from the same direction
+            const groupSize = 2 + Math.floor(Math.random() * 3);
             const angle = Math.random() * Math.PI * 2;
             const spawnDistance = CANVAS_WIDTH / 2 + ENEMY_SPAWN_OFFSET_MIN + Math.random() * ENEMY_SPAWN_OFFSET_RANGE;
 
@@ -4158,7 +4532,7 @@
             const cy = player.y + Math.sin(angle) * spawnDistance;
 
             const diffMult = getDiffMultipliers();
-            const hpMultiplier = Math.pow(1.12, playerLevel - 1) * diffMult.enemyHP;
+            const hpMultiplier = Math.pow(1.09, playerLevel - 1) * diffMult.enemyHP;
             const speedMult = diffMult.enemySpeed;
 
             for (let i = 0; i < groupSize; i++) {
@@ -4189,6 +4563,14 @@
                 enemy.burstCooldown = 0;
                 enemy.spawnTime = gameTime;
                 enemy.offScreenTime = 0;
+                enemy.dead = false;
+                enemy.snareSlow = 0;
+                enemy.snareSlowTimer = 0;
+                enemy.permaSlowAmount = 0;
+                enemy.rootTimer = 0;
+                enemy.wasInSnare = false;
+                enemy.vulnerability = 0;
+                enemy.vulnerabilityTimer = 0;
                 enemies.push(enemy);
             }
         }
@@ -4217,9 +4599,23 @@
                 
                 // Apply velocity toward facing direction
                 const rad = e.angle * Math.PI / 180;
-                const targetVx = Math.cos(rad) * speed;
-                const targetVy = Math.sin(rad) * speed;
-                
+
+                // Calculate slow multiplier from debuffs
+                let speedMultiplier = 1;
+                if (e.snareSlowTimer > 0) {
+                    e.snareSlowTimer -= deltaTime;
+                    const rawSlow = (e.snareSlow || 0) + (e.permaSlowAmount || 0);
+                    const isCharger = e.type === 'KAMIKAZE' || e.type === 'BERSERKER';
+                    const slowAmount = isCharger ? rawSlow * 0.25 : rawSlow;
+                    speedMultiplier = Math.max(isCharger ? 0.75 : 0.40, 1 - slowAmount);
+                    if (e.snareSlowTimer <= 0) { e.snareSlow = 0; e.wasInSnare = false; }
+                } else if (e.permaSlowAmount > 0) {
+                    speedMultiplier = Math.max(0.50, 1 - e.permaSlowAmount);
+                }
+
+                const targetVx = Math.cos(rad) * speed * speedMultiplier;
+                const targetVy = Math.sin(rad) * speed * speedMultiplier;
+
                 // Smooth acceleration
                 e.vx += (targetVx - e.vx) * deltaTime * 2;
                 e.vy += (targetVy - e.vy) * deltaTime * 2;
@@ -4254,8 +4650,8 @@
                             const pushX = (sepDx / sepDist) * push;
                             const pushY = (sepDy / sepDist) * push;
 
-                            const eIsK = e.type === 'KAMIKAZE';
-                            const oIsK = other.type === 'KAMIKAZE';
+                            const eIsK = e.type === 'KAMIKAZE' || e.type === 'BERSERKER';
+                            const oIsK = other.type === 'KAMIKAZE' || other.type === 'BERSERKER';
 
                             if (eIsK && oIsK) {
                                 // Kamikazes push each other normally
@@ -4280,17 +4676,7 @@
                     }
                 }
                 
-                // Snare/Blade debuff timers
-                if (e.snareSlowTimer > 0) {
-                    e.snareSlowTimer -= deltaTime;
-                    const slowFactor = 1 - (e.snareSlow || 0) - (e.permaSlowAmount || 0);
-                    e.vx *= Math.max(0.1, slowFactor);
-                    e.vy *= Math.max(0.1, slowFactor);
-                    if (e.snareSlowTimer <= 0) { e.snareSlow = 0; e.wasInSnare = false; }
-                } else if (e.permaSlowAmount > 0) {
-                    e.vx *= Math.max(0.3, 1 - e.permaSlowAmount);
-                    e.vy *= Math.max(0.3, 1 - e.permaSlowAmount);
-                }
+                // Root effect (freeze on snare entry)
                 if (e.rootTimer > 0) {
                     e.rootTimer -= deltaTime;
                     e.vx = 0;
@@ -4301,10 +4687,11 @@
                     if (e.vulnerabilityTimer <= 0) e.vulnerability = 0;
                 }
 
-                // Kamikaze trail (push + reuse oldest for O(1))
-                if (e.type === 'KAMIKAZE') {
+                // Kamikaze/Berserker trail (push + reuse oldest for O(1))
+                if (e.type === 'KAMIKAZE' || e.type === 'BERSERKER') {
                     if (!e.trail) e.trail = [];
-                    if (e.trail.length >= 50) {
+                    const maxTrail = e.type === 'BERSERKER' ? 70 : 50;
+                    if (e.trail.length >= maxTrail) {
                         const old = e.trail.shift();
                         old.x = e.x; old.y = e.y;
                         e.trail.push(old);
@@ -4376,19 +4763,54 @@
             // Guard: don't kill already-dead enemies twice
             if (enemy.dead) return;
             enemy.dead = true;
+            AudioManager.play('enemyDeath');
 
             const config = ENEMY_TYPES[enemy.type];
 
             // Increment kill counter
             totalKills++;
 
-            // Spawn explosion ring
-            spawnRing(enemy.x, enemy.y, config.color, 40);
+            // Spawn explosion ring (bigger for bigger enemies)
+            const ringSize = enemy.type === 'LEVIATHAN' ? 80 : (enemy.type === 'BERSERKER' ? 60 : 40);
+            spawnRing(enemy.x, enemy.y, config.color, ringSize);
 
             // Direct XP gain
             if (!enemy.noXP) {
-                const xpValue = enemy.type === 'TANK' ? 5 : (enemy.type === 'KAMIKAZE' ? 2 : 1);
-                collectXP(xpValue);
+                const xpValue = enemy.type === 'BERSERKER' ? 8 : (enemy.type === 'TANK' ? 5 : (enemy.type === 'KAMIKAZE' ? 2 : ((enemy.type === 'ALIEN' || enemy.type === 'LEVIATHAN') ? 0 : 1)));
+                if (xpValue > 0) collectXP(xpValue);
+            }
+
+            // Leviathan splits into 4 aliens on death
+            if (enemy.type === 'LEVIATHAN' && enemies.length < HARD_MAX_ENEMIES) {
+                const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
+                const alienConfig = ENEMY_TYPES['ALIEN'];
+                const scaledAlienHp = Math.ceil(alienConfig.hp * hpMultiplier);
+                for (let i = 0; i < 4; i++) {
+                    const angle = (Math.PI * 2 / 4) * i + Math.random() * 0.3;
+                    const alien = pools.enemy.acquire();
+                    alien.x = enemy.x + Math.cos(angle) * 50;
+                    alien.y = enemy.y + Math.sin(angle) * 50;
+                    alien.vx = Math.cos(angle) * 60;
+                    alien.vy = Math.sin(angle) * 60;
+                    alien.angle = angle * 180 / Math.PI;
+                    alien.type = 'ALIEN';
+                    alien.hp = scaledAlienHp;
+                    alien.maxHp = scaledAlienHp;
+                    alien.fireTimer = 0;
+                    alien.burstCooldown = 0;
+                    alien.spawnTime = gameTime;
+                    alien.offScreenTime = 0;
+                    alien.noXP = enemy.noXP || false;
+                    alien.dead = false;
+                    alien.snareSlow = 0;
+                    alien.snareSlowTimer = 0;
+                    alien.permaSlowAmount = 0;
+                    alien.rootTimer = 0;
+                    alien.wasInSnare = false;
+                    alien.vulnerability = 0;
+                    alien.vulnerabilityTimer = 0;
+                    enemies.push(alien);
+                }
             }
 
             // Alien splits into 5 tanks on death
@@ -4413,6 +4835,13 @@
                     tank.offScreenTime = 0;
                     tank.noXP = enemy.noXP || false;
                     tank.dead = false;
+                    tank.snareSlow = 0;
+                    tank.snareSlowTimer = 0;
+                    tank.permaSlowAmount = 0;
+                    tank.rootTimer = 0;
+                    tank.wasInSnare = false;
+                    tank.vulnerability = 0;
+                    tank.vulnerabilityTimer = 0;
                     enemies.push(tank);
                 }
             }
@@ -4436,6 +4865,13 @@
                     scout.offScreenTime = 0;
                     scout.noXP = enemy.noXP || false;
                     scout.dead = false;
+                    scout.snareSlow = 0;
+                    scout.snareSlowTimer = 0;
+                    scout.permaSlowAmount = 0;
+                    scout.rootTimer = 0;
+                    scout.wasInSnare = false;
+                    scout.vulnerability = 0;
+                    scout.vulnerabilityTimer = 0;
                     enemies.push(scout);
                 }
             }
@@ -4531,9 +4967,11 @@
                 }
                 
                 if (dist < PLAYER_COLLISION_RADIUS + 15) {
+                    AudioManager.play('xpPickup');
                     if (p.type === 'health') {
                         if (player.hp < playerMaxHP) {
                             player.hp++;
+                            triggerLifeGain();
                             spawnFloatingText(p.x, p.y, '+1 Hull', COLORS.POWERUP);
                         } else {
                             spawnFloatingText(p.x, p.y, '+1 XP', COLORS.GOLD);
@@ -4594,6 +5032,7 @@
 
             // Only trigger effects and open skill tree once if leveled up
             if (levelsGained > 0) {
+                AudioManager.play('levelUp');
                 // Demo: trigger demoEnd screen at level cap
                 if (!isFullVersion && playerLevel >= DEMO_MAX_LEVEL) {
                     triggerFlash(COLORS.UI_PRIMARY, 0.3, 300);
@@ -5280,21 +5719,32 @@
             upgradeSelectionActive = true;
             gameState = 'skilltree';
 
-            // Dim game canvas, show overlay canvas on top
-            canvas.style.opacity = '0.3';
+            // Capture blurred snapshot of game canvas for background
+            const snapCanvas = document.createElement('canvas');
+            snapCanvas.width = CANVAS_WIDTH;
+            snapCanvas.height = CANVAS_HEIGHT;
+            const snapCtx = snapCanvas.getContext('2d');
+            snapCtx.filter = 'blur(8px)';
+            snapCtx.drawImage(canvas, 0, 0);
+            snapCtx.filter = 'none';
+            upgradeOverlay.bgSnapshot = snapCanvas;
+
+            // Hide game canvas, show overlay canvas on top
+            canvas.style.opacity = '0';
             upgradeCanvas.style.display = 'block';
 
             // Reset joystick state (visibility handled by gameLoop)
             joystickActive = false;
             joystickMagnitude = 0;
 
-            // Calculate card positions — vertical tall cards
+            // Calculate card positions — vertical tall cards, capped width like HUD
             const numCards = upgradeOptions.length;
             const padding = 20;
             const cardGap = 14;
-            const availW = CANVAS_WIDTH - padding * 2;
+            const maxCardsWidth = 640;
+            const availW = Math.min(CANVAS_WIDTH - padding * 2, maxCardsWidth);
             const cardW = Math.floor((availW - (numCards - 1) * cardGap) / numCards);
-            const cardH = 420;
+            const cardH = 380;
             const totalW = numCards * cardW + (numCards - 1) * cardGap;
             const startX = CANVAS_WIDTH / 2 - totalW / 2 + cardW / 2;
             const cardY = CANVAS_HEIGHT - 60 - cardH / 2;
@@ -5323,8 +5773,11 @@
             const t = upgradeOverlay.animTime;
             const cx = CANVAS_WIDTH / 2;
 
-            // Clear overlay canvas each frame
+            // Draw blurred game snapshot as background
             uCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            if (upgradeOverlay.bgSnapshot) {
+                uCtx.drawImage(upgradeOverlay.bgSnapshot, 0, 0);
+            }
 
             // --- Ship: real position from game world ---
             const shipScreen = player ? worldToScreen(player.x, player.y) : { x: cx, y: CANVAS_HEIGHT / 3 };
@@ -5359,9 +5812,9 @@
                 uCtx.restore();
             }
 
-            // --- Phase 3: "LEVEL UP" header + ship icon + level ---
+            // --- Phase 3: "LEVEL UP" header just above ship ---
             const levelUpAlpha = easeOutCubic(Math.min(Math.max(0, t - 0.15) / 0.35, 1));
-            const topY = 90;
+            const topY = shipY - 180;
             if (levelUpAlpha > 0) {
                 uCtx.save();
                 // "LEVEL UP" title
@@ -5386,6 +5839,12 @@
                 uCtx.moveTo(cx + textW, topY);
                 uCtx.lineTo(cx + textW + 60, topY);
                 uCtx.stroke();
+
+                // Subtitle
+                uCtx.globalAlpha = levelUpAlpha * 0.5;
+                uCtx.font = '18px "Segoe UI", system-ui, sans-serif';
+                uCtx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                uCtx.fillText('Choose an upgrade', cx, topY + 30);
 
                 uCtx.restore();
             }
@@ -5562,8 +6021,8 @@
             uCtx.globalAlpha = alpha;
 
             // Horizontal single row: all 4 weapon slots side by side
-            const slotSize = 50;
-            const slotGap = 12;
+            const slotSize = 80;
+            const slotGap = 16;
             const numSlots = MAX_ACTIVE_WEAPONS; // 4
             const totalW = numSlots * slotSize + (numSlots - 1) * slotGap;
             const startX = cx - totalW / 2;
@@ -5580,12 +6039,6 @@
                     const lvl = upgradeLevels[weaponId] || 0;
                     const isShip = (i === 0);
 
-                    // Slot background
-                    uCtx.fillStyle = 'rgba(15, 20, 35, 0.8)';
-                    uCtx.beginPath();
-                    uCtx.roundRect(sx, slotY, slotSize, slotSize, 8);
-                    uCtx.fill();
-
                     // Slot border
                     uCtx.strokeStyle = weapon.color;
                     uCtx.lineWidth = 2;
@@ -5595,17 +6048,17 @@
 
                     // Icon (ship or weapon)
                     if (isShip) {
-                        drawShipUpgradeIcon(uCtx, selectedStartingWeapon, slotCx, slotCy - 2, 0.95, weapon.color);
+                        drawShipUpgradeIcon(uCtx, selectedStartingWeapon, slotCx, slotCy, 0.75, weapon.color);
                     } else {
                         uCtx.save();
-                        uCtx.translate(slotCx, slotCy - 2);
-                        uCtx.scale(1.0, 1.0);
+                        uCtx.translate(slotCx, slotCy);
+                        uCtx.scale(1.8, 1.8);
                         drawSkillIcon(uCtx, weapon.icon, 0, 0, weapon.color);
                         uCtx.restore();
                     }
 
                     // Level text below slot
-                    const lvlText = lvl >= 10 ? 'MAX' : 'Lv.' + lvl;
+                    const lvlText = lvl >= 10 ? 'MAX' : 'Lv.' + (lvl + 1);
                     const lvlColor = lvl >= 10 ? COLORS.GOLD : weapon.color;
                     uCtx.font = 'bold 13px "Segoe UI", system-ui, sans-serif';
                     uCtx.textAlign = 'center';
@@ -5656,24 +6109,27 @@
             const innerPad = 16;
             let curY = cy - halfH + innerPad;
 
-            // Badge at top — every card gets a type label
+            // Badge at top — only for evolution and bonus
             const badgeText = option.isEvolution ? 'EVOLUTION'
-                : option.type === 'weapon_activation' ? 'NEW'
-                : option.type === 'upgrade' ? 'UPGRADE'
-                : 'BONUS';
-            uCtx.font = 'bold 16px "Segoe UI", system-ui, sans-serif';
-            uCtx.textAlign = 'center';
-            uCtx.textBaseline = 'top';
-            uCtx.fillStyle = COLORS.GOLD;
-            uCtx.fillText(badgeText, cx, curY);
+                : option.type === 'bonus' ? 'BONUS'
+                : null;
+            if (badgeText) {
+                uCtx.font = 'bold 16px "Segoe UI", system-ui, sans-serif';
+                uCtx.textAlign = 'center';
+                uCtx.textBaseline = 'top';
+                uCtx.fillStyle = COLORS.GOLD;
+                uCtx.fillText(badgeText, cx, curY);
+            }
             curY += 24;
 
-            // Icon centered
+            // Icon centered (rounded rectangle)
             const isStartingWeaponUpgrade = option.type === 'upgrade' && !option.isEvolution && WEAPONS[option.id]?.isStartingWeapon;
-            const iconR = 42;
-            const iconY = curY + iconR + 4;
+            const iconSize = 84;
+            const iconBoxX = cx - iconSize / 2;
+            const iconBoxY = curY + 4;
+            const iconCenterY = iconBoxY + iconSize / 2;
             uCtx.beginPath();
-            uCtx.arc(cx, iconY, iconR, 0, Math.PI * 2);
+            uCtx.roundRect(iconBoxX, iconBoxY, iconSize, iconSize, 12);
             uCtx.fillStyle = color + '10';
             uCtx.fill();
             uCtx.strokeStyle = borderColor;
@@ -5681,28 +6137,31 @@
             uCtx.stroke();
 
             if (isStartingWeaponUpgrade) {
-                drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, iconY + 2, 0.85, color);
+                drawShipUpgradeIcon(uCtx, selectedStartingWeapon, cx, iconCenterY + 2, 0.85, color);
             } else {
                 uCtx.save();
-                uCtx.translate(cx, iconY);
+                uCtx.translate(cx, iconCenterY);
                 uCtx.scale(2.0, 2.0);
                 drawSkillIcon(uCtx, option.icon, 0, 0, color);
                 uCtx.restore();
             }
-            curY = iconY + iconR + 12;
+            curY = iconBoxY + iconSize + 12;
 
             // Weapon name (centered)
             uCtx.textAlign = 'center';
             uCtx.textBaseline = 'top';
-            uCtx.font = 'bold 22px "Segoe UI", system-ui, sans-serif';
             uCtx.fillStyle = nameColor;
             let displayName = isStartingWeaponUpgrade ? 'Upgrade Ship' : option.name;
             const maxNameW = w - innerPad * 2;
-            while (uCtx.measureText(displayName).width > maxNameW && displayName.length > 5) {
-                displayName = displayName.slice(0, -1);
+            // Try 30px first, shrink if needed to fit
+            let nameFontSize = 30;
+            uCtx.font = 'bold ' + nameFontSize + 'px "Segoe UI", system-ui, sans-serif';
+            while (uCtx.measureText(displayName).width > maxNameW && nameFontSize > 18) {
+                nameFontSize -= 2;
+                uCtx.font = 'bold ' + nameFontSize + 'px "Segoe UI", system-ui, sans-serif';
             }
             uCtx.fillText(displayName, cx, curY);
-            curY += 30;
+            curY += nameFontSize + 8;
 
             // Thin accent line
             const lineW = Math.min(w * 0.6, 120);
@@ -5714,48 +6173,70 @@
             uCtx.stroke();
             curY += 10;
 
-            // Description (centered, word-wrapped)
-            uCtx.font = '18px "Segoe UI", system-ui, sans-serif';
-            uCtx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            uCtx.textAlign = 'center';
-            uCtx.textBaseline = 'top';
-            const descMaxW = w - innerPad * 2 - 4;
-            const words = option.description.split(' ');
-            let lines = [];
-            let currentLine = '';
-            for (const word of words) {
-                const testLine = currentLine ? currentLine + ' ' + word : word;
-                if (uCtx.measureText(testLine).width > descMaxW && currentLine) {
-                    lines.push(currentLine);
-                    currentLine = word;
-                } else {
-                    currentLine = testLine;
-                }
-            }
-            if (currentLine) lines.push(currentLine);
-            for (const line of lines) {
-                uCtx.fillText(line, cx, curY);
-                curY += 24;
+            // --- Bottom section: laid out from bottom upward ---
+            const btnText = option.isEvolution ? 'EVOLVE'
+                : option.type === 'weapon_activation' ? 'INSTALL'
+                : option.type === 'upgrade' ? 'UPGRADE'
+                : 'APPLY';
+            const btnColor = option.isEvolution ? COLORS.GOLD : color;
+            const btnW = w - innerPad * 2;
+            const btnH = 44;
+            const btnX = cx - btnW / 2;
+            const btnY = cy + halfH - innerPad - btnH;
+
+            // Action button
+            uCtx.beginPath();
+            uCtx.roundRect(btnX, btnY, btnW, btnH, 8);
+            const isInstall = option.type === 'weapon_activation';
+            const btnLabel = !isMobile() ? btnText + '  [' + (index + 1) + ']' : btnText;
+            if (isInstall) {
+                // Inverted: filled background, dark text
+                uCtx.fillStyle = btnColor;
+                uCtx.fill();
+                uCtx.font = 'bold 20px "Segoe UI", system-ui, sans-serif';
+                uCtx.textAlign = 'center';
+                uCtx.textBaseline = 'middle';
+                uCtx.fillStyle = '#0a0e1a';
+                uCtx.fillText(btnLabel, cx, btnY + btnH / 2);
+            } else {
+                // Outline style
+                uCtx.fillStyle = btnColor + '20';
+                uCtx.fill();
+                uCtx.strokeStyle = btnColor;
+                uCtx.lineWidth = 1.5;
+                uCtx.stroke();
+                uCtx.font = 'bold 20px "Segoe UI", system-ui, sans-serif';
+                uCtx.textAlign = 'center';
+                uCtx.textBaseline = 'middle';
+                uCtx.fillStyle = btnColor;
+                uCtx.fillText(btnLabel, cx, btnY + btnH / 2);
             }
 
-            // Level progress bar at bottom (10 segments, single row, full width)
+            // Level progress bar above button
+            let bottomLimit = btnY - 8; // space above button where description must stop
             if (option.type === 'weapon_activation' || option.type === 'upgrade') {
-                const currentLevel = option.type === 'weapon_activation' ? 0 : (option.level - 1);
+                // filledSegs = how many progress bar segments to fill
+                // displayLv = the level shown to the user (activation counts as level 1)
+                // weapon_activation: 0 filled, display "Lv. 1" (installing gives level 1)
+                // upgrade: option.level = upgradeLevels + 1 (target level)
+                //   upgradeLevels = option.level - 1, displayLv = upgradeLevels + 1 (activation) = option.level
+                const filledSegs = option.type === 'weapon_activation' ? 0 : option.level;
+                const displayLv = option.type === 'weapon_activation' ? 1 : (option.level + 1);
                 const barPad = innerPad;
                 const barW = w - barPad * 2;
                 const segGap = 3;
                 const numSegs = 10;
                 const segW = (barW - (numSegs - 1) * segGap) / numSegs;
                 const segH = 14;
-                const barY = cy + halfH - 50;
+                const barY = btnY - 12 - segH;
                 const barX = cx - barW / 2;
 
                 // "Lv. X" label above bar
                 uCtx.font = 'bold 14px "Segoe UI", system-ui, sans-serif';
                 uCtx.textAlign = 'center';
                 uCtx.textBaseline = 'bottom';
-                uCtx.fillStyle = color;
-                uCtx.fillText('Lv. ' + currentLevel, cx, barY - 4);
+                uCtx.fillStyle = COLORS.GOLD;
+                uCtx.fillText('Lv. ' + displayLv, cx, barY - 4);
 
                 for (let d = 0; d < numSegs; d++) {
                     const sx = barX + d * (segW + segGap);
@@ -5768,15 +6249,15 @@
                         uCtx.strokeStyle = COLORS.GOLD;
                         uCtx.lineWidth = 0.5;
                         uCtx.stroke();
-                    } else if (d < currentLevel) {
-                        uCtx.fillStyle = color;
+                    } else if (d < filledSegs) {
+                        uCtx.fillStyle = COLORS.GOLD;
                         uCtx.globalAlpha = alpha * 0.8;
                         uCtx.fill();
                         uCtx.globalAlpha = alpha;
-                    } else if (d === currentLevel) {
-                        uCtx.fillStyle = color;
+                    } else if (d === filledSegs) {
+                        uCtx.fillStyle = COLORS.GOLD;
                         uCtx.fill();
-                        uCtx.strokeStyle = color;
+                        uCtx.strokeStyle = COLORS.GOLD;
                         uCtx.lineWidth = 1.5;
                         uCtx.stroke();
                     } else {
@@ -5787,6 +6268,43 @@
                         uCtx.stroke();
                     }
                 }
+                bottomLimit = barY - 22; // account for "Lv. X" label
+            }
+
+            // Description (centered, word-wrapped, adaptive font to fit available space)
+            uCtx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            uCtx.textAlign = 'center';
+            uCtx.textBaseline = 'top';
+            const descMaxW = w - innerPad * 2 - 4;
+            const availDescH = bottomLimit - curY;
+
+            // Try font sizes from 26 down, pick largest that fits
+            let descFontSize = 26;
+            let descLineH = 32;
+            let lines;
+            while (descFontSize >= 16) {
+                uCtx.font = descFontSize + 'px "Segoe UI", system-ui, sans-serif';
+                descLineH = descFontSize + 6;
+                lines = [];
+                let currentLine = '';
+                const words = option.description.split(' ');
+                for (const word of words) {
+                    const testLine = currentLine ? currentLine + ' ' + word : word;
+                    if (uCtx.measureText(testLine).width > descMaxW && currentLine) {
+                        lines.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                if (currentLine) lines.push(currentLine);
+                if (lines.length * descLineH <= availDescH) break;
+                descFontSize -= 2;
+            }
+            uCtx.font = descFontSize + 'px "Segoe UI", system-ui, sans-serif';
+            for (const line of lines) {
+                uCtx.fillText(line, cx, curY);
+                curY += descLineH;
             }
 
             uCtx.restore();
@@ -5867,6 +6385,7 @@
             // Restore game canvas and hide overlay canvas
             canvas.style.opacity = '1';
             upgradeCanvas.style.display = 'none';
+            upgradeOverlay.bgSnapshot = null;
 
             gameState = 'playing';
         }
@@ -6353,7 +6872,6 @@
                     s.permaSlow = stats.snarePermaSlow;
                     s.killRefresh = stats.snareKillRefresh;
                     s.deathBurst = stats.snareDeathBurst;
-                    s.isCage = false;
                     s.stackSlow = stats.snareStackSlow;
                     snares.push(s);
                 }
@@ -6361,19 +6879,64 @@
                 snareDeployAngle += (2 * stats.snareRadius) / SNARE_SPAWN_RADIUS;
             }
 
-            // Temporal Cage evolution
+            // Temporal Cage evolution — spawn trap hexes around snares
             if (stats.hasTemporalCage) {
                 temporalCageTimer -= deltaTime;
                 if (temporalCageTimer <= 0 && snares.length > 0) {
-                    temporalCageTimer = 10;
-                    // Transform the oldest snare
-                    const oldest = snares[0];
-                    oldest.isCage = true;
-                    oldest.radius *= 2;
-                    oldest.dps *= 3;
-                    oldest.life = 5;
-                    oldest.maxLife = 5;
-                    oldest.rootDuration = 1.0;
+                    temporalCageTimer = 3;
+                    const MAX_TRAP_HEXES = 30;
+                    // Pick a random snare and place trap hexes within its grid
+                    const s = snares[Math.floor(Math.random() * snares.length)];
+                    const hexSize = s.radius * 0.18;
+                    const colStep = hexSize * 1.5;
+                    const rowStep = hexSize * 1.732050808;
+                    const count = 3 + Math.floor(Math.random() * 3); // 3-5 traps per burst
+                    for (let t = 0; t < count && trapHexes.length < MAX_TRAP_HEXES; t++) {
+                        // Pick a random hex cell within snare radius
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = Math.random() * s.radius * 0.8;
+                        const rawX = s.x + Math.cos(angle) * dist;
+                        const rawY = s.y + Math.sin(angle) * dist;
+                        // Snap to hex grid
+                        const ci = Math.round(rawX / colStep);
+                        const yOff = (ci & 1) ? rowStep * 0.5 : 0;
+                        const ri = Math.round((rawY - yOff) / rowStep);
+                        const wx = ci * colStep;
+                        const wy = ri * rowStep + yOff;
+                        // Don't duplicate positions
+                        let dupe = false;
+                        for (const th of trapHexes) {
+                            if (Math.abs(th.x - wx) < 1 && Math.abs(th.y - wy) < 1) { dupe = true; break; }
+                        }
+                        if (!dupe) {
+                            trapHexes.push({ x: wx, y: wy, size: hexSize, life: 8 });
+                        }
+                    }
+                }
+            }
+
+            // Update trap hexes — check enemy collisions, expire
+            for (let i = trapHexes.length - 1; i >= 0; i--) {
+                const th = trapHexes[i];
+                th.life -= deltaTime;
+                if (th.life <= 0) {
+                    fastRemove(trapHexes, i);
+                    continue;
+                }
+                // Check if any enemy is on this hex
+                const nearby = spatialGrid.queryRadius(th.x, th.y, th.size * 1.2);
+                let triggered = false;
+                for (const e of nearby) {
+                    const dx = e.x - th.x;
+                    const dy = e.y - th.y;
+                    if (dx * dx + dy * dy < th.size * th.size) {
+                        e.rootTimer = Math.max(e.rootTimer || 0, 0.5);
+                        triggered = true;
+                    }
+                }
+                if (triggered) {
+                    spawnRing(th.x, th.y, COLORS.PLAYER, th.size * 2);
+                    fastRemove(trapHexes, i);
                 }
             }
 
@@ -6428,7 +6991,7 @@
 
                         // Permanent slow
                         if (s.permaSlow > 0) {
-                            e.permaSlowAmount = Math.min(0.50, (e.permaSlowAmount || 0) + s.permaSlow * 0.1);
+                            e.permaSlowAmount = Math.min(0.20, (e.permaSlowAmount || 0) + s.permaSlow * 0.05);
                         }
 
                         if (e.hp <= 0) {
@@ -6924,10 +7487,11 @@
 
             beamState.targets = newTargets;
 
-            // Damage ticks
+            // Damage ticks + chain targeting
             for (const t of beamState.targets) {
                 t.tickTimer += deltaTime;
-                if (t.tickTimer >= stats.beamTickRate) {
+                const tickFired = t.tickTimer >= stats.beamTickRate;
+                if (tickFired) {
                     t.tickTimer -= stats.beamTickRate;
                     const baseDamage = stats.beamDPS * stats.beamTickRate * (1 + t.rampCurrent);
 
@@ -6937,33 +7501,48 @@
                     if (t.enemy.hp <= 0) {
                         handleBeamKill(t.enemy, stats);
                     }
+                    t._lastChainDmg = baseDamage * stats.beamChainDamage;
+                }
 
-                    // Chain beams: damage nearby enemies around the target
-                    if (stats.beamChainCount > 0 && t.enemy.hp > 0) {
-                        const chainDmg = baseDamage * stats.beamChainDamage;
-                        const chainNearby = spatialGrid.queryRadius(t.enemy.x, t.enemy.y, stats.beamChainRange);
-                        // Sort by distance to target enemy (closest first)
-                        const tx = t.enemy.x, ty = t.enemy.y;
-                        const chainCandidates = [];
+                // Rebuild chain targets every frame (like lightning: sequential nearest-enemy chain)
+                // Store {x, y, enemy} snapshots so render doesn't depend on pool-recycled objects
+                if (stats.beamChainCount > 0 && t.enemy.hp > 0 && !t.enemy.dead) {
+                    const chainRangeSq = stats.beamChainRange * stats.beamChainRange;
+                    const hitSet = new Set();
+                    hitSet.add(t.enemy);
+                    const newChainTargets = [];
+                    let currentX = t.enemy.x, currentY = t.enemy.y;
+
+                    for (let ci = 0; ci < stats.beamChainCount; ci++) {
+                        // Find closest enemy to current chain point (like lightning does)
+                        let bestEnemy = null;
+                        let bestDistSq = Infinity;
+                        const chainNearby = spatialGrid.queryRadius(currentX, currentY, stats.beamChainRange);
                         for (const e of chainNearby) {
-                            if (e === t.enemy || e.hp <= 0 || e.dead) continue;
-                            const cdx = e.x - tx, cdy = e.y - ty;
-                            chainCandidates.push({ enemy: e, distSq: cdx * cdx + cdy * cdy });
+                            if (hitSet.has(e) || e.hp <= 0 || e.dead) continue;
+                            const cdx = e.x - currentX, cdy = e.y - currentY;
+                            const distSq = cdx * cdx + cdy * cdy;
+                            if (distSq <= chainRangeSq && distSq < bestDistSq) {
+                                bestDistSq = distSq;
+                                bestEnemy = e;
+                            }
                         }
-                        chainCandidates.sort((a, b) => a.distSq - b.distSq);
-                        // Build chain targets from closest
-                        if (!t.chainTargets) t.chainTargets = [];
-                        const newChainTargets = [];
-                        for (let ci = 0; ci < chainCandidates.length && newChainTargets.length < stats.beamChainCount; ci++) {
-                            const e = chainCandidates[ci].enemy;
-                            newChainTargets.push(e);
-                            e.hp -= chainDmg;
-                            if (e.hp <= 0) killEnemy(e);
+                        if (!bestEnemy) break;
+                        // Snapshot coordinates at selection time (immune to pool reset)
+                        newChainTargets.push({ x: bestEnemy.x, y: bestEnemy.y, enemy: bestEnemy });
+                        hitSet.add(bestEnemy);
+                        currentX = bestEnemy.x;
+                        currentY = bestEnemy.y;
+
+                        // Apply chain damage only on tick
+                        if (tickFired && t._lastChainDmg > 0) {
+                            bestEnemy.hp -= t._lastChainDmg;
+                            if (bestEnemy.hp <= 0) killEnemy(bestEnemy);
                         }
-                        t.chainTargets = newChainTargets;
-                    } else if (stats.beamChainCount === 0) {
-                        t.chainTargets = [];
                     }
+                    t.chainTargets = newChainTargets;
+                } else {
+                    t.chainTargets = [];
                 }
             }
 
@@ -6992,18 +7571,27 @@
             for (let i = beamState.siphonBeams.length - 1; i >= 0; i--) {
                 const sb = beamState.siphonBeams[i];
                 sb.duration -= deltaTime;
+
+                // Mark dead targets every frame (before pool recycles them)
+                for (const st of sb.targets) {
+                    if (st.alive && (st.enemy.hp <= 0 || st.enemy.dead)) {
+                        st.alive = false;
+                    }
+                }
+
                 sb.tickTimer = (sb.tickTimer || 0) + deltaTime;
                 if (sb.tickTimer >= 0.1) {
                     sb.tickTimer -= 0.1;
                     const tickDmg = sb.dps * 0.1;
                     for (const st of sb.targets) {
-                        if (st.enemy.hp > 0 && !st.enemy.dead) {
-                            st.enemy.hp -= tickDmg;
-                            if (st.enemy.hp <= 0) killEnemy(st.enemy);
+                        if (!st.alive) continue;
+                        st.enemy.hp -= tickDmg;
+                        if (st.enemy.hp <= 0) {
+                            killEnemy(st.enemy);
+                            st.alive = false;
                         }
                     }
-                    // Clean dead siphon targets
-                    sb.targets = sb.targets.filter(st => st.enemy.hp > 0 && !st.enemy.dead);
+                    sb.targets = sb.targets.filter(st => st.alive);
                 }
                 if (sb.duration <= 0 || sb.targets.length === 0) {
                     beamState.siphonBeams.splice(i, 1);
@@ -7015,10 +7603,14 @@
             // Siphon Nexus evolution: killed enemies emit beams to 3 nearby enemies
             if (stats.hasSiphonNexus) {
                 const nearby = spatialGrid.queryRadius(enemy.x, enemy.y, 200);
+                const siphonRangeSq = 200 * 200;
                 const siphonTargets = [];
                 for (const e of nearby) {
                     if (e !== enemy && e.hp > 0 && !e.dead && siphonTargets.length < 3) {
-                        siphonTargets.push({ enemy: e });
+                        const sdx = e.x - enemy.x, sdy = e.y - enemy.y;
+                        if (sdx * sdx + sdy * sdy <= siphonRangeSq) {
+                            siphonTargets.push({ enemy: e, alive: true });
+                        }
                     }
                 }
                 if (siphonTargets.length > 0) {
@@ -7259,9 +7851,9 @@
                 if (distSq < collisionDistSq && player.invulnerable <= 0) {
                     damagePlayer();
 
-                    // Kamikaze dies on contact
-                    if (e.type === 'KAMIKAZE') {
-                        spawnRing(e.x, e.y, config.color, 50);
+                    // Kamikaze/Berserker dies on contact
+                    if (e.type === 'KAMIKAZE' || e.type === 'BERSERKER') {
+                        spawnRing(e.x, e.y, config.color, e.type === 'BERSERKER' ? 60 : 50);
                         e.dead = true;
                     }
                 }
@@ -7296,6 +7888,8 @@
         }
 
         function damagePlayer() {
+            AudioManager.play('playerHit');
+            recentDamageEvents++;
             // Reset shield regen timer
             player.shieldRegenTimer = 0;
 
@@ -7314,8 +7908,14 @@
                 player.shield = 0;
 
                 if (player.hp <= 0) {
-                    player.shield = 0; // Stay at 0 for death
-                    gameOver();
+                    if (!player.lastChance) {
+                        // One extra chance — play with 0 lives shown
+                        player.lastChance = true;
+                        triggerShieldBreak();
+                    } else {
+                        player.shield = 0; // Stay at 0 for death
+                        gameOver();
+                    }
                 } else {
                     // Trigger epic shield break sequence
                     triggerShieldBreak();
@@ -7443,7 +8043,47 @@
                 }
             }
         }
-        
+
+        function triggerLifeGain() {
+            // gainedSlotIndex is the NEW slot that just filled (hp was already incremented)
+            lifeGainState = {
+                phaseTimer: 0,
+                lifeSlotAlpha: 0,
+                gainedSlotIndex: player.hp - 1,
+                gainedSlotProgress: 0,
+                totalHP: player.hp,
+            };
+            triggerShake(4, 150);
+        }
+
+        function updateLifeGainAnimation(rawDt) {
+            if (!lifeGainState || !player) return;
+            const s = lifeGainState;
+
+            s.phaseTimer += rawDt;
+
+            // Timeline (total ~0.7s, no slowmo):
+            // 0.00–0.10s: fade in all slots
+            // 0.10–0.25s: hold (all slots visible, new slot not yet popping)
+            // 0.25–0.55s: new slot pops in (scale 0 → 1.4 → 1.0)
+            // 0.55–0.70s: fade out
+            if (s.phaseTimer < 0.10) {
+                s.lifeSlotAlpha = s.phaseTimer / 0.10;
+                s.gainedSlotProgress = 0;
+            } else if (s.phaseTimer < 0.25) {
+                s.lifeSlotAlpha = 1.0;
+                s.gainedSlotProgress = 0;
+            } else if (s.phaseTimer < 0.55) {
+                s.lifeSlotAlpha = 1.0;
+                s.gainedSlotProgress = (s.phaseTimer - 0.25) / 0.30;
+            } else if (s.phaseTimer < 0.70) {
+                s.lifeSlotAlpha = 1.0 - (s.phaseTimer - 0.55) / 0.15;
+                s.gainedSlotProgress = 1.0;
+            } else {
+                lifeGainState = null;
+            }
+        }
+
         function triggerNearMiss() {
             triggerSlowmo(SLOWMO_DURATION);
             
@@ -7477,7 +8117,7 @@
             // Crystal calculation
             const killBonus = Math.floor(totalKills / 50);
             const baseCrystals = crystalsThisRun + killBonus;
-            const totalCrystals = Math.round(baseCrystals * permCrystalMulti);
+            const totalCrystals = Math.round(baseCrystals * permCrystalMulti * getDiffMultipliers().crystals);
             lastRunCrystals = {
                 picked: crystalsThisRun,
                 killBonus: killBonus,
@@ -7491,6 +8131,28 @@
                 prog.crystals = (prog.crystals || 0) + totalCrystals;
                 prog.stats.totalKills = (prog.stats.totalKills || 0) + totalKills;
                 prog.stats.totalCrystalsEarned = (prog.stats.totalCrystalsEarned || 0) + totalCrystals;
+
+                // Best kills record
+                lastRunBestKills = prog.stats.bestKills || 0;
+                lastRunIsNewRecord = totalKills > lastRunBestKills;
+                if (lastRunIsNewRecord) {
+                    prog.stats.bestKills = totalKills;
+                }
+
+                // Run history tracking
+                const deathCause = enemies.length > 30 ? 'overwhelm' : 'damage';
+                prog.runHistory = prog.runHistory || [];
+                prog.runHistory.push({
+                    timestamp: Date.now(),
+                    survivalTime: Math.floor(gameTime),
+                    waveReached: waveNumber,
+                    levelReached: playerLevel,
+                    totalKills: totalKills,
+                    weapon: selectedStartingWeapon,
+                    deathCause: deathCause
+                });
+                if (prog.runHistory.length > 10) prog.runHistory = prog.runHistory.slice(-10);
+
                 saveProgression(prog);
             } catch (e) {
                 console.warn('Could not save crystals:', e);
@@ -7725,6 +8387,7 @@
                     renderPlayer();
                     renderShieldArc();
                     renderShieldBreakEffects();
+                    renderLifeGainEffects();
                     renderOrbitals();
                     renderLightning();
                     renderNovaBeam();
@@ -7923,14 +8586,16 @@
 
             // ── LIFE SLOTS OVERLAY ──
             if (s.phase === 'lifeslots' && s.lifeSlotAlpha > 0) {
-                const totalWidth = (playerMaxHP - 1) * LIFE_SLOT_SPACING;
+                const slotsToShow = s.lostSlotIndex + 1;
+                const totalWidth = (slotsToShow - 1) * LIFE_SLOT_SPACING;
                 const startX = player.x - totalWidth / 2;
                 const slotY = player.y + LIFE_SLOT_OFFSET_Y;
 
                 ctx.save();
                 ctx.lineCap = 'round';
 
-                for (let i = 0; i < playerMaxHP; i++) {
+                // Only show slots up to lostSlotIndex (already-lost slots beyond it are hidden)
+                for (let i = 0; i <= s.lostSlotIndex; i++) {
                     const slotX = startX + i * LIFE_SLOT_SPACING;
                     const isLost = (i === s.lostSlotIndex);
                     const isActive = (i < player.hp);
@@ -7967,7 +8632,15 @@
 
                     ctx.lineWidth = 3;
                     drawShipPath(ctx, selectedStartingWeapon);
+                    if (isLost) {
+                        ctx.shadowColor = ctx.strokeStyle;
+                        ctx.shadowBlur = 20;
+                    } else if (isActive) {
+                        ctx.shadowColor = COLORS.PLAYER;
+                        ctx.shadowBlur = 15;
+                    }
                     ctx.stroke();
+                    ctx.shadowBlur = 0;
 
                     ctx.restore();
                 }
@@ -7975,6 +8648,73 @@
                 ctx.globalAlpha = 1;
                 ctx.restore();
             }
+        }
+
+        function renderLifeGainEffects() {
+            if (!lifeGainState || !player) return;
+            const s = lifeGainState;
+            if (s.lifeSlotAlpha <= 0) return;
+
+            const slotsToShow = s.totalHP;
+            const totalWidth = (slotsToShow - 1) * LIFE_SLOT_SPACING;
+            const startX = player.x - totalWidth / 2;
+            const slotY = player.y + LIFE_SLOT_OFFSET_Y;
+
+            ctx.save();
+            ctx.lineCap = 'round';
+
+            for (let i = 0; i < slotsToShow; i++) {
+                const slotX = startX + i * LIFE_SLOT_SPACING;
+                const isGained = (i === s.gainedSlotIndex);
+
+                let alpha = s.lifeSlotAlpha;
+                let scale = LIFE_SLOT_SCALE;
+
+                if (isGained) {
+                    const p = s.gainedSlotProgress;
+                    if (p <= 0) {
+                        // Not yet appearing — draw as empty
+                        ctx.strokeStyle = COLORS.HUD_CYAN_DIM;
+                        alpha *= 0.3;
+                    } else if (p < 0.5) {
+                        // Pop in — scale 0 → 1.4, green flash
+                        const popT = easeOutCubic(p / 0.5);
+                        scale *= 1.4 * popT;
+                        ctx.strokeStyle = '#FFFFFF';
+                    } else {
+                        // Settle — scale 1.4 → 1.0, white → cyan
+                        const settleT = easeOutCubic((p - 0.5) / 0.5);
+                        scale *= 1.4 - 0.4 * settleT;
+                        ctx.strokeStyle = lerpColor('#FFFFFF', COLORS.PLAYER, settleT);
+                    }
+                } else {
+                    // Already-filled slots
+                    ctx.strokeStyle = COLORS.PLAYER;
+                }
+
+                ctx.globalAlpha = alpha;
+                ctx.save();
+                ctx.translate(slotX, slotY);
+                ctx.scale(scale, scale);
+                ctx.rotate(-Math.PI / 2);
+
+                ctx.lineWidth = 3;
+                drawShipPath(ctx, selectedStartingWeapon);
+                if (isGained && s.gainedSlotProgress > 0) {
+                    ctx.shadowColor = ctx.strokeStyle;
+                    ctx.shadowBlur = 20;
+                } else {
+                    ctx.shadowColor = COLORS.PLAYER;
+                    ctx.shadowBlur = 15;
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                ctx.restore();
+            }
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
         }
 
 
@@ -8181,6 +8921,29 @@
                 ctx.lineTo(t.enemy.x, t.enemy.y);
                 ctx.stroke();
 
+                // Traveling energy pulses along the beam
+                const beamDx = t.enemy.x - originX;
+                const beamDy = t.enemy.y - originY;
+                const beamLen = Math.sqrt(beamDx * beamDx + beamDy * beamDy);
+                if (beamLen > 1) {
+                    const pulseRadius = width * 0.85;
+                    const pulseSpacing = 40;
+                    const speed = 300; // px/s
+                    const offset = (Date.now() / 1000 * speed) % pulseSpacing;
+                    const nx = beamDx / beamLen, ny = beamDy / beamLen;
+                    ctx.strokeStyle = COLORS.PLAYER;
+                    ctx.lineWidth = 1.5;
+                    ctx.globalAlpha = 0.35;
+                    ctx.beginPath();
+                    for (let d = offset; d < beamLen; d += pulseSpacing) {
+                        const px = originX + nx * d;
+                        const py = originY + ny * d;
+                        ctx.moveTo(px + pulseRadius, py);
+                        ctx.arc(px, py, pulseRadius, 0, Math.PI * 2);
+                    }
+                    ctx.stroke();
+                }
+
                 // Impact point flash
                 const flashSize = 4 + Math.sin(Date.now() / 80) * 2;
                 ctx.globalAlpha = 0.7;
@@ -8189,17 +8952,18 @@
                 ctx.arc(t.enemy.x, t.enemy.y, flashSize, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Chain beams from target to nearby enemies
+                // Chain beams: sequential chain (A→B→C like lightning)
+                // Uses snapshot {x, y} coords — immune to pool recycling
                 if (t.chainTargets && t.chainTargets.length > 0) {
-                    for (const ce of t.chainTargets) {
-                        if (!ce || ce.hp <= 0 || ce.dead) continue;
+                    let prevX = t.enemy.x, prevY = t.enemy.y;
+                    for (const ct of t.chainTargets) {
                         // Chain beam line (thinner, slightly dimmer)
                         ctx.strokeStyle = COLORS.PLAYER;
                         ctx.lineWidth = 3;
                         ctx.globalAlpha = 0.4;
                         ctx.beginPath();
-                        ctx.moveTo(t.enemy.x, t.enemy.y);
-                        ctx.lineTo(ce.x, ce.y);
+                        ctx.moveTo(prevX, prevY);
+                        ctx.lineTo(ct.x, ct.y);
                         ctx.stroke();
 
                         // Chain beam white core
@@ -8207,9 +8971,12 @@
                         ctx.lineWidth = 1.2;
                         ctx.globalAlpha = 0.5;
                         ctx.beginPath();
-                        ctx.moveTo(t.enemy.x, t.enemy.y);
-                        ctx.lineTo(ce.x, ce.y);
+                        ctx.moveTo(prevX, prevY);
+                        ctx.lineTo(ct.x, ct.y);
                         ctx.stroke();
+
+                        prevX = ct.x;
+                        prevY = ct.y;
                     }
                 }
             }
@@ -8230,7 +8997,7 @@
             for (const sb of beamState.siphonBeams) {
                 const lifeRatio = sb.duration / 2.0;
                 for (const st of sb.targets) {
-                    if (!st.enemy || st.enemy.hp <= 0) continue;
+                    if (!st.alive) continue;
                     ctx.strokeStyle = COLORS.PLAYER;
                     ctx.lineWidth = 3;
                     ctx.globalAlpha = 0.4 * lifeRatio;
@@ -8271,6 +9038,15 @@
                 ctx.beginPath();
                 ctx.arc(orbX, orbY, orbitalSize, 0, Math.PI * 2);
                 ctx.stroke();
+
+                // Inner detail stroke (like scout enemies)
+                ctx.globalAlpha = 0.4;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(orbX, orbY, orbitalSize * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+                ctx.lineWidth = 2.5;
             }
         }
 
@@ -8712,7 +9488,7 @@
 
         function renderEnemies() {
             // Sort enemies by type for batched rendering
-            const byType = { SCOUT: [], KAMIKAZE: [], TANK: [], ALIEN: [] };
+            const byType = { SCOUT: [], KAMIKAZE: [], TANK: [], ALIEN: [], BERSERKER: [], LEVIATHAN: [] };
 
             for (const e of enemies) {
                 if (shouldRenderEntity(e, CULLING_DISTANCES.enemies)) {
@@ -8810,7 +9586,7 @@
                 }
             }
 
-            // Batch render aliens (large green enemies)
+            // Batch render aliens (large enemies)
             if (byType.ALIEN.length > 0) {
                 const config = ENEMY_TYPES['ALIEN'];
 
@@ -8826,25 +9602,116 @@
                     ctx.arc(0, 0, config.radius, 0, Math.PI * 2);
                     ctx.stroke();
 
-                    // Inner hexagon
-                    ctx.strokeStyle = config.outline;
-                    ctx.lineWidth = 2;
+                    // Inner detail circle (same style as scout/tank)
+                    ctx.globalAlpha = 0.4;
+                    ctx.lineWidth = 1.5;
                     ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (Math.PI / 3) * i + gameTime * 2;
-                        const x = Math.cos(angle) * config.radius * 0.6;
-                        const y = Math.sin(angle) * config.radius * 0.6;
-                        if (i === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
-                    }
-                    ctx.closePath();
+                    ctx.arc(0, 0, config.radius * 0.6, 0, Math.PI * 2);
                     ctx.stroke();
+                    ctx.globalAlpha = 1;
 
                     // Pulsing core
                     ctx.fillStyle = config.color;
                     ctx.globalAlpha = 0.3 + Math.sin(gameTime * 5) * 0.15;
                     ctx.beginPath();
                     ctx.arc(0, 0, config.radius * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+
+                    ctx.restore();
+                }
+            }
+
+            // Batch render berserkers with trail (no shadowBlur for performance)
+            if (byType.BERSERKER.length > 0) {
+                const config = ENEMY_TYPES['BERSERKER'];
+
+                for (const e of byType.BERSERKER) {
+                    // Draw trail (wider and more intense than kamikaze)
+                    if (e.trail && e.trail.length > 1) {
+                        for (let t = 0; t < e.trail.length - 1; t++) {
+                            const alpha = (t + 1) / e.trail.length;
+                            const width = 3.5 * alpha;
+                            ctx.strokeStyle = `rgba(255, 68, 34, ${alpha * 0.7})`;
+                            ctx.lineWidth = width;
+                            ctx.beginPath();
+                            ctx.moveTo(e.trail[t].x, e.trail[t].y);
+                            ctx.lineTo(e.trail[t + 1].x, e.trail[t + 1].y);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Draw berserker diamond (same shape as kamikaze, bigger)
+                    ctx.strokeStyle = config.color;
+                    ctx.lineWidth = 3.5;
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+                    ctx.rotate(e.angle * Math.PI / 180);
+
+                    // Outer diamond
+                    ctx.beginPath();
+                    ctx.moveTo(config.radius, 0);
+                    ctx.lineTo(-config.radius, -config.radius * 0.7);
+                    ctx.lineTo(-config.radius * 0.5, 0);
+                    ctx.lineTo(-config.radius, config.radius * 0.7);
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Inner detail diamond
+                    ctx.strokeStyle = config.outline;
+                    ctx.lineWidth = 1.5;
+                    ctx.globalAlpha = 0.5;
+                    const inner = 0.55;
+                    ctx.beginPath();
+                    ctx.moveTo(config.radius * inner, 0);
+                    ctx.lineTo(-config.radius * inner, -config.radius * 0.7 * inner);
+                    ctx.lineTo(-config.radius * 0.5 * inner, 0);
+                    ctx.lineTo(-config.radius * inner, config.radius * 0.7 * inner);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+
+                    ctx.restore();
+                }
+            }
+
+            // Batch render leviathans (largest circular enemy)
+            if (byType.LEVIATHAN.length > 0) {
+                const config = ENEMY_TYPES['LEVIATHAN'];
+
+                for (const e of byType.LEVIATHAN) {
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+
+                    // Outer circle
+                    ctx.strokeStyle = config.color;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, config.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Middle detail ring
+                    ctx.strokeStyle = config.outline;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, config.radius * 0.75, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+
+                    // Inner detail circle
+                    ctx.globalAlpha = 0.4;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, config.radius * 0.5, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+
+                    // Pulsing core
+                    ctx.fillStyle = config.color;
+                    ctx.globalAlpha = 0.25 + Math.sin(gameTime * 3) * 0.15;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, config.radius * 0.25, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.globalAlpha = 1;
 
@@ -9239,72 +10106,163 @@
 
         function renderSnares() {
             if (snares.length === 0) return;
+
+            // Pass 1: Collect normal snares for global hex grid (lowPerf renders individually)
+            let maxAlpha = 0;
+            let gridCellSize = 0;
+            const normalSnares = [];
+
             for (const s of snares) {
                 if (!shouldRenderEntity(s, CULLING_DISTANCES.particles)) continue;
                 const alpha = Math.min(1, s.life / Math.min(2, s.maxLife));
 
-                ctx.save();
-                ctx.globalAlpha = alpha;
-
-                if (s.isCage) {
-                    // Temporal Cage: hexagonal outline
+                if (lowPerfMode) {
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
                     ctx.strokeStyle = COLORS.PLAYER;
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 1.5;
                     ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        const angle = (i / 6) * Math.PI * 2 + gameTime * 0.3;
-                        const hx = s.x + Math.cos(angle) * s.radius;
-                        const hy = s.y + Math.sin(angle) * s.radius;
-                        if (i === 0) ctx.moveTo(hx, hy);
-                        else ctx.lineTo(hx, hy);
+                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                } else {
+                    // Scale animation: quick scale-up on appear, scale-down on disappear
+                    const SCALE_IN_DURATION = 0.15;
+                    const SCALE_OUT_DURATION = 0.25;
+                    const timeSinceSpawn = s.maxLife - s.life;
+                    const scaleIn = Math.min(1, timeSinceSpawn / SCALE_IN_DURATION);
+                    const scaleOut = Math.min(1, s.life / SCALE_OUT_DURATION);
+                    s._scale = Math.min(scaleIn, scaleOut);
+                    if (s._scale <= 0.01) continue;
+                    normalSnares.push(s);
+                    if (alpha > maxAlpha) maxAlpha = alpha;
+                    if (gridCellSize === 0) gridCellSize = s.radius * 0.18;
+                }
+            }
+
+            // Pass 2: Global hex grid revealed by normal snares
+            if (normalSnares.length === 0) return;
+
+            const innerSize = gridCellSize * 0.6;
+            const colStep = gridCellSize * 1.5;
+            const rowStep = gridCellSize * 1.732050808; // sqrt(3)
+            const margin = gridCellSize * 0.3;
+
+            // Precompute hex vertex offsets
+            const hexCos = [], hexSin = [];
+            for (let v = 0; v < 6; v++) {
+                const a = (v / 6) * 6.283185307;
+                hexCos[v] = Math.cos(a);
+                hexSin[v] = Math.sin(a);
+            }
+
+            // Collect unique global grid cells visible through any snare
+            // Store: wx, wy, hexScale (3 values per cell)
+            const EDGE_ZONE = 0.2; // outer 20% of radius = scale transition
+            const seen = new Set();
+            const cellData = []; // flat array: wx, wy, hexScale, ...
+            for (const s of normalSnares) {
+                const r = s.radius * s._scale - margin;
+                if (r <= 0) continue;
+                const rSq = r * r;
+                const minCol = Math.floor((s.x - r) / colStep);
+                const maxCol = Math.ceil((s.x + r) / colStep);
+                for (let ci = minCol; ci <= maxCol; ci++) {
+                    const wx = ci * colStep;
+                    const yOff = (ci & 1) ? rowStep * 0.5 : 0;
+                    const minRow = Math.floor((s.y - r - yOff) / rowStep);
+                    const maxRow = Math.ceil((s.y + r - yOff) / rowStep);
+                    for (let ri = minRow; ri <= maxRow; ri++) {
+                        const wy = ri * rowStep + yOff;
+                        const dx = wx - s.x;
+                        const dy = wy - s.y;
+                        const distSq = dx * dx + dy * dy;
+                        if (distSq > rSq) continue;
+                        const dist = Math.sqrt(distSq);
+                        // proximity: 1 at center, 0 at edge
+                        const proximity = 1 - dist / r;
+                        const hexScale = proximity < EDGE_ZONE ? proximity / EDGE_ZONE : 1;
+                        const key = ci + ',' + ri;
+                        if (seen.has(key)) {
+                            // Keep the largest scale (most interior)
+                            const idx = cellData._keyMap[key];
+                            if (hexScale > cellData[idx + 2]) cellData[idx + 2] = hexScale;
+                            continue;
+                        }
+                        seen.add(key);
+                        if (!cellData._keyMap) cellData._keyMap = {};
+                        cellData._keyMap[key] = cellData.length;
+                        cellData.push(wx, wy, hexScale);
+                    }
+                }
+            }
+
+            // Draw all visible hex cells with per-hex scale
+            ctx.save();
+            ctx.strokeStyle = COLORS.PLAYER;
+
+            // Outer strokes
+            ctx.lineWidth = 0.8;
+            for (let i = 0; i < cellData.length; i += 3) {
+                const wx = cellData[i];
+                const wy = cellData[i + 1];
+                const hs = cellData[i + 2];
+                const outerR = gridCellSize * hs;
+                ctx.globalAlpha = maxAlpha * hs;
+                ctx.beginPath();
+                for (let v = 0; v < 6; v++) {
+                    const vx = wx + hexCos[v] * outerR;
+                    const vy = wy + hexSin[v] * outerR;
+                    if (v === 0) ctx.moveTo(vx, vy);
+                    else ctx.lineTo(vx, vy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            // Inner detail hexagons
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < cellData.length; i += 3) {
+                const wx = cellData[i];
+                const wy = cellData[i + 1];
+                const hs = cellData[i + 2];
+                const innerR = innerSize * hs;
+                ctx.globalAlpha = maxAlpha * 0.4 * hs;
+                ctx.beginPath();
+                for (let v = 0; v < 6; v++) {
+                    const vx = wx + hexCos[v] * innerR;
+                    const vy = wy + hexSin[v] * innerR;
+                    if (v === 0) ctx.moveTo(vx, vy);
+                    else ctx.lineTo(vx, vy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Trap hexes (Temporal Cage evolution) — filled hexagons that root enemies
+            if (trapHexes.length > 0) {
+                ctx.save();
+                ctx.strokeStyle = COLORS.PLAYER;
+                ctx.fillStyle = COLORS.PLAYER;
+                for (const th of trapHexes) {
+                    if (!shouldRenderEntity(th, CULLING_DISTANCES.particles)) continue;
+                    const alpha = Math.min(1, th.life / 1.5);
+                    const sz = th.size;
+                    // Filled hex with low opacity + brighter stroke
+                    ctx.globalAlpha = alpha * 0.15;
+                    ctx.beginPath();
+                    for (let v = 0; v < 6; v++) {
+                        const vx = th.x + hexCos[v] * sz;
+                        const vy = th.y + hexSin[v] * sz;
+                        if (v === 0) ctx.moveTo(vx, vy);
+                        else ctx.lineTo(vx, vy);
                     }
                     ctx.closePath();
-                    ctx.stroke();
-                    if (!lowPerfMode) {
-                        // Inner rotating hex
-                        ctx.globalAlpha = alpha * 0.3;
-                        ctx.lineWidth = 1.5;
-                        ctx.beginPath();
-                        for (let i = 0; i < 6; i++) {
-                            const angle = (i / 6) * Math.PI * 2 - gameTime * 0.5;
-                            const hx = s.x + Math.cos(angle) * s.radius * 0.5;
-                            const hy = s.y + Math.sin(angle) * s.radius * 0.5;
-                            if (i === 0) ctx.moveTo(hx, hy);
-                            else ctx.lineTo(hx, hy);
-                        }
-                        ctx.closePath();
-                        ctx.stroke();
-                        // Fill
-                        ctx.globalAlpha = alpha * 0.08;
-                        ctx.fillStyle = COLORS.PLAYER;
-                        ctx.fill();
-                    }
-                } else if (lowPerfMode) {
-                    // Low perf: simple solid circle
-                    ctx.strokeStyle = COLORS.PLAYER;
-                    ctx.lineWidth = 1.5;
-                    ctx.beginPath();
-                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-                    ctx.stroke();
-                } else {
-                    // Normal snare: dashed circle
-                    ctx.strokeStyle = COLORS.PLAYER;
-                    ctx.lineWidth = 1.5;
-                    ctx.setLineDash([6, 8]);
-                    ctx.beginPath();
-                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-                    ctx.stroke();
-                    // Inner circle
-                    ctx.beginPath();
-                    ctx.arc(s.x, s.y, s.radius * 0.6, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    // Subtle fill
-                    ctx.globalAlpha = alpha * 0.04 + Math.sin(gameTime * 3) * 0.02;
-                    ctx.fillStyle = COLORS.PLAYER;
-                    ctx.beginPath();
-                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
                     ctx.fill();
+                    ctx.globalAlpha = alpha * 0.7;
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
                 }
                 ctx.restore();
             }
@@ -9648,6 +10606,7 @@
             } else if (gameState === 'tutorial') {
                 renderTutorial();
             }
+            if (showCheatOverlay) renderCheatOverlay();
         }
 
         function renderMenu() {
@@ -9835,6 +10794,13 @@
                 ctx.font = mobile ? '18px "Segoe UI", sans-serif' : '14px "Segoe UI", sans-serif';
                 ctx.fillStyle = COLORS.UI_SECONDARY;
                 ctx.fillText(selWeapon.description, cx, weaponDisplayY + (mobile ? 28 : 22));
+
+                // Best kills record
+                if (prog.stats && prog.stats.bestKills > 0) {
+                    ctx.font = mobile ? '16px "Segoe UI", sans-serif' : '13px "Segoe UI", sans-serif';
+                    ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.45);
+                    ctx.fillText('BEST: ' + prog.stats.bestKills + ' KILLS', cx, weaponDisplayY + (mobile ? 52 : 40));
+                }
 
                 ctx.globalAlpha = menuUIAlpha;
 
@@ -10229,66 +11195,71 @@
             const xpBarY = 48;  // XP bar below info row
 
             // ═══════════════════════════════════════
-            // KILLS (left-aligned above bar)
+            // HAMBURGER MENU BUTTON (above bar, left-aligned)
             // ═══════════════════════════════════════
-            ctx.textAlign = 'left';
-            ctx.font = '10px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('KILLS', barX, infoY - 12);
+            const hbW = 36;
+            const hbH = 30;
+            const hbX = barX;
+            const hbY = infoY - hbH / 2 - 4;
+            // Update hit area to match rendered position
+            HAMBURGER_BTN.x = hbX - 4;
+            HAMBURGER_BTN.y = hbY - 4;
+            HAMBURGER_BTN.w = hbW + 8;
+            HAMBURGER_BTN.h = hbH + 8;
 
-            ctx.font = 'bold 20px "Segoe UI", sans-serif';
+            // Button background
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+            ctx.strokeStyle = COLORS.HUD_PANEL_BORDER;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(hbX, hbY, hbW, hbH, 6);
+            ctx.fill();
+            ctx.stroke();
+
+            // Three lines
+            const lineW = 18;
+            const lineGap = 6;
+            const linesStartX = hbX + (hbW - lineW) / 2;
+            const linesStartY = hbY + hbH / 2 - lineGap;
+            ctx.strokeStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 3; i++) {
+                const ly = linesStartY + i * lineGap;
+                ctx.beginPath();
+                ctx.moveTo(linesStartX, ly);
+                ctx.lineTo(linesStartX + lineW, ly);
+                ctx.stroke();
+            }
+
+            // ═══════════════════════════════════════
+            // KILLS (centered above bar, prominent)
+            // ═══════════════════════════════════════
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 28px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.HUD_TEXT_PRIMARY;
             if (ENABLE_GLOW_EFFECTS) {
                 ctx.shadowColor = COLORS.HUD_CYAN_GLOW;
                 ctx.shadowBlur = 20;
             }
-            ctx.fillText(totalKills.toLocaleString(), barX + 40, infoY - 12);
+            const killsStr = totalKills.toLocaleString();
+            const killsNumW = ctx.measureText(killsStr).width;
+            ctx.fillText(killsStr, CANVAS_WIDTH / 2, infoY);
             ctx.shadowBlur = 0;
 
-            // Crystal counter (next to kills)
+            // "KILLS" label to the left of the number
+            ctx.font = '10px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.textAlign = 'right';
+            ctx.fillText('KILLS', CANVAS_WIDTH / 2 - killsNumW / 2 - 6, infoY);
+
+            // Crystal counter (right of kills)
             if (crystalsThisRun > 0) {
-                const killsTextWidth = ctx.measureText(totalKills.toLocaleString()).width;
+                const killsW = ctx.measureText(killsStr).width;
                 ctx.fillStyle = '#E0F0FF';
-                ctx.font = 'bold 12px "Segoe UI", sans-serif';
-                ctx.fillText('\u25C6 ' + crystalsThisRun, barX + 40 + killsTextWidth + 16, infoY - 12);
+                ctx.font = 'bold 13px "Segoe UI", sans-serif';
+                ctx.fillText('\u25C6 ' + crystalsThisRun, CANVAS_WIDTH / 2 + killsW / 2 + 20, infoY);
             }
-
-            // ═══════════════════════════════════════
-            // LEVEL HEXAGON (centered above bar)
-            // ═══════════════════════════════════════
-            const hexX = CANVAS_WIDTH / 2;
-            const hexY = infoY - 6;
-            const hexSize = 16;
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const angle = (Math.PI / 3) * i - Math.PI / 2;
-                const px = hexX + Math.cos(angle) * hexSize;
-                const py = hexY + Math.sin(angle) * hexSize;
-                if (i === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(0, 255, 170, 0.04)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            // Level number inside hexagon
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 13px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_GREEN;
-            if (ENABLE_GLOW_EFFECTS) {
-                ctx.shadowColor = 'rgba(0, 255, 170, 0.5)';
-                ctx.shadowBlur = 10;
-            }
-            if (!isFullVersion) {
-                ctx.font = 'bold 10px "Segoe UI", sans-serif';
-                ctx.fillText(playerLevel + '/' + DEMO_MAX_LEVEL, hexX, hexY + 4);
-            } else {
-                ctx.fillText(playerLevel.toString(), hexX, hexY + 4);
-            }
-            ctx.shadowBlur = 0;
 
             // ═══════════════════════════════════════
             // LIVES (right-aligned above bar)
@@ -10314,11 +11285,14 @@
 
                 if (isActive) {
                     ctx.strokeStyle = COLORS.PLAYER;
+                    ctx.shadowColor = COLORS.PLAYER;
+                    ctx.shadowBlur = 15;
                 } else {
                     ctx.strokeStyle = COLORS.HUD_CYAN_DIM;
                     ctx.globalAlpha = 0.3;
                 }
                 ctx.stroke();
+                ctx.shadowBlur = 0;
                 ctx.restore();
             }
 
@@ -10326,7 +11300,7 @@
             // XP BAR (full width, below info row)
             // ═══════════════════════════════════════
             const xpBarWidth = barWidth;
-            const xpBarHeight = 6;
+            const xpBarHeight = 20;
             const xpProgress = playerXP / xpToNextLevel;
 
             // Bar track
@@ -10367,11 +11341,22 @@
                 ctx.stroke();
             }
 
-            // XP text
+            // Level text inside bar (left side) — outline for readability over fill
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 12px "Segoe UI", sans-serif';
+            const lvlLabel = !isFullVersion ? 'Lv.' + playerLevel + '/' + DEMO_MAX_LEVEL : 'Lv.' + playerLevel;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            ctx.strokeText(lvlLabel, barX + 6, xpBarY + 14);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(lvlLabel, barX + 6, xpBarY + 14);
+
+            // XP text (right side inside bar)
             ctx.textAlign = 'right';
             ctx.font = '9px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText(playerXP + ' / ' + xpToNextLevel + ' XP', barX + xpBarWidth, xpBarY + xpBarHeight + 12);
+            ctx.fillText(playerXP + ' / ' + xpToNextLevel + ' XP', barX + xpBarWidth - 6, xpBarY + 14);
 
             // ═══════════════════════════════════════
             // WAVE ALERT (below XP bar, conditional)
@@ -10404,15 +11389,6 @@
                 ctx.restore();
             }
 
-            // ═══════════════════════════════════════
-            // SKILL POINTS INDICATOR
-            // ═══════════════════════════════════════
-            if (skillPoints > 0) {
-                ctx.textAlign = 'center';
-                ctx.fillStyle = COLORS.HUD_GOLD;
-                ctx.font = 'bold 14px "Segoe UI", sans-serif';
-                ctx.fillText('SKILL POINTS: ' + skillPoints + ' (Press TAB)', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 55);
-            }
 
         }
         // ============================================================
@@ -10699,21 +11675,240 @@
             return false;
         }
 
+        function handlePauseClick(clickX, clickY) {
+            for (const btn of currentPauseButtons) {
+                if (clickX >= btn.x && clickX <= btn.x + btn.w &&
+                    clickY >= btn.y && clickY <= btn.y + btn.h) {
+                    if (btn.type === 'resume') {
+                        gameState = 'playing';
+                        return true;
+                    }
+                    if (btn.type === 'restart') {
+                        startGame();
+                        return true;
+                    }
+                    if (btn.type === 'exit') {
+                        gameState = 'menu';
+                        resetMenuAnimation();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function renderPauseWeaponInventory(cx, y) {
+            const slotSize = 60;
+            const slotGap = 12;
+            const numSlots = MAX_ACTIVE_WEAPONS;
+            const totalW = numSlots * slotSize + (numSlots - 1) * slotGap;
+            const startX = cx - totalW / 2;
+            const slotY = y;
+
+            for (let i = 0; i < numSlots; i++) {
+                const sx = startX + i * (slotSize + slotGap);
+                const weaponId = activeWeapons[i];
+                const slotCx = sx + slotSize / 2;
+                const slotCy = slotY + slotSize / 2;
+
+                if (weaponId && WEAPONS[weaponId]) {
+                    const weapon = WEAPONS[weaponId];
+                    const lvl = upgradeLevels[weaponId] || 0;
+                    const isShip = (i === 0);
+
+                    ctx.strokeStyle = weapon.color;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(sx, slotY, slotSize, slotSize, 8);
+                    ctx.stroke();
+
+                    if (isShip) {
+                        drawShipUpgradeIcon(ctx, selectedStartingWeapon, slotCx, slotCy, 0.6, weapon.color);
+                    } else {
+                        ctx.save();
+                        ctx.translate(slotCx, slotCy);
+                        ctx.scale(1.5, 1.5);
+                        drawSkillIcon(ctx, weapon.icon, 0, 0, weapon.color);
+                        ctx.restore();
+                    }
+
+                    // Level text below slot
+                    const lvlText = lvl >= 10 ? 'MAX' : 'Lv.' + (lvl + 1);
+                    const lvlColor = lvl >= 10 ? COLORS.GOLD : weapon.color;
+                    ctx.font = 'bold 11px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    ctx.fillStyle = lvlColor;
+                    ctx.fillText(lvlText, slotCx, slotY + slotSize + 4);
+                    ctx.textBaseline = 'alphabetic';
+                } else {
+                    ctx.strokeStyle = 'rgba(100, 100, 140, 0.25)';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.roundRect(sx, slotY, slotSize, slotSize, 8);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = 'rgba(100, 100, 140, 0.3)';
+                    ctx.font = '18px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('+', slotCx, slotCy);
+                    ctx.textBaseline = 'alphabetic';
+                }
+            }
+        }
+
         function renderPauseOverlay() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            currentPauseButtons = [];
+
+            // Dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            
+
+            const cx = CANVAS_WIDTH / 2;
+            const cy = CANVAS_HEIGHT / 2;
+            const panelW = isMobile() ? Math.min(CANVAS_WIDTH - 40, 500) : 460;
+            const panelH = 380;
+            const panelX = cx - panelW / 2;
+            const panelY = cy - panelH / 2;
+
+            // Panel background
+            ctx.fillStyle = COLORS.HUD_PANEL_BG;
+            ctx.strokeStyle = COLORS.HUD_PANEL_BORDER;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+            ctx.fill();
+            ctx.stroke();
+
+            // Title
             ctx.textAlign = 'center';
-            ctx.font = 'bold 48px "Segoe UI", sans-serif';
+            ctx.font = 'bold 32px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('PAUSED', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 30);
-            
-            ctx.font = '20px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            ctx.fillText('Press P or ESC to Resume', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
-            ctx.fillText('Press R to Restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+            ctx.fillText('PAUSED', cx, panelY + 48);
+
+            // Weapon inventory
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.font = '11px "Segoe UI", sans-serif';
+            ctx.fillText('ARSENAL', cx, panelY + 76);
+            renderPauseWeaponInventory(cx, panelY + 86);
+
+            // Buttons
+            const btnW = isMobile() ? panelW - 60 : 260;
+            const btnH = isMobile() ? 52 : 44;
+            const btnX = cx - btnW / 2;
+            const btnStartY = panelY + 186;
+            const btnGap = isMobile() ? 16 : 12;
+
+            const buttons = [
+                { type: 'resume', label: 'RESUME', color: COLORS.PLAYER },
+                { type: 'restart', label: 'RESTART', color: COLORS.HUD_GOLD },
+                { type: 'exit', label: 'EXIT TO MENU', color: COLORS.HUD_RED }
+            ];
+
+            for (let i = 0; i < buttons.length; i++) {
+                const btn = buttons[i];
+                const by = btnStartY + i * (btnH + btnGap);
+
+                // Button background
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                ctx.strokeStyle = hexToRGBA(btn.color, 0.4);
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.roundRect(btnX, by, btnW, btnH, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                // Button text
+                ctx.textAlign = 'center';
+                ctx.font = 'bold ' + (isMobile() ? '22' : '16') + 'px "Segoe UI", sans-serif';
+                ctx.fillStyle = btn.color;
+                ctx.fillText(btn.label, cx, by + btnH / 2 + (isMobile() ? 8 : 6));
+
+                currentPauseButtons.push({ type: btn.type, x: btnX, y: by, w: btnW, h: btnH });
+            }
+
+            // Hint text at bottom
+            if (!isMobile()) {
+                ctx.font = '11px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                ctx.fillText('ESC to resume', cx, panelY + panelH - 16);
+            }
         }
         
+        function renderCheatOverlay() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const cx = CANVAS_WIDTH / 2;
+            const cy = CANVAS_HEIGHT / 2;
+            const mobile = isMobile();
+            const panelW = mobile ? Math.min(CANVAS_WIDTH - 40, 600) : 500;
+
+            const codes = Object.keys(CHEAT_CODES).filter(c => c !== 'cheat');
+            const descriptions = {
+                'laser': 'Max laser + Nova Beam',
+                'rocket': 'Max missiles + Armageddon',
+                'orbit': 'Max orbital + Singularity',
+                'chain': 'Max lightning + Storm Nexus',
+                'plasma': 'Max plasma + Annihilation',
+                'drone': 'Max drone + Hive Mind',
+                'mines': 'Max mines + Black Hole',
+                'blade': 'Max void blade + Dimensional Rift',
+                'snare': 'Max warp snare + Temporal Cage',
+                'beam': 'Max fusion beam + Siphon Nexus',
+                'turret': 'Max sentry turret + Combat Station',
+                'full': 'All weapons evolved',
+                'reset': 'Reset current run',
+                'wipe': 'Wipe shop progress',
+                'unlock': 'Unlock full version',
+                'demo': 'Enable demo mode',
+                'level': 'Gain a level',
+                'skip': 'Skip ahead +20 waves',
+                'dead': 'Trigger game over'
+            };
+
+            const lineH = mobile ? 36 : 28;
+            const panelH = 80 + codes.length * lineH + 30;
+            const panelX = cx - panelW / 2;
+            const panelY = cy - panelH / 2;
+
+            ctx.fillStyle = COLORS.HUD_PANEL_BG;
+            ctx.strokeStyle = COLORS.HUD_PANEL_BORDER;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 28px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_GOLD;
+            ctx.fillText('CHEAT CODES', cx, panelY + 40);
+
+            let y = panelY + 70;
+            for (const code of codes) {
+                ctx.textAlign = 'left';
+                ctx.font = mobile ? 'bold 20px monospace' : 'bold 16px monospace';
+                ctx.fillStyle = COLORS.PLAYER;
+                ctx.fillText(code, panelX + 30, y);
+
+                ctx.textAlign = 'right';
+                ctx.font = mobile ? '18px "Segoe UI", sans-serif' : '14px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_SECONDARY;
+                ctx.fillText(descriptions[code] || '', panelX + panelW - 30, y);
+
+                y += lineH;
+            }
+
+            ctx.textAlign = 'center';
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.UI_SECONDARY;
+            ctx.fillText(mobile ? 'TAP TO CLOSE' : 'PRESS ANY KEY TO CLOSE', cx, panelY + panelH - 14);
+        }
+
         function renderGameOver() {
             const t = (Date.now() - gameOverAnimStart) / 1000;
             const cx = CANVAS_WIDTH / 2;
@@ -10808,72 +12003,65 @@
             ctx.stroke();
             curY += 28;
 
-            // === Stats ===
+            // === Hero stat: KILLS ===
             const countT = easeOutCubic(Math.min(1, Math.max(0, t - 0.5) / 1.0));
             const statsAlpha = easeOutCubic(Math.min(1, Math.max(0, t - 0.5) / 0.3));
             ctx.save();
             ctx.globalAlpha = panelProgress * statsAlpha;
-
-            const crystalTotal = lastRunCrystals ? lastRunCrystals.total : 0;
-            const crystalPicked = lastRunCrystals ? lastRunCrystals.picked : 0;
-            const crystalKillBonus = lastRunCrystals ? lastRunCrystals.killBonus : 0;
-            const crystalMulti = lastRunCrystals ? lastRunCrystals.crystalMulti : 1;
-
-            const colOffset = panelW * 0.22;
-
-            // Left column: Crystals
-            const leftX = cx - colOffset;
             ctx.textAlign = 'center';
 
-            ctx.font = '12px "Segoe UI", sans-serif';
-            ctx.fillStyle = hexToRGBA(COLORS.HUD_GOLD, 0.6);
-            ctx.fillText('CRYSTALS EARNED', leftX, curY);
+            // "KILLS" label
+            ctx.font = '13px "Segoe UI", sans-serif';
+            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.6);
+            ctx.fillText('KILLS', cx, curY);
 
-            const displayCrystals = Math.floor(crystalTotal * countT);
-            ctx.font = 'bold 38px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.HUD_GOLD;
-            setGlow(ctx, COLORS.HUD_GOLD, 10);
-            ctx.fillText('\u25C6 ' + displayCrystals, leftX, curY + 40);
+            // Giant kill count
+            const displayKills = Math.floor(totalKills * countT);
+            ctx.font = 'bold 54px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.PLAYER;
+            setGlow(ctx, COLORS.PLAYER, 15);
+            ctx.fillText('' + displayKills, cx, curY + 50);
             clearGlow(ctx);
 
-            ctx.font = '14px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.UI_SECONDARY;
-            let breakdownText = Math.floor(crystalPicked * countT) + ' picked';
-            if (crystalKillBonus > 0) breakdownText += ' + ' + Math.floor(crystalKillBonus * countT) + ' kill bonus';
-            ctx.fillText(breakdownText, leftX, curY + 60);
-            if (crystalMulti > 1) {
-                ctx.fillStyle = '#00FFAA';
-                ctx.fillText('\u00D7' + crystalMulti.toFixed(1) + ' multiplier', leftX, curY + 78);
+            // New record or best record
+            curY += 68;
+            if (lastRunIsNewRecord) {
+                const recordPulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
+                ctx.save();
+                ctx.globalAlpha = panelProgress * statsAlpha * recordPulse;
+                ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.HUD_GOLD;
+                setGlow(ctx, COLORS.HUD_GOLD, 12);
+                ctx.fillText('\u2605 NEW RECORD! \u2605', cx, curY);
+                clearGlow(ctx);
+                ctx.restore();
+            } else {
+                ctx.font = '16px "Segoe UI", sans-serif';
+                ctx.fillStyle = COLORS.UI_SECONDARY;
+                ctx.fillText('BEST: ' + lastRunBestKills, cx, curY);
+            }
+            curY += 30;
+
+            // Secondary stats row: Level | Wave | Crystals
+            const crystalTotal = lastRunCrystals ? lastRunCrystals.total : 0;
+            const statSpacing = panelW * 0.25;
+            const stats3 = [
+                { label: 'LEVEL', value: '' + Math.max(1, Math.floor(playerLevel * countT)), color: COLORS.PLAYER },
+                { label: 'WAVE', value: '' + Math.max(1, Math.floor(waveNumber * countT)), color: COLORS.PLAYER },
+                { label: 'CRYSTALS', value: '\u25C6 ' + Math.floor(crystalTotal * countT), color: COLORS.HUD_GOLD }
+            ];
+            for (let i = 0; i < 3; i++) {
+                const sx = cx + (i - 1) * statSpacing;
+                ctx.font = '11px "Segoe UI", sans-serif';
+                ctx.fillStyle = hexToRGBA(stats3[i].color, 0.5);
+                ctx.fillText(stats3[i].label, sx, curY);
+                ctx.font = 'bold 26px "Segoe UI", sans-serif';
+                ctx.fillStyle = stats3[i].color;
+                ctx.fillText(stats3[i].value, sx, curY + 30);
             }
 
-            // Right column: Combat stats
-            const rightX = cx + colOffset;
-            const statGap = 56;
-
-            ctx.font = '12px "Segoe UI", sans-serif';
-            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.5);
-            ctx.fillText('KILLS', rightX, curY);
-            ctx.font = 'bold 32px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.PLAYER;
-            ctx.fillText('' + Math.floor(totalKills * countT), rightX, curY + 34);
-
-            ctx.font = '12px "Segoe UI", sans-serif';
-            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.5);
-            ctx.fillText('LEVEL', rightX, curY + statGap);
-            ctx.font = 'bold 32px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.PLAYER;
-            const displayLevel = Math.max(1, Math.floor(playerLevel * countT));
-            ctx.fillText('' + displayLevel, rightX, curY + statGap + 34);
-
-            ctx.font = '12px "Segoe UI", sans-serif';
-            ctx.fillStyle = hexToRGBA(COLORS.PLAYER, 0.5);
-            ctx.fillText('WAVE', rightX, curY + statGap * 2);
-            ctx.font = 'bold 32px "Segoe UI", sans-serif';
-            ctx.fillStyle = COLORS.PLAYER;
-            ctx.fillText('' + Math.max(1, Math.floor(waveNumber * countT)), rightX, curY + statGap * 2 + 34);
-
             ctx.restore();
-            curY += 175;
+            curY += 65;
 
             // Divider
             ctx.strokeStyle = hexToRGBA(COLORS.PLAYER, 0.12);
