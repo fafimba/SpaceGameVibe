@@ -1931,15 +1931,45 @@
         let pausePanelRect = null;
         let gameOverBgSnapshot = null;
         const HAMBURGER_BTN = { x: 16, y: 10, w: 50, h: 40 };
+        // Detect ctx.filter support once
+        const _filterSupported = (() => {
+            try {
+                const tc = document.createElement('canvas');
+                tc.width = tc.height = 1;
+                const tctx = tc.getContext('2d');
+                tctx.filter = 'blur(1px)';
+                return tctx.filter === 'blur(1px)';
+            } catch(e) { return false; }
+        })();
+        function blurCanvas(srcCanvas) {
+            const out = document.createElement('canvas');
+            out.width = srcCanvas.width;
+            out.height = srcCanvas.height;
+            const outCtx = out.getContext('2d');
+            if (_filterSupported) {
+                outCtx.filter = 'blur(8px)';
+                outCtx.drawImage(srcCanvas, 0, 0);
+                outCtx.filter = 'none';
+            } else {
+                // Multi-pass downscale fallback for browsers without filter support
+                const s1 = document.createElement('canvas');
+                s1.width = srcCanvas.width >> 1;
+                s1.height = srcCanvas.height >> 1;
+                const c1 = s1.getContext('2d');
+                c1.drawImage(srcCanvas, 0, 0, s1.width, s1.height);
+                const s2 = document.createElement('canvas');
+                s2.width = s1.width >> 1;
+                s2.height = s1.height >> 1;
+                const c2 = s2.getContext('2d');
+                c2.drawImage(s1, 0, 0, s2.width, s2.height);
+                outCtx.imageSmoothingEnabled = true;
+                outCtx.imageSmoothingQuality = 'high';
+                outCtx.drawImage(s2, 0, 0, out.width, out.height);
+            }
+            return out;
+        }
         function capturePauseBg() {
-            const snap = document.createElement('canvas');
-            snap.width = CANVAS_WIDTH;
-            snap.height = CANVAS_HEIGHT;
-            const sCtx = snap.getContext('2d');
-            sCtx.filter = 'blur(8px)';
-            sCtx.drawImage(canvas, 0, 0);
-            sCtx.filter = 'none';
-            pauseBgSnapshot = snap;
+            pauseBgSnapshot = blurCanvas(canvas);
         }
 
         // Camera system
@@ -6453,14 +6483,7 @@
             DroneEngine.setState('skilltree');
 
             // Capture blurred snapshot of game canvas for background
-            const snapCanvas = document.createElement('canvas');
-            snapCanvas.width = CANVAS_WIDTH;
-            snapCanvas.height = CANVAS_HEIGHT;
-            const snapCtx = snapCanvas.getContext('2d');
-            snapCtx.filter = 'blur(8px)';
-            snapCtx.drawImage(canvas, 0, 0);
-            snapCtx.filter = 'none';
-            upgradeOverlay.bgSnapshot = snapCanvas;
+            upgradeOverlay.bgSnapshot = blurCanvas(canvas);
 
             // Hide game canvas, show overlay canvas on top
             canvas.style.opacity = '0';
@@ -8920,14 +8943,7 @@
             
             setTimeout(() => {
                 // Capture blurred snapshot for game over background
-                const snap = document.createElement('canvas');
-                snap.width = CANVAS_WIDTH;
-                snap.height = CANVAS_HEIGHT;
-                const sCtx = snap.getContext('2d');
-                sCtx.filter = 'blur(8px)';
-                sCtx.drawImage(canvas, 0, 0);
-                sCtx.filter = 'none';
-                gameOverBgSnapshot = snap;
+                gameOverBgSnapshot = blurCanvas(canvas);
 
                 gameState = 'gameOver';
                 gameOverAnimStart = Date.now();
