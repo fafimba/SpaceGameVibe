@@ -1929,7 +1929,18 @@
 
         // Pause menu state
         let currentPauseButtons = [];
+        let pauseBgSnapshot = null;
         const HAMBURGER_BTN = { x: 16, y: 10, w: 50, h: 40 };
+        function capturePauseBg() {
+            const snap = document.createElement('canvas');
+            snap.width = CANVAS_WIDTH;
+            snap.height = CANVAS_HEIGHT;
+            const sCtx = snap.getContext('2d');
+            sCtx.filter = 'blur(8px)';
+            sCtx.drawImage(canvas, 0, 0);
+            sCtx.filter = 'none';
+            pauseBgSnapshot = snap;
+        }
 
         // Camera system
         let camera = {
@@ -2914,6 +2925,7 @@
                 if (e.code === 'Escape') {
                     if (gameState === 'playing') {
                         AudioManager.play('pauseIn');
+                        capturePauseBg();
                         gameState = 'paused';
                     } else if (gameState === 'paused') {
                         AudioManager.play('pauseOut');
@@ -2925,6 +2937,7 @@
                 // P key pauses the game (skip if cheat code buffer is active)
                 if (e.code === 'KeyP' && !cheatCodeBuffer) {
                     if (gameState === 'playing') {
+                        capturePauseBg();
                         gameState = 'paused';
                     } else if (gameState === 'paused') {
                         gameState = 'playing';
@@ -3016,6 +3029,7 @@
                     if (clickX >= HAMBURGER_BTN.x && clickX <= HAMBURGER_BTN.x + HAMBURGER_BTN.w &&
                         clickY >= HAMBURGER_BTN.y && clickY <= HAMBURGER_BTN.y + HAMBURGER_BTN.h) {
                         AudioManager.play('pauseIn');
+                        capturePauseBg();
                         gameState = 'paused';
                     }
                 } else if (gameState === 'skilltree') {
@@ -3094,6 +3108,7 @@
                     if (coords.x >= HAMBURGER_BTN.x && coords.x <= HAMBURGER_BTN.x + HAMBURGER_BTN.w &&
                         coords.y >= HAMBURGER_BTN.y && coords.y <= HAMBURGER_BTN.y + HAMBURGER_BTN.h) {
                         AudioManager.play('pauseIn');
+                        capturePauseBg();
                         gameState = 'paused';
                         e.preventDefault();
                         return;
@@ -12539,9 +12554,10 @@
         function renderPauseOverlay() {
             currentPauseButtons = [];
 
-            // Dark overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            // Blurred game background
+            if (pauseBgSnapshot) {
+                ctx.drawImage(pauseBgSnapshot, 0, 0);
+            }
 
             const cx = CANVAS_WIDTH / 2;
             const cy = CANVAS_HEIGHT / 2;
