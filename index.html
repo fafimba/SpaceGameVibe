@@ -625,17 +625,116 @@
         // ============================================================
 
         const SOUND_DEFS = {
+            // === PLAYER WEAPONS ===
             playerShoot: {
                 wave: 'square', freq: [880, 440], duration: 0.08, volume: 0.25,
                 decay: 'exp', noise: 0, detune: 50, category: 'sfx'
             },
-            enemyDeath: {
-                wave: 'sine', freq: [600, 150], duration: 0.15, volume: 0.3,
-                decay: 'exp', noise: 0.2, detune: 80, category: 'sfx'
+            rocketFire: {
+                wave: 'sawtooth', freq: [150, 80], duration: 0.15, volume: 0.3,
+                decay: 'exp', noise: 0.3, detune: 40, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1200, 400], Q: 2 }
             },
+            rocketExplode: {
+                wave: 'sine', freq: [120, 40], duration: 0.25, volume: 0.35,
+                decay: 'exp', noise: 0.6, detune: 20, category: 'sfx',
+                filter: { type: 'lowpass', freq: [800, 200], Q: 1 }
+            },
+            lightningZap: {
+                wave: 'sawtooth', freq: [2000, 800], duration: 0.06, volume: 0.2,
+                decay: 'exp', noise: 0.5, detune: 100, category: 'sfx',
+                filter: { type: 'highpass', freq: [500, 1000], Q: 3 }
+            },
+            voidSlash: {
+                wave: 'sawtooth', freq: [600, 120], duration: 0.1, volume: 0.25,
+                decay: 'exp', noise: 0.15, detune: 60, category: 'sfx'
+            },
+            fusionBeam: {
+                wave: 'sine', freq: [340, 360], duration: 0.12, volume: 0.12,
+                decay: 'linear', noise: 0.05, detune: 20, category: 'sfx'
+            },
+            orbitalHit: {
+                wave: 'triangle', freq: [1400, 800], duration: 0.04, volume: 0.12,
+                decay: 'exp', noise: 0, detune: 80, category: 'sfx'
+            },
+            auraHit: {
+                wave: 'sine', freq: [180, 120], duration: 0.05, volume: 0.08,
+                decay: 'exp', noise: 0, detune: 40, category: 'sfx'
+            },
+            droneFire: {
+                wave: 'square', freq: [700, 350], duration: 0.06, volume: 0.15,
+                decay: 'exp', noise: 0.1, detune: 60, category: 'sfx'
+            },
+            turretFire: {
+                wave: 'square', freq: [1000, 600], duration: 0.04, volume: 0.12,
+                decay: 'exp', noise: 0.15, detune: 70, category: 'sfx'
+            },
+            mineExplode: {
+                wave: 'sine', freq: [200, 30], duration: 0.3, volume: 0.35,
+                decay: 'exp', noise: 0.5, detune: 15, category: 'sfx',
+                filter: { type: 'lowpass', freq: [600, 100], Q: 2 }
+            },
+            snareActivate: {
+                wave: 'sine', freq: [400, 800], duration: 0.15, volume: 0.15,
+                decay: 'linear', noise: 0.1, detune: 30, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2000, 600], Q: 4 }
+            },
+            // === EVOLUTIONS ===
+            novaBeamFire: {
+                wave: 'sawtooth', freq: [600, 400], duration: 0.12, volume: 0.3,
+                decay: 'exp', noise: 0.1, detune: 20, category: 'sfx',
+                filter: { type: 'lowpass', freq: [3000, 1500], Q: 3 }
+            },
+            armageddonLaunch: {
+                wave: 'sawtooth', freq: [100, 50], duration: 0.3, volume: 0.35,
+                decay: 'exp', noise: 0.4, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [600, 200], Q: 2 }
+            },
+            armageddonExplode: {
+                wave: 'sine', freq: [80, 20], duration: 0.5, volume: 0.4,
+                decay: 'exp', noise: 0.7, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [500, 80], Q: 1 }
+            },
+            annihilationPulse: {
+                wave: 'sine', freq: [250, 60], duration: 0.35, volume: 0.35,
+                decay: 'exp', noise: 0.3, detune: 15, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1000, 200], Q: 2 }
+            },
+            hiveMindSpawn: {
+                wave: 'triangle', freq: [1200, 600], duration: 0.1, volume: 0.15,
+                decay: 'exp', noise: 0.1, detune: 100, category: 'sfx'
+            },
+            // === PLAYER & COMBAT ===
+            playerHit: {
+                wave: 'sawtooth', freq: [300, 80], duration: 0.12, volume: 0.35,
+                decay: 'exp', noise: 0.4, detune: 30, category: 'sfx'
+            },
+            shieldBreak: {
+                wave: 'square', freq: [500, 100], duration: 0.2, volume: 0.35,
+                decay: 'exp', noise: 0.3, detune: 20, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2000, 300], Q: 2 }
+            },
+            shieldRecharge: {
+                wave: 'sine', freq: [400, 800], duration: 0.2, volume: 0.15,
+                decay: 'linear', noise: 0, detune: 0, category: 'sfx'
+            },
+            playerDeath: {
+                wave: 'sawtooth', freq: [200, 30], duration: 0.6, volume: 0.4,
+                decay: 'exp', noise: 0.6, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1000, 100], Q: 1 }
+            },
+            nearMiss: {
+                wave: 'sine', freq: [600, 900], duration: 0.08, volume: 0.1,
+                decay: 'linear', noise: 0.05, detune: 40, category: 'sfx'
+            },
+            // === PICKUPS & PROGRESSION ===
             xpPickup: {
                 wave: 'sine', freq: [1200, 1600], duration: 0.06, volume: 0.2,
                 decay: 'linear', noise: 0, detune: 30, category: 'sfx'
+            },
+            healthPickup: {
+                wave: 'triangle', freq: [500, 900], duration: 0.15, volume: 0.25,
+                decay: 'linear', noise: 0, detune: 10, category: 'sfx'
             },
             levelUp: {
                 wave: 'square', freq: [440, 880], duration: 0.25, volume: 0.3,
@@ -646,9 +745,57 @@
                     { freq: [784, 784], delay: 0.18, duration: 0.12 }
                 ]
             },
-            playerHit: {
-                wave: 'sawtooth', freq: [300, 80], duration: 0.12, volume: 0.35,
-                decay: 'exp', noise: 0.4, detune: 30, category: 'sfx'
+            upgradeSelect: {
+                wave: 'triangle', freq: [800, 1200], duration: 0.1, volume: 0.2,
+                decay: 'linear', noise: 0, detune: 0, category: 'sfx'
+            },
+            // === UI & MENUS ===
+            uiClick: {
+                wave: 'square', freq: [1000, 800], duration: 0.03, volume: 0.12,
+                decay: 'exp', noise: 0, detune: 0, category: 'ui'
+            },
+            gameStart: {
+                wave: 'sawtooth', freq: [300, 600], duration: 0.2, volume: 0.25,
+                decay: 'linear', noise: 0.1, detune: 0, category: 'ui',
+                filter: { type: 'lowpass', freq: [1500, 3000], Q: 2 }
+            },
+            waveAlert: {
+                wave: 'square', freq: [600, 400], duration: 0.15, volume: 0.2,
+                decay: 'exp', noise: 0, detune: 0, category: 'sfx',
+                notes: [
+                    { freq: [500, 500], delay: 0, duration: 0.08 },
+                    { freq: [700, 700], delay: 0.1, duration: 0.08 }
+                ]
+            },
+            pauseIn: {
+                wave: 'sine', freq: [600, 300], duration: 0.1, volume: 0.12,
+                decay: 'exp', noise: 0, detune: 0, category: 'ui'
+            },
+            pauseOut: {
+                wave: 'sine', freq: [300, 600], duration: 0.1, volume: 0.12,
+                decay: 'exp', noise: 0, detune: 0, category: 'ui'
+            },
+            // === ENEMIES ===
+            enemyDeath: {
+                wave: 'sine', freq: [600, 150], duration: 0.15, volume: 0.3,
+                decay: 'exp', noise: 0.2, detune: 80, category: 'sfx'
+            },
+            enemyShoot: {
+                wave: 'square', freq: [200, 120], duration: 0.06, volume: 0.12,
+                decay: 'exp', noise: 0.2, detune: 50, category: 'sfx'
+            },
+            kamikazeCharge: {
+                wave: 'sawtooth', freq: [200, 500], duration: 0.2, volume: 0.12,
+                decay: 'linear', noise: 0.1, detune: 30, category: 'sfx'
+            },
+            leviathanSpawn: {
+                wave: 'sawtooth', freq: [60, 30], duration: 0.4, volume: 0.3,
+                decay: 'exp', noise: 0.3, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [400, 100], Q: 1 }
+            },
+            tankSplit: {
+                wave: 'square', freq: [400, 200], duration: 0.1, volume: 0.2,
+                decay: 'exp', noise: 0.3, detune: 60, category: 'sfx'
             }
         };
 
@@ -782,7 +929,20 @@
                     gain.gain.linearRampToValueAtTime(0, endT);
                 }
 
-                osc.connect(gain);
+                // Optional filter
+                if (def.filter) {
+                    const filt = ctx.createBiquadFilter();
+                    filt.type = def.filter.type;
+                    const fFreqStart = Array.isArray(def.filter.freq) ? def.filter.freq[0] : def.filter.freq;
+                    const fFreqEnd = Array.isArray(def.filter.freq) ? def.filter.freq[1] : def.filter.freq;
+                    filt.frequency.setValueAtTime(fFreqStart, t);
+                    if (fFreqStart !== fFreqEnd) filt.frequency.linearRampToValueAtTime(fFreqEnd, endT);
+                    filt.Q.value = def.filter.Q || 1;
+                    osc.connect(filt);
+                    filt.connect(gain);
+                } else {
+                    osc.connect(gain);
+                }
 
                 // Noise mix
                 if (def.noise > 0) {
@@ -2042,6 +2202,7 @@
         let selectedStartingWeapon = 'laser_cannon';
 
         function startGame() {
+            AudioManager.play('gameStart');
             selectedStartingWeapon = STARTING_WEAPON_IDS[menuWeaponIndex] || 'laser_cannon';
 
             // From game over or demo end, skip menu animation — go straight to playing
@@ -2267,8 +2428,10 @@
                 
                 if (e.code === 'Escape') {
                     if (gameState === 'playing') {
+                        AudioManager.play('pauseIn');
                         gameState = 'paused';
                     } else if (gameState === 'paused') {
+                        AudioManager.play('pauseOut');
                         gameState = 'playing';
                     }
                     // skilltree: no ESC close - must choose an upgrade
@@ -2353,6 +2516,7 @@
                 const scaleY = CANVAS_HEIGHT / rect.height;
                 const clickX = (e.clientX - rect.left) * scaleX;
                 const clickY = (e.clientY - rect.top) * scaleY;
+                AudioManager.play('uiClick');
 
                 if (showCheatOverlay) {
                     showCheatOverlay = false;
@@ -2365,6 +2529,7 @@
                     // Hamburger menu button
                     if (clickX >= HAMBURGER_BTN.x && clickX <= HAMBURGER_BTN.x + HAMBURGER_BTN.w &&
                         clickY >= HAMBURGER_BTN.y && clickY <= HAMBURGER_BTN.y + HAMBURGER_BTN.h) {
+                        AudioManager.play('pauseIn');
                         gameState = 'paused';
                     }
                 } else if (gameState === 'skilltree') {
@@ -2428,6 +2593,7 @@
                     const coords = touchToCanvas(e.touches[0]);
                     if (coords.x >= HAMBURGER_BTN.x && coords.x <= HAMBURGER_BTN.x + HAMBURGER_BTN.w &&
                         coords.y >= HAMBURGER_BTN.y && coords.y <= HAMBURGER_BTN.y + HAMBURGER_BTN.h) {
+                        AudioManager.play('pauseIn');
                         gameState = 'paused';
                         e.preventDefault();
                         return;
@@ -2994,6 +3160,7 @@
                 if (shieldRechargeTimer <= 0) {
                     shieldRechargeTimer = 0;
                     player.shield = PLAYER_MAX_SHIELD;
+                    AudioManager.play('shieldRecharge');
                 }
             }
 
@@ -3596,6 +3763,7 @@
 
         // NOVA BEAM: instant hitscan laser (laser cannon evolution)
         function fireNovaBeam(noseX, noseY, targetRad, stats) {
+            AudioManager.play('novaBeamFire');
             const beamRange = 4000;
             const novaDamage = Math.round(stats.damage * 3);
             const endX = noseX + Math.cos(targetRad) * beamRange;
@@ -3650,6 +3818,7 @@
         // Fire rockets in burst (360º enemy detection)
         // TODO: EVOLUTION - Armageddon Protocol: every 8s, fire a mega-missile with massive explosion
         function fireRocket(nearbyEnemies, stats) {
+            AudioManager.play('rocketFire');
             // Find closest enemy to aim at
             let closestEnemy = null;
             let closestDist = Infinity;
@@ -3741,6 +3910,7 @@
 
         // ARMAGEDDON PROTOCOL: mega-missile with massive explosion (missile_launcher evolution)
         function fireArmageddonMissile(nearbyEnemies, stats) {
+            AudioManager.play('armageddonLaunch');
             let closestEnemy = null;
             let closestDist = Infinity;
             for (const e of nearbyEnemies) {
@@ -3805,6 +3975,7 @@
 
         // TODO: EVOLUTION - Storm Nexus: residual electric field between hit enemies
         function fireLightning(nearbyEnemies, stats) {
+            AudioManager.play('lightningZap');
             // Find closest enemy to start the chain
             let closestEnemy = null;
             let closestDist = Infinity;
@@ -3933,6 +4104,7 @@
         function spawnAlienDrone(x, y) {
             const stats = getWeaponStats();
             if (!stats.hasDrones) return;
+            AudioManager.play('hiveMindSpawn');
 
             // Calculate actual drone count (base + extra chance)
             let count = stats.droneBaseCount;
@@ -4399,6 +4571,7 @@
             if (!player) return;
 
             // Trigger wave alert
+            AudioManager.play('waveAlert');
             waveAlertActive = true;
             waveAlertTimer = 0;
             waveAlertNumber = waveNumber;
@@ -4571,6 +4744,7 @@
                 enemy.wasInSnare = false;
                 enemy.vulnerability = 0;
                 enemy.vulnerabilityTimer = 0;
+                if (type === 'LEVIATHAN') AudioManager.play('leviathanSpawn');
                 enemies.push(enemy);
             }
         }
@@ -4782,6 +4956,7 @@
 
             // Leviathan splits into 4 aliens on death
             if (enemy.type === 'LEVIATHAN' && enemies.length < HARD_MAX_ENEMIES) {
+                AudioManager.play('leviathanSpawn');
                 const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
                 const alienConfig = ENEMY_TYPES['ALIEN'];
                 const scaledAlienHp = Math.ceil(alienConfig.hp * hpMultiplier);
@@ -4815,6 +4990,7 @@
 
             // Alien splits into 5 tanks on death
             if (enemy.type === 'ALIEN' && enemies.length < HARD_MAX_ENEMIES) {
+                AudioManager.play('tankSplit');
                 const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
                 const tankConfig = ENEMY_TYPES['TANK'];
                 const scaledTankHp = Math.ceil(tankConfig.hp * hpMultiplier);
@@ -4848,6 +5024,7 @@
 
             // Tank splits into scouts
             if (enemy.type === 'TANK' && enemies.length < HARD_MAX_ENEMIES) {
+                AudioManager.play('tankSplit');
                 for (let i = 0; i < 2; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const scout = pools.enemy.acquire();
@@ -4967,7 +5144,7 @@
                 }
                 
                 if (dist < PLAYER_COLLISION_RADIUS + 15) {
-                    AudioManager.play('xpPickup');
+                    AudioManager.play(p.type === 'health' ? 'healthPickup' : 'xpPickup');
                     if (p.type === 'health') {
                         if (player.hp < playerMaxHP) {
                             player.hp++;
@@ -6352,6 +6529,7 @@
             }
 
             skillPoints--;
+            AudioManager.play('upgradeSelect');
             spawnFloatingText(player.x, player.y - 40, option.name + '!', option.color || '#FFFFFF');
 
             // Celebration particles
@@ -6497,6 +6675,7 @@
 
                     if (distSq < collisionDist * collisionDist) {
                         e.hp -= stats.orbDamage;
+                        AudioManager.play('orbitalHit');
                         orb.hitEnemies[e.id] = 0.15;
 
                         spawnFloatingText(e.x, e.y - config.radius, stats.orbDamage.toString(), WEAPONS['orbital_shield'].color);
@@ -6554,6 +6733,7 @@
                 if (distSq < effectiveRadius * effectiveRadius) {
                     // Apply damage
                     e.hp -= stats.auraDamage;
+                    AudioManager.play('auraHit');
 
                     // Visual feedback
                     spawnFloatingText(e.x, e.y - config.radius, stats.auraDamage.toString(), auraColor);
@@ -6581,6 +6761,7 @@
 
         function triggerAnnihilationExplosion(x, y, baseDamage, baseRadius, depth, processedSet, explosionCount) {
             if (depth >= ANNIHILATION_MAX_DEPTH || explosionCount.count >= ANNIHILATION_MAX_EXPLOSIONS) return;
+            if (depth === 0) AudioManager.play('annihilationPulse');
 
             const decayFactor = Math.pow(ANNIHILATION_CHAIN_DECAY, depth);
             const explosionRadius = baseRadius * decayFactor;
@@ -6679,6 +6860,7 @@
             if (!hasForwardEnemy) return;
 
             bladeTimer = stats.bladeInterval;
+            AudioManager.play('voidSlash');
 
             // Simultaneous fan blast (all slashes fire at once)
             for (let s = 0; s < stats.bladeMultiSlash; s++) {
@@ -7022,6 +7204,7 @@
         // ============================================================
 
         function detonateMine(mine, index, stats) {
+            AudioManager.play('mineExplode');
             // Deal damage to enemies in explosion radius
             const nearby = spatialGrid.queryRadius(mine.x, mine.y, stats.mineExplosionRadius);
             for (const e of nearby) {
@@ -7331,6 +7514,7 @@
 
                     t.fireTimer = fireInterval;
                     t.shotCount++;
+                    AudioManager.play('turretFire');
 
                     const angleToTarget = Math.atan2(closestEnemy.y - t.y, closestEnemy.x - t.x);
                     const spread = (Math.random() - 0.5) * 0.12; // ±3.4° machine gun spread
@@ -7493,6 +7677,7 @@
                 const tickFired = t.tickTimer >= stats.beamTickRate;
                 if (tickFired) {
                     t.tickTimer -= stats.beamTickRate;
+                    AudioManager.play('fusionBeam');
                     const baseDamage = stats.beamDPS * stats.beamTickRate * (1 + t.rampCurrent);
 
                     // Primary target damage
@@ -7633,6 +7818,7 @@
         function explodePlayerRocket(b) {
             if (b.type !== 'rocket' && b.type !== 'mini_rocket' && b.type !== 'armageddon_rocket' && b.type !== 'turret_rocket') return;
             const isArmageddon = b.type === 'armageddon_rocket';
+            AudioManager.play(isArmageddon ? 'armageddonExplode' : 'rocketExplode');
             const isTurretRocket = b.type === 'turret_rocket';
             const explosionX = b.x;
             const explosionY = b.y;
@@ -7925,6 +8111,7 @@
 
         function triggerShieldBreak() {
             if (shieldBreakState) return;
+            AudioManager.play('shieldBreak');
 
             shieldBreakState = {
                 phase: 'freeze',
@@ -8085,6 +8272,7 @@
         }
 
         function triggerNearMiss() {
+            AudioManager.play('nearMiss');
             triggerSlowmo(SLOWMO_DURATION);
             
             // Burst particles
@@ -8108,6 +8296,7 @@
             // Prevent re-entry (player can keep getting hit after death)
             if (gameState === 'gameOver' || player._dead) return;
             player._dead = true;
+            AudioManager.play('playerDeath');
 
             // Close upgrade panel if it was open (die during level-up)
             if (upgradeOverlay.active) {
@@ -11680,6 +11869,7 @@
                 if (clickX >= btn.x && clickX <= btn.x + btn.w &&
                     clickY >= btn.y && clickY <= btn.y + btn.h) {
                     if (btn.type === 'resume') {
+                        AudioManager.play('pauseOut');
                         gameState = 'playing';
                         return true;
                     }
