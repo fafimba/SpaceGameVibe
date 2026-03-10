@@ -2822,6 +2822,58 @@
             }
         }
 
+        // ─── Volume slider drag state (shared between setupInput & setupTouchControls) ───
+        let draggingVolume = false;
+        let draggingMusic = false;
+        function getVolumeSliderBtn() {
+            return currentPauseButtons.find(b => b.type === 'volume_slider');
+        }
+        function getMusicSliderBtn() {
+            return currentPauseButtons.find(b => b.type === 'music_slider');
+        }
+        function canvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+                y: (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
+            };
+        }
+        function touchCanvasCoords(touch) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (touch.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+                y: (touch.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
+            };
+        }
+        function tryStartSliderDrag(c) {
+            const btn = getVolumeSliderBtn();
+            if (btn && c.x >= btn.x && c.x <= btn.x + btn.w &&
+                c.y >= btn.y && c.y <= btn.y + btn.h) {
+                draggingVolume = true;
+                AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
+                return true;
+            }
+            const musBtn = getMusicSliderBtn();
+            if (musBtn && c.x >= musBtn.x && c.x <= musBtn.x + musBtn.w &&
+                c.y >= musBtn.y && c.y <= musBtn.y + musBtn.h) {
+                draggingMusic = true;
+                DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
+                return true;
+            }
+            return false;
+        }
+        function updateSliderDrag(c) {
+            if (draggingVolume) {
+                const btn = getVolumeSliderBtn();
+                if (btn) AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
+            }
+            if (draggingMusic) {
+                const musBtn = getMusicSliderBtn();
+                if (musBtn) DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
+            }
+        }
+        function stopSliderDrag() { draggingVolume = false; draggingMusic = false; }
+
         function setupInput() {
             // Mobile: init audio on first touchstart (iOS requires touchstart, not click)
             window.addEventListener('touchstart', _initAudioOnInteraction, { once: true });
@@ -2977,58 +3029,6 @@
                 }
             });
 
-            // Volume slider drag support
-            let draggingVolume = false;
-            let draggingMusic = false;
-            function getVolumeSliderBtn() {
-                return currentPauseButtons.find(b => b.type === 'volume_slider');
-            }
-            function getMusicSliderBtn() {
-                return currentPauseButtons.find(b => b.type === 'music_slider');
-            }
-            function canvasCoords(e) {
-                const rect = canvas.getBoundingClientRect();
-                return {
-                    x: (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
-                    y: (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
-                };
-            }
-            function touchCanvasCoords(touch) {
-                const rect = canvas.getBoundingClientRect();
-                return {
-                    x: (touch.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
-                    y: (touch.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
-                };
-            }
-            function tryStartSliderDrag(c) {
-                const btn = getVolumeSliderBtn();
-                if (btn && c.x >= btn.x && c.x <= btn.x + btn.w &&
-                    c.y >= btn.y && c.y <= btn.y + btn.h) {
-                    draggingVolume = true;
-                    AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
-                    return true;
-                }
-                const musBtn = getMusicSliderBtn();
-                if (musBtn && c.x >= musBtn.x && c.x <= musBtn.x + musBtn.w &&
-                    c.y >= musBtn.y && c.y <= musBtn.y + musBtn.h) {
-                    draggingMusic = true;
-                    DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
-                    return true;
-                }
-                return false;
-            }
-            function updateSliderDrag(c) {
-                if (draggingVolume) {
-                    const btn = getVolumeSliderBtn();
-                    if (btn) AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
-                }
-                if (draggingMusic) {
-                    const musBtn = getMusicSliderBtn();
-                    if (musBtn) DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
-                }
-            }
-            function stopSliderDrag() { draggingVolume = false; draggingMusic = false; }
-
             // Mouse slider drag
             canvas.addEventListener('mousedown', (e) => {
                 if (gameState !== 'paused') return;
@@ -3039,20 +3039,6 @@
                 updateSliderDrag(canvasCoords(e));
             });
             window.addEventListener('mouseup', stopSliderDrag);
-
-            // Touch slider drag (canvas-level, works alongside joystickZone)
-            canvas.addEventListener('touchstart', (e) => {
-                if (gameState !== 'paused') return;
-                const c = touchCanvasCoords(e.touches[0]);
-                if (tryStartSliderDrag(c)) e.preventDefault();
-            }, { passive: false });
-            canvas.addEventListener('touchmove', (e) => {
-                if (!draggingVolume && !draggingMusic) return;
-                updateSliderDrag(touchCanvasCoords(e.touches[0]));
-                e.preventDefault();
-            }, { passive: false });
-            canvas.addEventListener('touchend', stopSliderDrag);
-            canvas.addEventListener('touchcancel', stopSliderDrag);
 
         }
         
@@ -12587,28 +12573,53 @@
             renderPauseWeaponInventory(cx, panelY + (isMobile() ? 100 : 86));
 
             // ─── Slider shared dimensions ───
-            const sliderH = isMobile() ? 14 : 8;
-            const sliderRadius = isMobile() ? 7 : 4;
-            const thumbR = isMobile() ? 11 : 6;
-            const sliderW = isMobile() ? panelW - 100 : 200;
-            const sliderX = cx - sliderW / 2 + (isMobile() ? 10 : 0);
-            const labelFont = isMobile() ? '14px "Segoe UI", sans-serif' : '11px "Segoe UI", sans-serif';
-            const pctFont = isMobile() ? '15px "Segoe UI", sans-serif' : '12px "Segoe UI", sans-serif';
-            const rowGap = isMobile() ? 56 : 36;
+            const mobile = isMobile();
+            const sliderH = mobile ? 14 : 8;
+            const sliderRadius = mobile ? 7 : 4;
+            const thumbR = mobile ? 11 : 6;
+            const hitPad = mobile ? 18 : 10;
+            const muteHitW = mobile ? 44 : 30;
+            const muteHitH = mobile ? 36 : 24;
+            const muteScale = mobile ? 1.4 : 1;
+            // Mobile: label row on top, slider full-width below with mute icon at end
+            // Desktop: single row — label | pct | slider | mute
+            const sliderMargin = panelX + 30;
+            const muteIconW = mobile ? 40 : 30;
+            const sliderW = mobile ? panelW - 60 - muteIconW - 16 : 200;
+            const sliderX = mobile ? sliderMargin : cx - sliderW / 2;
+            const labelFont = mobile ? '14px "Segoe UI", sans-serif' : '11px "Segoe UI", sans-serif';
+            const pctFont = mobile ? '14px "Segoe UI", sans-serif' : '12px "Segoe UI", sans-serif';
+            // Mobile rows are taller (label line + slider line + gap)
+            const rowGap = mobile ? 76 : 36;
 
-            // ─── SFX volume control row ───
-            const volRowY = panelY + (isMobile() ? 200 : 170);
-            const sliderY = volRowY + (isMobile() ? 4 : 2);
+            // ─── SFX volume control ───
+            const volLabelY = panelY + (mobile ? 200 : 170);
             const vol = AudioManager.getVolume();
             const muted = AudioManager.isMuted();
 
-            // "SFX" label
-            ctx.textAlign = 'left';
-            ctx.font = labelFont;
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('SFX', panelX + 24, volRowY + (isMobile() ? 13 : 8));
+            if (mobile) {
+                // Label row: "SFX" left, "100%" right
+                ctx.textAlign = 'left';
+                ctx.font = labelFont;
+                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                ctx.fillText('SFX', sliderMargin, volLabelY + 5);
+                ctx.textAlign = 'right';
+                ctx.font = pctFont;
+                ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
+                ctx.fillText(muted ? 'MUTED' : Math.round(vol * 100) + '%', panelX + panelW - 30, volLabelY + 5);
+            } else {
+                ctx.textAlign = 'left';
+                ctx.font = labelFont;
+                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                ctx.fillText('SFX', panelX + 24, volLabelY + 8);
+                ctx.textAlign = 'right';
+                ctx.font = pctFont;
+                ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
+                ctx.fillText(muted ? 'MUTED' : Math.round(vol * 100) + '%', sliderX - 8, volLabelY + 9);
+            }
 
-            // Slider track
+            // Slider track (below label on mobile, same line on desktop)
+            const sliderY = mobile ? volLabelY + 24 : volLabelY + 2;
             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
             ctx.beginPath();
             ctx.roundRect(sliderX, sliderY, sliderW, sliderH, sliderRadius);
@@ -12630,17 +12641,14 @@
             ctx.arc(thumbX, sliderY + sliderH / 2, thumbR, 0, Math.PI * 2);
             ctx.fill();
 
-            // Volume slider hit area
-            const hitPad = isMobile() ? 18 : 10;
             currentPauseButtons.push({
                 type: 'volume_slider', x: sliderX - thumbR, y: sliderY - hitPad,
                 w: sliderW + thumbR * 2, h: sliderH + hitPad * 2, sliderX, sliderW
             });
 
-            // Mute button (speaker icon)
-            const muteX = sliderX + sliderW + (isMobile() ? 20 : 16);
+            // Mute button (speaker icon) — right of slider
+            const muteX = sliderX + sliderW + (mobile ? 14 : 16);
             const muteY = sliderY + sliderH / 2;
-            const muteScale = isMobile() ? 1.5 : 1;
             ctx.save();
             ctx.translate(muteX, muteY);
             ctx.scale(muteScale, muteScale);
@@ -12660,30 +12668,37 @@
                 if (vol > 0.5) { ctx.beginPath(); ctx.arc(12, 0, 9, -0.5, 0.5); ctx.stroke(); }
             }
             ctx.restore();
-            const muteHitW = isMobile() ? 44 : 30;
-            const muteHitH = isMobile() ? 36 : 24;
             currentPauseButtons.push({
                 type: 'mute_toggle', x: muteX - 4, y: muteY - muteHitH / 2,
                 w: muteHitW, h: muteHitH
             });
 
-            // SFX percentage text
-            ctx.textAlign = 'right';
-            ctx.font = pctFont;
-            ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
-            ctx.fillText(muted ? 'MUTED' : Math.round(vol * 100) + '%', sliderX - (isMobile() ? 12 : 8), volRowY + (isMobile() ? 14 : 9));
-
-            // ─── Music volume control row ───
-            const musRowY = volRowY + rowGap;
+            // ─── Music volume control ───
+            const musLabelY = volLabelY + rowGap;
             const musVol = DroneEngine.getMusicVolume();
             const musMuted = DroneEngine.isMusicMuted();
-            const musSliderY = musRowY + (isMobile() ? 4 : 2);
 
-            // "MUSIC" label
-            ctx.textAlign = 'left';
-            ctx.font = labelFont;
-            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('MUSIC', panelX + 24, musRowY + (isMobile() ? 13 : 8));
+            if (mobile) {
+                ctx.textAlign = 'left';
+                ctx.font = labelFont;
+                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                ctx.fillText('MUSIC', sliderMargin, musLabelY + 5);
+                ctx.textAlign = 'right';
+                ctx.font = pctFont;
+                ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
+                ctx.fillText(musMuted ? 'MUTED' : Math.round(musVol * 100) + '%', panelX + panelW - 30, musLabelY + 5);
+            } else {
+                ctx.textAlign = 'left';
+                ctx.font = labelFont;
+                ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                ctx.fillText('MUSIC', panelX + 24, musLabelY + 8);
+                ctx.textAlign = 'right';
+                ctx.font = pctFont;
+                ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
+                ctx.fillText(musMuted ? 'MUTED' : Math.round(musVol * 100) + '%', sliderX - 8, musLabelY + 9);
+            }
+
+            const musSliderY = mobile ? musLabelY + 24 : musLabelY + 2;
 
             // Music slider track
             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
@@ -12713,7 +12728,7 @@
             });
 
             // Music mute button (note icon)
-            const musMuteX = sliderX + sliderW + (isMobile() ? 20 : 16);
+            const musMuteX = sliderX + sliderW + (mobile ? 14 : 16);
             const musMuteY = musSliderY + sliderH / 2;
             ctx.save();
             ctx.translate(musMuteX, musMuteY);
@@ -12733,18 +12748,12 @@
                 w: muteHitW, h: muteHitH
             });
 
-            // Music percentage text
-            ctx.textAlign = 'right';
-            ctx.font = pctFont;
-            ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
-            ctx.fillText(musMuted ? 'MUTED' : Math.round(musVol * 100) + '%', sliderX - (isMobile() ? 12 : 8), musRowY + (isMobile() ? 14 : 9));
-
             // ─── Action buttons ───
-            const btnW = isMobile() ? panelW - 60 : 260;
-            const btnH = isMobile() ? 64 : 44;
+            const btnW = mobile ? panelW - 60 : 260;
+            const btnH = mobile ? 64 : 44;
             const btnX = cx - btnW / 2;
-            const btnStartY = panelY + (isMobile() ? 330 : 256);
-            const btnGap = isMobile() ? 20 : 12;
+            const btnStartY = panelY + (mobile ? 360 : 256);
+            const btnGap = mobile ? 20 : 12;
 
             const buttons = [
                 { type: 'resume', label: 'RESUME', color: COLORS.PLAYER },
@@ -12767,15 +12776,15 @@
 
                 // Button text
                 ctx.textAlign = 'center';
-                ctx.font = 'bold ' + (isMobile() ? '24' : '16') + 'px "Segoe UI", sans-serif';
+                ctx.font = 'bold ' + (mobile ? '24' : '16') + 'px "Segoe UI", sans-serif';
                 ctx.fillStyle = btn.color;
-                ctx.fillText(btn.label, cx, by + btnH / 2 + (isMobile() ? 9 : 6));
+                ctx.fillText(btn.label, cx, by + btnH / 2 + (mobile ? 9 : 6));
 
                 currentPauseButtons.push({ type: btn.type, x: btnX, y: by, w: btnW, h: btnH });
             }
 
             // Hint text at bottom
-            if (!isMobile()) {
+            if (!mobile) {
                 ctx.font = '11px "Segoe UI", sans-serif';
                 ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
                 ctx.fillText('ESC to resume', cx, panelY + panelH - 16);
