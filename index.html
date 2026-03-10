@@ -1931,42 +1931,35 @@
         let pausePanelRect = null;
         let gameOverBgSnapshot = null;
         const HAMBURGER_BTN = { x: 16, y: 10, w: 50, h: 40 };
-        // Detect ctx.filter support once
-        const _filterSupported = (() => {
-            try {
-                const tc = document.createElement('canvas');
-                tc.width = tc.height = 1;
-                const tctx = tc.getContext('2d');
-                tctx.filter = 'blur(1px)';
-                return tctx.filter === 'blur(1px)';
-            } catch(e) { return false; }
-        })();
         function blurCanvas(srcCanvas) {
-            const out = document.createElement('canvas');
-            out.width = srcCanvas.width;
-            out.height = srcCanvas.height;
-            const outCtx = out.getContext('2d');
-            if (_filterSupported) {
-                outCtx.filter = 'blur(8px)';
-                outCtx.drawImage(srcCanvas, 0, 0);
-                outCtx.filter = 'none';
-            } else {
-                // Multi-pass downscale fallback for browsers without filter support
-                const s1 = document.createElement('canvas');
-                s1.width = srcCanvas.width >> 1;
-                s1.height = srcCanvas.height >> 1;
-                const c1 = s1.getContext('2d');
-                c1.drawImage(srcCanvas, 0, 0, s1.width, s1.height);
-                const s2 = document.createElement('canvas');
-                s2.width = s1.width >> 1;
-                s2.height = s1.height >> 1;
-                const c2 = s2.getContext('2d');
-                c2.drawImage(s1, 0, 0, s2.width, s2.height);
-                outCtx.imageSmoothingEnabled = true;
-                outCtx.imageSmoothingQuality = 'high';
-                outCtx.drawImage(s2, 0, 0, out.width, out.height);
+            // Multi-pass downscale + gradual upscale blur — works on all browsers
+            const w = srcCanvas.width, h = srcCanvas.height;
+            // Downscale in 4 steps: 1/2 → 1/4 → 1/8 → 1/16
+            const steps = [srcCanvas];
+            for (let i = 0; i < 4; i++) {
+                const prev = steps[i];
+                const s = document.createElement('canvas');
+                s.width = Math.max(1, prev.width >> 1);
+                s.height = Math.max(1, prev.height >> 1);
+                const sc = s.getContext('2d');
+                sc.imageSmoothingEnabled = true;
+                sc.imageSmoothingQuality = 'high';
+                sc.drawImage(prev, 0, 0, s.width, s.height);
+                steps.push(s);
             }
-            return out;
+            // Gradual upscale back through each step for smooth blur
+            let cur = steps[steps.length - 1];
+            for (let i = steps.length - 2; i >= 0; i--) {
+                const target = document.createElement('canvas');
+                target.width = steps[i].width;
+                target.height = steps[i].height;
+                const tc = target.getContext('2d');
+                tc.imageSmoothingEnabled = true;
+                tc.imageSmoothingQuality = 'high';
+                tc.drawImage(cur, 0, 0, target.width, target.height);
+                cur = target;
+            }
+            return cur;
         }
         function capturePauseBg() {
             pauseBgSnapshot = blurCanvas(canvas);
