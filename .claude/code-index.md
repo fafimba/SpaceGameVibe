@@ -166,12 +166,15 @@ Lines 120-12700+: JavaScript IIFE
 ## 33. RENDERING (9022-10797)
 - L9040: `render()`
 
-## 34. UI RENDERING (11266-12717)
-- L11266: `renderUI()`
-- L12553: `renderPauseOverlay()` — SFX volume slider + Music volume slider + action buttons (mobile: taller panel, bigger sliders/thumbs/buttons)
+## 34. UI RENDERING (11358-12948)
+- L11358: `renderUI()`
+- L11381: `renderMenu()` — main menu; `menuMode='settings'` renders sound sliders via `currentPauseButtons`
+- L12521: `handleMenuClick()` — handles play, shop, settings, back, upgrade, weapon arrows
+- L12696: `handlePauseClick()` — volume/music sliders, mute toggles, resume/restart/exit
+- L12808: `renderPauseOverlay()` — SFX + Music volume sliders + action buttons
 
-## 35. UTILITIES (13044)
-- L13044: `normalizeAngle(angle)`
+## 35. UTILITIES (13364)
+- L13364: `normalizeAngle(angle)`
 
-## 36. START GAME (13057+)
+## 36. START GAME (13377+)
 - `init()` call
