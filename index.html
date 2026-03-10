@@ -2993,25 +2993,31 @@
                     y: (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
                 };
             }
-            canvas.addEventListener('mousedown', (e) => {
-                if (gameState !== 'paused') return;
-                const c = canvasCoords(e);
+            function touchCanvasCoords(touch) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (touch.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+                    y: (touch.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
+                };
+            }
+            function tryStartSliderDrag(c) {
                 const btn = getVolumeSliderBtn();
                 if (btn && c.x >= btn.x && c.x <= btn.x + btn.w &&
                     c.y >= btn.y && c.y <= btn.y + btn.h) {
                     draggingVolume = true;
                     AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
+                    return true;
                 }
                 const musBtn = getMusicSliderBtn();
                 if (musBtn && c.x >= musBtn.x && c.x <= musBtn.x + musBtn.w &&
                     c.y >= musBtn.y && c.y <= musBtn.y + musBtn.h) {
                     draggingMusic = true;
                     DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
+                    return true;
                 }
-            });
-            canvas.addEventListener('mousemove', (e) => {
-                if (!draggingVolume && !draggingMusic) return;
-                const c = canvasCoords(e);
+                return false;
+            }
+            function updateSliderDrag(c) {
                 if (draggingVolume) {
                     const btn = getVolumeSliderBtn();
                     if (btn) AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
@@ -3020,8 +3026,33 @@
                     const musBtn = getMusicSliderBtn();
                     if (musBtn) DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
                 }
+            }
+            function stopSliderDrag() { draggingVolume = false; draggingMusic = false; }
+
+            // Mouse slider drag
+            canvas.addEventListener('mousedown', (e) => {
+                if (gameState !== 'paused') return;
+                tryStartSliderDrag(canvasCoords(e));
             });
-            window.addEventListener('mouseup', () => { draggingVolume = false; draggingMusic = false; });
+            canvas.addEventListener('mousemove', (e) => {
+                if (!draggingVolume && !draggingMusic) return;
+                updateSliderDrag(canvasCoords(e));
+            });
+            window.addEventListener('mouseup', stopSliderDrag);
+
+            // Touch slider drag (canvas-level, works alongside joystickZone)
+            canvas.addEventListener('touchstart', (e) => {
+                if (gameState !== 'paused') return;
+                const c = touchCanvasCoords(e.touches[0]);
+                if (tryStartSliderDrag(c)) e.preventDefault();
+            }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => {
+                if (!draggingVolume && !draggingMusic) return;
+                updateSliderDrag(touchCanvasCoords(e.touches[0]));
+                e.preventDefault();
+            }, { passive: false });
+            canvas.addEventListener('touchend', stopSliderDrag);
+            canvas.addEventListener('touchcancel', stopSliderDrag);
 
         }
         
@@ -3064,7 +3095,10 @@
 
                 if (gameState === 'paused') {
                     const coords = touchToCanvas(e.touches[0]);
-                    handlePauseClick(coords.x, coords.y);
+                    // Try slider drag first, fall back to button tap
+                    if (!tryStartSliderDrag(coords)) {
+                        handlePauseClick(coords.x, coords.y);
+                    }
                     e.preventDefault();
                     return;
                 }
@@ -3122,14 +3156,28 @@
             });
 
             joystickZone.addEventListener('touchmove', (e) => {
+                if (draggingVolume || draggingMusic) {
+                    const rect = canvas.getBoundingClientRect();
+                    const c = {
+                        x: (e.touches[0].clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+                        y: (e.touches[0].clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
+                    };
+                    updateSliderDrag(c);
+                    e.preventDefault();
+                    return;
+                }
                 if (joystickActive) {
                     joystickTouch = e.touches[0];
                     updateJoystick(joystickTouch);
                 }
                 e.preventDefault();
             });
-            
+
             joystickZone.addEventListener('touchend', () => {
+                if (draggingVolume || draggingMusic) {
+                    stopSliderDrag();
+                    return;
+                }
                 joystickActive = false;
                 joystickMagnitude = 0;
                 joystickKnob.style.left = '52px';
@@ -3390,7 +3438,7 @@
             }
             
             // Show/hide joystick based on game state (mobile only)
-            const showJoystick = gameState === 'playing' || gameState === 'paused';
+            const showJoystick = gameState === 'playing';
             joystickBaseEl.style.display = showJoystick ? 'block' : 'none';
 
             // Volume ducking: lower SFX when not actively playing
@@ -12511,8 +12559,8 @@
 
             const cx = CANVAS_WIDTH / 2;
             const cy = CANVAS_HEIGHT / 2;
-            const panelW = isMobile() ? Math.min(CANVAS_WIDTH - 40, 500) : 460;
-            const panelH = 480;
+            const panelW = isMobile() ? Math.min(CANVAS_WIDTH - 40, 520) : 460;
+            const panelH = isMobile() ? 720 : 480;
             const panelX = cx - panelW / 2;
             const panelY = cy - panelH / 2;
 
@@ -12527,35 +12575,43 @@
 
             // Title
             ctx.textAlign = 'center';
-            ctx.font = 'bold 32px "Segoe UI", sans-serif';
+            const titleSize = isMobile() ? 40 : 32;
+            ctx.font = 'bold ' + titleSize + 'px "Segoe UI", sans-serif';
             ctx.fillStyle = COLORS.UI_PRIMARY;
-            ctx.fillText('PAUSED', cx, panelY + 48);
+            ctx.fillText('PAUSED', cx, panelY + (isMobile() ? 56 : 48));
 
             // Weapon inventory
             ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.font = '11px "Segoe UI", sans-serif';
-            ctx.fillText('ARSENAL', cx, panelY + 76);
-            renderPauseWeaponInventory(cx, panelY + 86);
+            ctx.font = (isMobile() ? '13' : '11') + 'px "Segoe UI", sans-serif';
+            ctx.fillText('ARSENAL', cx, panelY + (isMobile() ? 88 : 76));
+            renderPauseWeaponInventory(cx, panelY + (isMobile() ? 100 : 86));
 
-            // ─── Volume control row ───
-            const volRowY = panelY + 170;
-            const sliderW = isMobile() ? panelW - 140 : 200;
-            const sliderH = 8;
-            const sliderX = cx - sliderW / 2;
-            const sliderY = volRowY + 2;
+            // ─── Slider shared dimensions ───
+            const sliderH = isMobile() ? 14 : 8;
+            const sliderRadius = isMobile() ? 7 : 4;
+            const thumbR = isMobile() ? 11 : 6;
+            const sliderW = isMobile() ? panelW - 100 : 200;
+            const sliderX = cx - sliderW / 2 + (isMobile() ? 10 : 0);
+            const labelFont = isMobile() ? '14px "Segoe UI", sans-serif' : '11px "Segoe UI", sans-serif';
+            const pctFont = isMobile() ? '15px "Segoe UI", sans-serif' : '12px "Segoe UI", sans-serif';
+            const rowGap = isMobile() ? 56 : 36;
+
+            // ─── SFX volume control row ───
+            const volRowY = panelY + (isMobile() ? 200 : 170);
+            const sliderY = volRowY + (isMobile() ? 4 : 2);
             const vol = AudioManager.getVolume();
             const muted = AudioManager.isMuted();
 
             // "SFX" label
             ctx.textAlign = 'left';
-            ctx.font = '11px "Segoe UI", sans-serif';
+            ctx.font = labelFont;
             ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('SFX', panelX + 24, volRowY + 8);
+            ctx.fillText('SFX', panelX + 24, volRowY + (isMobile() ? 13 : 8));
 
             // Slider track
             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
             ctx.beginPath();
-            ctx.roundRect(sliderX, sliderY, sliderW, sliderH, 4);
+            ctx.roundRect(sliderX, sliderY, sliderW, sliderH, sliderRadius);
             ctx.fill();
 
             // Slider fill
@@ -12563,7 +12619,7 @@
             if (fillW > 0) {
                 ctx.fillStyle = hexToRGBA(COLORS.PLAYER, muted ? 0.2 : 0.6);
                 ctx.beginPath();
-                ctx.roundRect(sliderX, sliderY, fillW, sliderH, 4);
+                ctx.roundRect(sliderX, sliderY, fillW, sliderH, sliderRadius);
                 ctx.fill();
             }
 
@@ -12571,80 +12627,68 @@
             const thumbX = sliderX + fillW;
             ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.PLAYER;
             ctx.beginPath();
-            ctx.arc(thumbX, sliderY + sliderH / 2, 6, 0, Math.PI * 2);
+            ctx.arc(thumbX, sliderY + sliderH / 2, thumbR, 0, Math.PI * 2);
             ctx.fill();
 
-            // Volume slider hit area (wider for easier clicking)
+            // Volume slider hit area
+            const hitPad = isMobile() ? 18 : 10;
             currentPauseButtons.push({
-                type: 'volume_slider', x: sliderX - 6, y: sliderY - 10,
-                w: sliderW + 12, h: sliderH + 20, sliderX, sliderW
+                type: 'volume_slider', x: sliderX - thumbR, y: sliderY - hitPad,
+                w: sliderW + thumbR * 2, h: sliderH + hitPad * 2, sliderX, sliderW
             });
 
             // Mute button (speaker icon)
-            const muteX = sliderX + sliderW + 16;
+            const muteX = sliderX + sliderW + (isMobile() ? 20 : 16);
             const muteY = sliderY + sliderH / 2;
-            const muteSize = 12;
+            const muteScale = isMobile() ? 1.5 : 1;
+            ctx.save();
+            ctx.translate(muteX, muteY);
+            ctx.scale(muteScale, muteScale);
             ctx.strokeStyle = muted ? COLORS.HUD_RED : COLORS.HUD_TEXT_SECONDARY;
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
-            // Speaker body
             ctx.beginPath();
-            ctx.moveTo(muteX, muteY - 4);
-            ctx.lineTo(muteX + 5, muteY - 4);
-            ctx.lineTo(muteX + 10, muteY - 8);
-            ctx.lineTo(muteX + 10, muteY + 8);
-            ctx.lineTo(muteX + 5, muteY + 4);
-            ctx.lineTo(muteX, muteY + 4);
+            ctx.moveTo(0, -4); ctx.lineTo(5, -4); ctx.lineTo(10, -8);
+            ctx.lineTo(10, 8); ctx.lineTo(5, 4); ctx.lineTo(0, 4);
             ctx.closePath();
             ctx.stroke();
             if (muted) {
-                // X through speaker
-                ctx.beginPath();
-                ctx.moveTo(muteX + 14, muteY - 5);
-                ctx.lineTo(muteX + 22, muteY + 5);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(muteX + 22, muteY - 5);
-                ctx.lineTo(muteX + 14, muteY + 5);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(14, -5); ctx.lineTo(22, 5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(22, -5); ctx.lineTo(14, 5); ctx.stroke();
             } else {
-                // Sound waves
-                ctx.beginPath();
-                ctx.arc(muteX + 12, muteY, 5, -0.6, 0.6);
-                ctx.stroke();
-                if (vol > 0.5) {
-                    ctx.beginPath();
-                    ctx.arc(muteX + 12, muteY, 9, -0.5, 0.5);
-                    ctx.stroke();
-                }
+                ctx.beginPath(); ctx.arc(12, 0, 5, -0.6, 0.6); ctx.stroke();
+                if (vol > 0.5) { ctx.beginPath(); ctx.arc(12, 0, 9, -0.5, 0.5); ctx.stroke(); }
             }
+            ctx.restore();
+            const muteHitW = isMobile() ? 44 : 30;
+            const muteHitH = isMobile() ? 36 : 24;
             currentPauseButtons.push({
-                type: 'mute_toggle', x: muteX - 4, y: muteY - 12,
-                w: 30, h: 24
+                type: 'mute_toggle', x: muteX - 4, y: muteY - muteHitH / 2,
+                w: muteHitW, h: muteHitH
             });
 
             // SFX percentage text
             ctx.textAlign = 'right';
-            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.font = pctFont;
             ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
-            ctx.fillText(muted ? 'MUTED' : Math.round(vol * 100) + '%', sliderX - 8, volRowY + 9);
+            ctx.fillText(muted ? 'MUTED' : Math.round(vol * 100) + '%', sliderX - (isMobile() ? 12 : 8), volRowY + (isMobile() ? 14 : 9));
 
             // ─── Music volume control row ───
-            const musRowY = volRowY + 36;
+            const musRowY = volRowY + rowGap;
             const musVol = DroneEngine.getMusicVolume();
             const musMuted = DroneEngine.isMusicMuted();
-            const musSliderY = musRowY + 2;
+            const musSliderY = musRowY + (isMobile() ? 4 : 2);
 
             // "MUSIC" label
             ctx.textAlign = 'left';
-            ctx.font = '11px "Segoe UI", sans-serif';
+            ctx.font = labelFont;
             ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
-            ctx.fillText('MUSIC', panelX + 24, musRowY + 8);
+            ctx.fillText('MUSIC', panelX + 24, musRowY + (isMobile() ? 13 : 8));
 
             // Music slider track
             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
             ctx.beginPath();
-            ctx.roundRect(sliderX, musSliderY, sliderW, sliderH, 4);
+            ctx.roundRect(sliderX, musSliderY, sliderW, sliderH, sliderRadius);
             ctx.fill();
 
             // Music slider fill
@@ -12652,7 +12696,7 @@
             if (musFillW > 0) {
                 ctx.fillStyle = hexToRGBA(COLORS.HUD_GOLD, musMuted ? 0.2 : 0.6);
                 ctx.beginPath();
-                ctx.roundRect(sliderX, musSliderY, musFillW, sliderH, 4);
+                ctx.roundRect(sliderX, musSliderY, musFillW, sliderH, sliderRadius);
                 ctx.fill();
             }
 
@@ -12660,56 +12704,47 @@
             const musThumbX = sliderX + musFillW;
             ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_GOLD;
             ctx.beginPath();
-            ctx.arc(musThumbX, musSliderY + sliderH / 2, 6, 0, Math.PI * 2);
+            ctx.arc(musThumbX, musSliderY + sliderH / 2, thumbR, 0, Math.PI * 2);
             ctx.fill();
 
             currentPauseButtons.push({
-                type: 'music_slider', x: sliderX - 6, y: musSliderY - 10,
-                w: sliderW + 12, h: sliderH + 20, sliderX, sliderW
+                type: 'music_slider', x: sliderX - thumbR, y: musSliderY - hitPad,
+                w: sliderW + thumbR * 2, h: sliderH + hitPad * 2, sliderX, sliderW
             });
 
             // Music mute button (note icon)
-            const musMuteX = sliderX + sliderW + 16;
+            const musMuteX = sliderX + sliderW + (isMobile() ? 20 : 16);
             const musMuteY = musSliderY + sliderH / 2;
+            ctx.save();
+            ctx.translate(musMuteX, musMuteY);
+            ctx.scale(muteScale, muteScale);
             ctx.strokeStyle = musMuted ? COLORS.HUD_RED : COLORS.HUD_TEXT_SECONDARY;
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
-            // Simple note icon
-            ctx.beginPath();
-            ctx.arc(musMuteX + 2, musMuteY + 3, 3, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(musMuteX + 5, musMuteY + 3);
-            ctx.lineTo(musMuteX + 5, musMuteY - 7);
-            ctx.lineTo(musMuteX + 10, musMuteY - 9);
-            ctx.stroke();
+            ctx.beginPath(); ctx.arc(2, 3, 3, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(5, 3); ctx.lineTo(5, -7); ctx.lineTo(10, -9); ctx.stroke();
             if (musMuted) {
-                ctx.beginPath();
-                ctx.moveTo(musMuteX + 14, musMuteY - 5);
-                ctx.lineTo(musMuteX + 22, musMuteY + 5);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(musMuteX + 22, musMuteY - 5);
-                ctx.lineTo(musMuteX + 14, musMuteY + 5);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(14, -5); ctx.lineTo(22, 5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(22, -5); ctx.lineTo(14, 5); ctx.stroke();
             }
+            ctx.restore();
             currentPauseButtons.push({
-                type: 'music_mute_toggle', x: musMuteX - 4, y: musMuteY - 12,
-                w: 30, h: 24
+                type: 'music_mute_toggle', x: musMuteX - 4, y: musMuteY - muteHitH / 2,
+                w: muteHitW, h: muteHitH
             });
 
             // Music percentage text
             ctx.textAlign = 'right';
-            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.font = pctFont;
             ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
-            ctx.fillText(musMuted ? 'MUTED' : Math.round(musVol * 100) + '%', sliderX - 8, musRowY + 9);
+            ctx.fillText(musMuted ? 'MUTED' : Math.round(musVol * 100) + '%', sliderX - (isMobile() ? 12 : 8), musRowY + (isMobile() ? 14 : 9));
 
             // ─── Action buttons ───
             const btnW = isMobile() ? panelW - 60 : 260;
-            const btnH = isMobile() ? 52 : 44;
+            const btnH = isMobile() ? 64 : 44;
             const btnX = cx - btnW / 2;
-            const btnStartY = panelY + 256;
-            const btnGap = isMobile() ? 16 : 12;
+            const btnStartY = panelY + (isMobile() ? 330 : 256);
+            const btnGap = isMobile() ? 20 : 12;
 
             const buttons = [
                 { type: 'resume', label: 'RESUME', color: COLORS.PLAYER },
@@ -12732,9 +12767,9 @@
 
                 // Button text
                 ctx.textAlign = 'center';
-                ctx.font = 'bold ' + (isMobile() ? '22' : '16') + 'px "Segoe UI", sans-serif';
+                ctx.font = 'bold ' + (isMobile() ? '24' : '16') + 'px "Segoe UI", sans-serif';
                 ctx.fillStyle = btn.color;
-                ctx.fillText(btn.label, cx, by + btnH / 2 + (isMobile() ? 8 : 6));
+                ctx.fillText(btn.label, cx, by + btnH / 2 + (isMobile() ? 9 : 6));
 
                 currentPauseButtons.push({ type: btn.type, x: btnX, y: by, w: btnW, h: btnH });
             }

@@ -1,4 +1,4 @@
-# index.html Code Index (~13067 lines)
+# index.html Code Index (~13102 lines)
 
 Last updated: 2026-03-10
 
@@ -89,7 +89,7 @@ Lines 120-12700+: JavaScript IIFE
 ## 10. INPUT HANDLING (2813-3174)
 - L2813: `_initAudioOnInteraction()` — shared helper: AudioManager.init() + resume() + DroneEngine.init()/start()
 - L2825: `setupInput()` — global touchstart listener (once) + keydown/click init audio, pauseIn/pauseOut sounds on Escape
-- L2983-3029: Volume slider drag support (SFX + Music sliders)
+- L2980-3060: Volume slider drag support (SFX + Music sliders, mouse + touch)
 
 ## 11. COORDINATE SYSTEM (3166-3202)
 - L3173: `worldToScreen()`
@@ -168,7 +168,7 @@ Lines 120-12700+: JavaScript IIFE
 
 ## 34. UI RENDERING (11266-12717)
 - L11266: `renderUI()`
-- L12482: `renderPauseOverlay()` — SFX volume slider + Music volume slider + action buttons
+- L12553: `renderPauseOverlay()` — SFX volume slider + Music volume slider + action buttons (mobile: taller panel, bigger sliders/thumbs/buttons)
 
 ## 35. UTILITIES (13044)
 - L13044: `normalizeAngle(angle)`
