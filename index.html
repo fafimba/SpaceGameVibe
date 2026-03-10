@@ -2810,17 +2810,27 @@
         // INPUT HANDLING
         // ============================================================
         
+        function _initAudioOnInteraction() {
+            AudioManager.init();
+            if (AudioManager.ctx && AudioManager.ctx.state === 'suspended') {
+                AudioManager.ctx.resume();
+            }
+            if (AudioManager.initialized && !DroneEngine._started) {
+                DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
+                DroneEngine.start();
+                DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
+            }
+        }
+
         function setupInput() {
+            // Mobile: init audio on first touchstart (iOS requires touchstart, not click)
+            window.addEventListener('touchstart', _initAudioOnInteraction, { once: true });
+
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
 
                 // Init audio on first interaction
-                AudioManager.init();
-                if (AudioManager.initialized && !DroneEngine._started) {
-                    DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
-                    DroneEngine.start();
-                    DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
-                }
+                _initAudioOnInteraction();
 
                 // Dismiss cheat overlay on any key
                 if (showCheatOverlay) {
@@ -2939,12 +2949,7 @@
                 const scaleY = CANVAS_HEIGHT / rect.height;
                 const clickX = (e.clientX - rect.left) * scaleX;
                 const clickY = (e.clientY - rect.top) * scaleY;
-                AudioManager.init();
-                if (AudioManager.initialized && !DroneEngine._started) {
-                    DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
-                    DroneEngine.start();
-                    DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
-                }
+                _initAudioOnInteraction();
                 AudioManager.play('uiClick');
 
                 if (showCheatOverlay) {
@@ -3046,12 +3051,7 @@
             joystickZone.addEventListener('touchstart', (e) => {
 
                 // Init audio on first touch
-                AudioManager.init();
-                if (AudioManager.initialized && !DroneEngine._started) {
-                    DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
-                    DroneEngine.start();
-                    DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
-                }
+                _initAudioOnInteraction();
 
                 // Helper to convert touch to canvas coordinates
                 function touchToCanvas(touch) {

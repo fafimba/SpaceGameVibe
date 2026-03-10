@@ -86,9 +86,10 @@ Lines 120-12700+: JavaScript IIFE
 - L2626: `startGame()` — plays `gameStart` sound, sets DroneEngine to playing_calm
 - L2662: `resetGame()` — calls `AudioManager.stopAllLoops()`
 
-## 10. INPUT HANDLING (2813-3166)
-- L2813: `setupInput()` — AudioManager.init() + DroneEngine.init()/start() on first keydown/touch, pauseIn/pauseOut sounds on Escape
-- L2975-3021: Volume slider drag support (SFX + Music sliders)
+## 10. INPUT HANDLING (2813-3174)
+- L2813: `_initAudioOnInteraction()` — shared helper: AudioManager.init() + resume() + DroneEngine.init()/start()
+- L2825: `setupInput()` — global touchstart listener (once) + keydown/click init audio, pauseIn/pauseOut sounds on Escape
+- L2983-3029: Volume slider drag support (SFX + Music sliders)
 
 ## 11. COORDINATE SYSTEM (3166-3202)
 - L3173: `worldToScreen()`
