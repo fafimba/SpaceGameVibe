@@ -627,177 +627,217 @@
         const SOUND_DEFS = {
             // === PLAYER WEAPONS ===
             playerShoot: {
-                wave: 'square', freq: [880, 440], duration: 0.08, volume: 0.25,
-                decay: 'exp', noise: 0, detune: 50, category: 'sfx'
+                wave: 'sine', freq: [1200, 600], duration: 0.07, volume: 0.05,
+                decay: 'exp', noise: 0, detune: 8, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1800, 800], Q: 2.0 }
             },
             rocketFire: {
-                wave: 'sawtooth', freq: [150, 80], duration: 0.15, volume: 0.3,
-                decay: 'exp', noise: 0.3, detune: 40, category: 'sfx',
-                filter: { type: 'lowpass', freq: [1200, 400], Q: 2 }
+                wave: 'triangle', freq: [180, 90], duration: 0.14, volume: 0.25,
+                decay: 'exp', noise: 0.08, detune: 15, category: 'sfx',
+                filter: { type: 'lowpass', freq: [800, 300], Q: 1.5 }
             },
             rocketExplode: {
-                wave: 'sine', freq: [120, 40], duration: 0.25, volume: 0.35,
-                decay: 'exp', noise: 0.6, detune: 20, category: 'sfx',
-                filter: { type: 'lowpass', freq: [800, 200], Q: 1 }
+                wave: 'sine', freq: [100, 35], duration: 0.28, volume: 0.30,
+                decay: 'exp', noise: 0.12, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [500, 120], Q: 1.2 }
             },
             lightningZap: {
-                wave: 'sawtooth', freq: [2000, 800], duration: 0.06, volume: 0.2,
-                decay: 'exp', noise: 0.5, detune: 100, category: 'sfx',
-                filter: { type: 'highpass', freq: [500, 1000], Q: 3 }
+                wave: 'sine', freq: [1800, 600], duration: 0.06, volume: 0.18,
+                decay: 'exp', noise: 0.05, detune: 20, category: 'sfx',
+                filter: { type: 'lowpass', freq: [3000, 1200], Q: 4 }
             },
             voidSlash: {
-                wave: 'sawtooth', freq: [600, 120], duration: 0.1, volume: 0.25,
-                decay: 'exp', noise: 0.15, detune: 60, category: 'sfx'
+                wave: 'sine', freq: [120, 800], duration: 0.5, volume: 0.14,
+                decay: 'exp', noise: 0.03, detune: 15, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1800, 600], Q: 2.0 }
             },
             fusionBeam: {
-                wave: 'sine', freq: [340, 360], duration: 0.12, volume: 0.12,
-                decay: 'linear', noise: 0.05, detune: 20, category: 'sfx'
+                wave: 'sine', freq: [330, 350], duration: 0.12, volume: 0.10,
+                decay: 'linear', noise: 0, detune: 8, category: 'sfx'
             },
             orbitalHit: {
-                wave: 'triangle', freq: [1400, 800], duration: 0.04, volume: 0.12,
-                decay: 'exp', noise: 0, detune: 80, category: 'sfx'
+                wave: 'sine', freq: [1200, 700], duration: 0.04, volume: 0.10,
+                decay: 'exp', noise: 0, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2000, 1000], Q: 1.5 }
             },
             auraHit: {
-                wave: 'sine', freq: [180, 120], duration: 0.05, volume: 0.08,
-                decay: 'exp', noise: 0, detune: 40, category: 'sfx'
+                wave: 'sine', freq: [160, 110], duration: 0.05, volume: 0.06,
+                decay: 'exp', noise: 0, detune: 5, category: 'sfx'
             },
             droneFire: {
-                wave: 'square', freq: [700, 350], duration: 0.06, volume: 0.15,
-                decay: 'exp', noise: 0.1, detune: 60, category: 'sfx'
+                wave: 'triangle', freq: [600, 300], duration: 0.05, volume: 0.12,
+                decay: 'exp', noise: 0, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1500, 600], Q: 2 }
             },
             turretFire: {
-                wave: 'square', freq: [1000, 600], duration: 0.04, volume: 0.12,
-                decay: 'exp', noise: 0.15, detune: 70, category: 'sfx'
+                wave: 'triangle', freq: [800, 500], duration: 0.035, volume: 0.10,
+                decay: 'exp', noise: 0, detune: 8, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2000, 800], Q: 1.5 }
             },
             mineExplode: {
-                wave: 'sine', freq: [200, 30], duration: 0.3, volume: 0.35,
-                decay: 'exp', noise: 0.5, detune: 15, category: 'sfx',
-                filter: { type: 'lowpass', freq: [600, 100], Q: 2 }
+                wave: 'sine', freq: [180, 25], duration: 0.35, volume: 0.30,
+                decay: 'exp', noise: 0.10, detune: 8, category: 'sfx',
+                filter: { type: 'lowpass', freq: [400, 80], Q: 1.5 }
             },
             snareActivate: {
-                wave: 'sine', freq: [400, 800], duration: 0.15, volume: 0.15,
-                decay: 'linear', noise: 0.1, detune: 30, category: 'sfx',
-                filter: { type: 'lowpass', freq: [2000, 600], Q: 4 }
+                wave: 'sine', freq: [380, 760], duration: 0.18, volume: 0.13,
+                decay: 'linear', noise: 0, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1800, 500], Q: 3 }
             },
             // === EVOLUTIONS ===
             novaBeamFire: {
-                wave: 'sawtooth', freq: [600, 400], duration: 0.12, volume: 0.3,
-                decay: 'exp', noise: 0.1, detune: 20, category: 'sfx',
-                filter: { type: 'lowpass', freq: [3000, 1500], Q: 3 }
+                wave: 'sine', freq: [500, 350], duration: 0.15, volume: 0.25,
+                decay: 'exp', noise: 0.03, detune: 12, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2000, 800], Q: 3.5 }
             },
             armageddonLaunch: {
-                wave: 'sawtooth', freq: [100, 50], duration: 0.3, volume: 0.35,
-                decay: 'exp', noise: 0.4, detune: 10, category: 'sfx',
-                filter: { type: 'lowpass', freq: [600, 200], Q: 2 }
+                wave: 'sine', freq: [90, 45], duration: 0.35, volume: 0.30,
+                decay: 'exp', noise: 0.08, detune: 8, category: 'sfx',
+                filter: { type: 'lowpass', freq: [400, 120], Q: 1.5 }
             },
             armageddonExplode: {
-                wave: 'sine', freq: [80, 20], duration: 0.5, volume: 0.4,
-                decay: 'exp', noise: 0.7, detune: 10, category: 'sfx',
-                filter: { type: 'lowpass', freq: [500, 80], Q: 1 }
+                wave: 'sine', freq: [70, 18], duration: 0.55, volume: 0.35,
+                decay: 'exp', noise: 0.15, detune: 8, category: 'sfx',
+                filter: { type: 'lowpass', freq: [350, 60], Q: 1 }
             },
             annihilationPulse: {
-                wave: 'sine', freq: [250, 60], duration: 0.35, volume: 0.35,
-                decay: 'exp', noise: 0.3, detune: 15, category: 'sfx',
-                filter: { type: 'lowpass', freq: [1000, 200], Q: 2 }
+                wave: 'sine', freq: [220, 55], duration: 0.4, volume: 0.30,
+                decay: 'exp', noise: 0.05, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [700, 150], Q: 2.5 }
             },
             hiveMindSpawn: {
-                wave: 'triangle', freq: [1200, 600], duration: 0.1, volume: 0.15,
-                decay: 'exp', noise: 0.1, detune: 100, category: 'sfx'
+                wave: 'sine', freq: [1000, 500], duration: 0.12, volume: 0.13,
+                decay: 'exp', noise: 0, detune: 12, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2500, 1000], Q: 2 }
             },
             // === PLAYER & COMBAT ===
             playerHit: {
-                wave: 'sawtooth', freq: [300, 80], duration: 0.12, volume: 0.35,
-                decay: 'exp', noise: 0.4, detune: 30, category: 'sfx'
+                wave: 'sine', freq: [250, 70], duration: 0.14, volume: 0.30,
+                decay: 'exp', noise: 0.08, detune: 12, category: 'sfx',
+                filter: { type: 'lowpass', freq: [800, 200], Q: 1.5 }
             },
             shieldBreak: {
-                wave: 'square', freq: [500, 100], duration: 0.2, volume: 0.35,
-                decay: 'exp', noise: 0.3, detune: 20, category: 'sfx',
-                filter: { type: 'lowpass', freq: [2000, 300], Q: 2 }
+                wave: 'triangle', freq: [450, 90], duration: 0.22, volume: 0.30,
+                decay: 'exp', noise: 0.06, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1200, 200], Q: 2.5 }
             },
             shieldRecharge: {
-                wave: 'sine', freq: [400, 800], duration: 0.2, volume: 0.15,
-                decay: 'linear', noise: 0, detune: 0, category: 'sfx'
+                wave: 'sine', freq: [400, 800], duration: 0.25, volume: 0.12,
+                decay: 'linear', noise: 0, detune: 0, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2000, 3000], Q: 2 }
             },
             playerDeath: {
-                wave: 'sawtooth', freq: [200, 30], duration: 0.6, volume: 0.4,
-                decay: 'exp', noise: 0.6, detune: 10, category: 'sfx',
-                filter: { type: 'lowpass', freq: [1000, 100], Q: 1 }
+                wave: 'sine', freq: [180, 25], duration: 0.7, volume: 0.35,
+                decay: 'exp', noise: 0.10, detune: 8, category: 'sfx',
+                filter: { type: 'lowpass', freq: [600, 60], Q: 1.2 }
             },
             nearMiss: {
-                wave: 'sine', freq: [600, 900], duration: 0.08, volume: 0.1,
-                decay: 'linear', noise: 0.05, detune: 40, category: 'sfx'
+                wave: 'sine', freq: [600, 900], duration: 0.08, volume: 0.08,
+                decay: 'linear', noise: 0, detune: 5, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2500, 3500], Q: 2 }
             },
             // === PICKUPS & PROGRESSION ===
             xpPickup: {
-                wave: 'sine', freq: [1200, 1600], duration: 0.06, volume: 0.2,
-                decay: 'linear', noise: 0, detune: 30, category: 'sfx'
+                wave: 'sine', freq: [1100, 1650], duration: 0.06, volume: 0.15,
+                decay: 'linear', noise: 0, detune: 5, category: 'sfx'
             },
             healthPickup: {
-                wave: 'triangle', freq: [500, 900], duration: 0.15, volume: 0.25,
-                decay: 'linear', noise: 0, detune: 10, category: 'sfx'
+                wave: 'sine', freq: [440, 880], duration: 0.18, volume: 0.20,
+                decay: 'linear', noise: 0, detune: 5, category: 'sfx',
+                filter: { type: 'lowpass', freq: [2500, 4000], Q: 2 }
             },
             levelUp: {
-                wave: 'square', freq: [440, 880], duration: 0.25, volume: 0.3,
+                wave: 'sine', freq: [523, 523], duration: 0.3, volume: 0.25,
                 decay: 'linear', noise: 0, detune: 0, category: 'sfx',
                 notes: [
-                    { freq: [523, 523], delay: 0, duration: 0.08 },
-                    { freq: [659, 659], delay: 0.09, duration: 0.08 },
-                    { freq: [784, 784], delay: 0.18, duration: 0.12 }
-                ]
+                    { freq: [523, 523], delay: 0, duration: 0.12 },
+                    { freq: [659, 659], delay: 0.10, duration: 0.12 },
+                    { freq: [784, 784], delay: 0.20, duration: 0.15 }
+                ],
+                filter: { type: 'lowpass', freq: [3000, 4000], Q: 2 }
             },
             upgradeSelect: {
-                wave: 'triangle', freq: [800, 1200], duration: 0.1, volume: 0.2,
-                decay: 'linear', noise: 0, detune: 0, category: 'sfx'
+                wave: 'sine', freq: [700, 1050], duration: 0.12, volume: 0.18,
+                decay: 'linear', noise: 0, detune: 0, category: 'sfx',
+                filter: { type: 'lowpass', freq: [3000, 4000], Q: 2 }
             },
             // === UI & MENUS ===
             uiClick: {
-                wave: 'square', freq: [1000, 800], duration: 0.03, volume: 0.12,
-                decay: 'exp', noise: 0, detune: 0, category: 'ui'
+                wave: 'sine', freq: [900, 700], duration: 0.03, volume: 0.10,
+                decay: 'exp', noise: 0, detune: 0, category: 'ui',
+                filter: { type: 'lowpass', freq: [3000, 1500], Q: 1.5 }
             },
             gameStart: {
-                wave: 'sawtooth', freq: [300, 600], duration: 0.2, volume: 0.25,
-                decay: 'linear', noise: 0.1, detune: 0, category: 'ui',
-                filter: { type: 'lowpass', freq: [1500, 3000], Q: 2 }
+                wave: 'sine', freq: [260, 520], duration: 0.25, volume: 0.20,
+                decay: 'linear', noise: 0, detune: 5, category: 'ui',
+                filter: { type: 'lowpass', freq: [1200, 2500], Q: 2.5 }
             },
             waveAlert: {
-                wave: 'square', freq: [600, 400], duration: 0.15, volume: 0.2,
+                wave: 'sine', freq: [500, 500], duration: 0.2, volume: 0.18,
                 decay: 'exp', noise: 0, detune: 0, category: 'sfx',
                 notes: [
-                    { freq: [500, 500], delay: 0, duration: 0.08 },
-                    { freq: [700, 700], delay: 0.1, duration: 0.08 }
-                ]
+                    { freq: [440, 440], delay: 0, duration: 0.10 },
+                    { freq: [660, 660], delay: 0.12, duration: 0.10 }
+                ],
+                filter: { type: 'lowpass', freq: [2500, 3000], Q: 2 }
             },
             pauseIn: {
-                wave: 'sine', freq: [600, 300], duration: 0.1, volume: 0.12,
+                wave: 'sine', freq: [600, 300], duration: 0.1, volume: 0.10,
                 decay: 'exp', noise: 0, detune: 0, category: 'ui'
             },
             pauseOut: {
-                wave: 'sine', freq: [300, 600], duration: 0.1, volume: 0.12,
+                wave: 'sine', freq: [300, 600], duration: 0.1, volume: 0.10,
                 decay: 'exp', noise: 0, detune: 0, category: 'ui'
             },
             // === ENEMIES ===
             enemyDeath: {
-                wave: 'sine', freq: [600, 150], duration: 0.15, volume: 0.3,
-                decay: 'exp', noise: 0.2, detune: 80, category: 'sfx'
+                wave: 'sine', freq: [300, 1800], duration: 0.06, volume: 0.15,
+                decay: 'exp', noise: 0, detune: 8, category: 'sfx'
             },
             enemyShoot: {
-                wave: 'square', freq: [200, 120], duration: 0.06, volume: 0.12,
-                decay: 'exp', noise: 0.2, detune: 50, category: 'sfx'
+                wave: 'triangle', freq: [180, 110], duration: 0.05, volume: 0.10,
+                decay: 'exp', noise: 0.03, detune: 12, category: 'sfx',
+                filter: { type: 'lowpass', freq: [800, 400], Q: 1.5 }
             },
             kamikazeCharge: {
-                wave: 'sawtooth', freq: [200, 500], duration: 0.2, volume: 0.12,
-                decay: 'linear', noise: 0.1, detune: 30, category: 'sfx'
+                wave: 'sine', freq: [180, 440], duration: 0.22, volume: 0.10,
+                decay: 'linear', noise: 0, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [600, 1200], Q: 2 }
             },
             leviathanSpawn: {
-                wave: 'sawtooth', freq: [60, 30], duration: 0.4, volume: 0.3,
-                decay: 'exp', noise: 0.3, detune: 10, category: 'sfx',
-                filter: { type: 'lowpass', freq: [400, 100], Q: 1 }
+                wave: 'sine', freq: [55, 28], duration: 0.45, volume: 0.25,
+                decay: 'exp', noise: 0.06, detune: 5, category: 'sfx',
+                filter: { type: 'lowpass', freq: [300, 70], Q: 1.2 }
             },
             tankSplit: {
-                wave: 'square', freq: [400, 200], duration: 0.1, volume: 0.2,
-                decay: 'exp', noise: 0.3, detune: 60, category: 'sfx'
+                wave: 'triangle', freq: [350, 180], duration: 0.1, volume: 0.16,
+                decay: 'exp', noise: 0.04, detune: 10, category: 'sfx',
+                filter: { type: 'lowpass', freq: [1200, 400], Q: 2 }
             }
         };
+
+        // Rate limits: max simultaneous instances per sound type
+        const SOUND_LIMITS = {
+            playerShoot: 3, turretFire: 2, orbitalHit: 2, auraHit: 1,
+            fusionBeam: 1, lightningZap: 2, enemyDeath: 4, xpPickup: 2,
+            droneFire: 2, tankSplit: 2, rocketExplode: 2
+        };
+
+        // Cooldown overrides (seconds) — high-frequency sounds get longer cooldowns
+        const SOUND_COOLDOWNS = {
+            auraHit: 0.15, orbitalHit: 0.08, turretFire: 0.05,
+            fusionBeam: 0.08, playerShoot: 0.04, enemyDeath: 0.04,
+            xpPickup: 0.05, droneFire: 0.06
+        };
+
+        // Priority: higher = never dropped. Critical sounds bypass rate limits.
+        const SOUND_PRIORITY = {
+            playerHit: 10, playerDeath: 10, shieldBreak: 10, levelUp: 9,
+            upgradeSelect: 9, gameStart: 9, waveAlert: 8, shieldRecharge: 8,
+            nearMiss: 8, armageddonExplode: 7, annihilationPulse: 7,
+            leviathanSpawn: 7, rocketExplode: 5
+        };
+        const PRIORITY_BYPASS_THRESHOLD = 8; // priority >= this bypasses rate limits
 
         const AudioManager = {
             ctx: null,
@@ -807,7 +847,12 @@
             _volume: 1.0,
             _muted: false,
             _cooldowns: {},
-            MIN_COOLDOWN: 0.03,
+            _activeCounts: {},
+            _ducked: false,
+            _loops: {},
+            DEFAULT_COOLDOWN: 0.03,
+            MAX_TOTAL_SOUNDS: 12,
+            _totalActive: 0,
 
             init() {
                 if (this.initialized) return;
@@ -827,13 +872,19 @@
                             this._muted = s.muted ?? false;
                         } catch(e) {}
                     }
-                    this.masterGain.gain.value = this._muted ? 0 : this._volume;
+                    this._applyVolume();
 
                     this.initialized = true;
                     if (this.ctx.state === 'suspended') this.ctx.resume();
                 } catch(e) {
                     // Web Audio not supported — audio silently disabled
                 }
+            },
+
+            _applyVolume() {
+                if (!this.masterGain) return;
+                const base = this._muted ? 0 : this._volume;
+                this.masterGain.gain.value = this._ducked ? base * 0.25 : base;
             },
 
             _saveSettings() {
@@ -844,9 +895,7 @@
 
             setVolume(v) {
                 this._volume = Math.max(0, Math.min(1, v));
-                if (this.masterGain && !this._muted) {
-                    this.masterGain.gain.value = this._volume;
-                }
+                this._applyVolume();
                 this._saveSettings();
             },
 
@@ -854,31 +903,65 @@
 
             toggleMute() {
                 this._muted = !this._muted;
-                if (this.masterGain) {
-                    this.masterGain.gain.value = this._muted ? 0 : this._volume;
-                }
+                this._applyVolume();
                 this._saveSettings();
                 return this._muted;
             },
 
             isMuted() { return this._muted; },
 
+            // Volume ducking for menus
+            duck() {
+                if (!this._ducked) { this._ducked = true; this._applyVolume(); }
+            },
+            unduck() {
+                if (this._ducked) { this._ducked = false; this._applyVolume(); }
+            },
+
             resume() {
                 if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
             },
 
-            setMusicVolume() {},
+            setMusicVolume(v) { DroneEngine.setMusicVolume(v); },
 
-            play(soundId) {
+            play(soundId, worldX, worldY) {
                 if (!this.initialized || !this.ctx || this._muted) return;
                 const def = SOUND_DEFS[soundId];
                 if (!def) return;
 
-                // Cooldown check
                 const now = this.ctx.currentTime;
+                const priority = SOUND_PRIORITY[soundId] || 0;
+                const cooldown = SOUND_COOLDOWNS[soundId] || this.DEFAULT_COOLDOWN;
+                const isCritical = priority >= PRIORITY_BYPASS_THRESHOLD;
+
+                // Cooldown check (critical sounds have reduced cooldown)
                 const lastPlayed = this._cooldowns[soundId] || 0;
-                if (now - lastPlayed < this.MIN_COOLDOWN) return;
+                if (now - lastPlayed < (isCritical ? cooldown * 0.5 : cooldown)) return;
+
+                // Rate limit check (critical sounds bypass)
+                if (!isCritical) {
+                    const limit = SOUND_LIMITS[soundId];
+                    const active = this._activeCounts[soundId] || 0;
+                    if (limit && active >= limit) return;
+                    if (this._totalActive >= this.MAX_TOTAL_SOUNDS) return;
+                }
+
                 this._cooldowns[soundId] = now;
+
+                // Compute stereo pan and distance-based volume from world position
+                let pan = 0;
+                let distanceVol = 1.0;
+                if (worldX !== undefined && typeof player !== 'undefined' && player) {
+                    const dx = worldX - player.x;
+                    const dy = (worldY !== undefined) ? (worldY - player.y) : 0;
+                    pan = Math.max(-1, Math.min(1, dx / (CANVAS_WIDTH * 0.5)));
+
+                    // Distance-based volume attenuation
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 200) {
+                        distanceVol = Math.max(0.1, 1.0 - (dist - 200) / 1000);
+                    }
+                }
 
                 // Multi-note sound (levelUp fanfare)
                 if (def.notes) {
@@ -890,20 +973,33 @@
                             volume: def.volume,
                             decay: def.decay,
                             noise: def.noise || 0,
-                            detune: def.detune || 0
-                        }, now + note.delay);
+                            detune: def.detune || 0,
+                            filter: def.filter
+                        }, now + note.delay, soundId, pan, distanceVol);
                     }
                     return;
                 }
 
-                this._synth(def, now);
+                this._synth(def, now, soundId, pan, distanceVol);
             },
 
-            _synth(def, startTime) {
+            _synth(def, startTime, soundId, pan, distanceVol) {
                 const ctx = this.ctx;
                 const t = startTime;
                 const dur = def.duration;
                 const endT = t + dur;
+                const vol = def.volume * (distanceVol || 1.0);
+
+                // Track active count
+                if (soundId) {
+                    this._activeCounts[soundId] = (this._activeCounts[soundId] || 0) + 1;
+                    this._totalActive++;
+                    const sid = soundId;
+                    setTimeout(() => {
+                        this._activeCounts[sid] = Math.max(0, (this._activeCounts[sid] || 1) - 1);
+                        this._totalActive = Math.max(0, this._totalActive - 1);
+                    }, dur * 1000 + 50);
+                }
 
                 // Oscillator
                 const osc = ctx.createOscillator();
@@ -922,7 +1018,7 @@
 
                 // Gain envelope
                 const gain = ctx.createGain();
-                gain.gain.setValueAtTime(def.volume, t);
+                gain.gain.setValueAtTime(vol, t);
                 if (def.decay === 'exp') {
                     gain.gain.exponentialRampToValueAtTime(0.001, endT);
                 } else {
@@ -946,7 +1042,7 @@
 
                 // Noise mix
                 if (def.noise > 0) {
-                    const bufferSize = ctx.sampleRate * dur;
+                    const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * dur));
                     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
                     const data = noiseBuffer.getChannelData(0);
                     for (let i = 0; i < bufferSize; i++) {
@@ -955,7 +1051,7 @@
                     const noiseSrc = ctx.createBufferSource();
                     noiseSrc.buffer = noiseBuffer;
                     const noiseGain = ctx.createGain();
-                    noiseGain.gain.setValueAtTime(def.volume, t);
+                    noiseGain.gain.setValueAtTime(vol, t);
                     if (def.decay === 'exp') {
                         noiseGain.gain.exponentialRampToValueAtTime(0.001, endT);
                     } else {
@@ -967,11 +1063,331 @@
                     noiseSrc.stop(endT);
                 }
 
-                gain.connect(this.sfxGain);
+                // Stereo panner
+                if (pan && pan !== 0) {
+                    const panner = ctx.createStereoPanner();
+                    panner.pan.value = pan;
+                    gain.connect(panner);
+                    panner.connect(this.sfxGain);
+                } else {
+                    gain.connect(this.sfxGain);
+                }
+
                 osc.start(t);
                 osc.stop(endT);
+            },
+
+            // === LOOPING SOUNDS ===
+            startLoop(loopId) {
+                if (!this.initialized || !this.ctx || this._loops[loopId]) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                // Master gain for this loop
+                const loopGain = ctx.createGain();
+                loopGain.gain.setValueAtTime(0, now);
+                loopGain.gain.linearRampToValueAtTime(0.08, now + 0.15); // fade in
+
+                // Lowpass filter — keeps the sound dark
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 180;
+                filter.Q.value = 1;
+
+                // Two detuned sine oscillators for a rich low hum
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.value = 82;
+                osc1.detune.value = -5;
+
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.value = 86;
+                osc2.detune.value = 7;
+
+                // Subtle LFO for pulsing feel
+                const lfo = ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = 3.5;
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.value = 0.02; // subtle volume modulation
+                lfo.connect(lfoGain);
+                lfoGain.connect(loopGain.gain);
+
+                // Connect: oscs → filter → loopGain → sfxGain (master chain)
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(loopGain);
+                loopGain.connect(this.sfxGain);
+
+                osc1.start(now);
+                osc2.start(now);
+                lfo.start(now);
+
+                this._loops[loopId] = { osc1, osc2, lfo, lfoGain, filter, gain: loopGain };
+            },
+
+            stopLoop(loopId) {
+                const loop = this._loops[loopId];
+                if (!loop) return;
+                delete this._loops[loopId];
+
+                if (!this.ctx) { return; }
+                const now = this.ctx.currentTime;
+                // Fade out to avoid clicks
+                loop.gain.gain.cancelScheduledValues(now);
+                loop.gain.gain.setValueAtTime(loop.gain.gain.value, now);
+                loop.gain.gain.linearRampToValueAtTime(0, now + 0.1);
+
+                // Stop oscillators after fade
+                const stopTime = now + 0.15;
+                loop.osc1.stop(stopTime);
+                loop.osc2.stop(stopTime);
+                loop.lfo.stop(stopTime);
+            },
+
+            stopAllLoops() {
+                for (const id of Object.keys(this._loops)) {
+                    this.stopLoop(id);
+                }
             }
         };
+
+        // ============================================================
+        // DRONE ENGINE — Adaptive Ambient Music (Layer 1)
+        // ============================================================
+
+        const DRONE_STATES = {
+            menu:            { freq: 55, lfoSpeed: 0.08, volume: 0.06, cutoff: 200, osc3: false },
+            playing_calm:    { freq: 60, lfoSpeed: 0.12, volume: 0.05, cutoff: 300, osc3: false },
+            playing_tense:   { freq: 65, lfoSpeed: 0.20, volume: 0.07, cutoff: 500, osc3: true  },
+            playing_intense: { freq: 70, lfoSpeed: 0.30, volume: 0.09, cutoff: 800, osc3: true  },
+            skilltree:       { freq: 50, lfoSpeed: 0.06, volume: 0.04, cutoff: 150, osc3: false },
+            gameOver:        { freq: 45, lfoSpeed: 0.04, volume: 0.08, cutoff: 120, osc3: false }
+        };
+
+        const DroneEngine = {
+            _started: false,
+            _state: 'menu',
+            _musicVolume: 1.0,
+            _musicMuted: false,
+            _tensionInterval: null,
+
+            init(audioCtx, masterGain) {
+                this.ctx = audioCtx;
+                this.masterGain = masterGain;
+
+                // Drone gain chain: osc → filter → droneGain → musicGain → masterGain
+                this.musicGain = audioCtx.createGain();
+                this.musicGain.gain.value = this._musicMuted ? 0 : this._musicVolume;
+                this.musicGain.connect(masterGain);
+
+                this.droneGain = audioCtx.createGain();
+                this.droneGain.gain.value = 0; // start silent, fade in on start()
+                this.droneGain.connect(this.musicGain);
+
+                // Lowpass filter
+                this.filter = audioCtx.createBiquadFilter();
+                this.filter.type = 'lowpass';
+                this.filter.frequency.value = 200;
+                this.filter.Q.value = 0.7;
+                this.filter.connect(this.droneGain);
+
+                // Osc1 — fundamental sine hum
+                this.osc1 = audioCtx.createOscillator();
+                this.osc1.type = 'sine';
+                this.osc1.frequency.value = 55;
+                this.osc1.connect(this.filter);
+
+                // Osc2 — slightly detuned fifth for subtle beating
+                this.osc2 = audioCtx.createOscillator();
+                this.osc2.type = 'sine';
+                this.osc2.frequency.value = 82;
+                this.osc2.connect(this.filter);
+
+                // Osc3 — triangle texture, has its own gain for fade in/out
+                this.osc3Gain = audioCtx.createGain();
+                this.osc3Gain.gain.value = 0; // starts off
+                this.osc3Gain.connect(this.filter);
+
+                this.osc3 = audioCtx.createOscillator();
+                this.osc3.type = 'triangle';
+                this.osc3.frequency.value = 165; // higher overtone
+                this.osc3.connect(this.osc3Gain);
+
+                // LFO — modulates droneGain for breathing effect
+                this.lfo = audioCtx.createOscillator();
+                this.lfo.type = 'sine';
+                this.lfo.frequency.value = 0.08;
+
+                this.lfoGain = audioCtx.createGain();
+                this.lfoGain.gain.value = 0.02; // subtle volume modulation
+                this.lfo.connect(this.lfoGain);
+                this.lfoGain.connect(this.droneGain.gain);
+
+                // Load saved music volume
+                try {
+                    const saved = localStorage.getItem('StellarSwarm_music');
+                    if (saved) {
+                        const s = JSON.parse(saved);
+                        this._musicVolume = s.volume ?? 1.0;
+                        this._musicMuted = s.muted ?? false;
+                        this.musicGain.gain.value = this._musicMuted ? 0 : this._musicVolume;
+                    }
+                } catch(e) {}
+            },
+
+            start() {
+                if (this._started || !this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                this.osc1.start(now);
+                this.osc2.start(now);
+                this.osc3.start(now);
+                this.lfo.start(now);
+
+                // Fade in
+                this.droneGain.gain.setValueAtTime(0, now);
+                this.droneGain.gain.linearRampToValueAtTime(DRONE_STATES.menu.volume, now + 2);
+
+                this._started = true;
+
+                // Start tension polling every 2 seconds
+                this._tensionInterval = setInterval(() => {
+                    if (typeof gameState !== 'undefined' && gameState === 'playing') {
+                        this.updateTension(calculateMusicTension());
+                    }
+                }, 2000);
+            },
+
+            stop() {
+                if (!this._started || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                this.droneGain.gain.cancelScheduledValues(now);
+                this.droneGain.gain.setValueAtTime(this.droneGain.gain.value, now);
+                this.droneGain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+                if (this._tensionInterval) {
+                    clearInterval(this._tensionInterval);
+                    this._tensionInterval = null;
+                }
+
+                // Stop oscillators after fade
+                const stopTime = now + 0.6;
+                try {
+                    this.osc1.stop(stopTime);
+                    this.osc2.stop(stopTime);
+                    this.osc3.stop(stopTime);
+                    this.lfo.stop(stopTime);
+                } catch(e) {}
+                this._started = false;
+            },
+
+            setState(state) {
+                if (!this._started || !this.ctx) return;
+                const s = DRONE_STATES[state];
+                if (!s) return;
+                this._state = state;
+                const now = this.ctx.currentTime;
+                const rampTime = 2; // 2 second transitions
+
+                // Frequency ramps
+                this.osc1.frequency.cancelScheduledValues(now);
+                this.osc1.frequency.setValueAtTime(this.osc1.frequency.value, now);
+                this.osc1.frequency.linearRampToValueAtTime(s.freq, now + rampTime);
+
+                this.osc2.frequency.cancelScheduledValues(now);
+                this.osc2.frequency.setValueAtTime(this.osc2.frequency.value, now);
+                this.osc2.frequency.linearRampToValueAtTime(s.freq * 1.49, now + rampTime); // ~fifth interval
+
+                this.osc3.frequency.cancelScheduledValues(now);
+                this.osc3.frequency.setValueAtTime(this.osc3.frequency.value, now);
+                this.osc3.frequency.linearRampToValueAtTime(s.freq * 3, now + rampTime);
+
+                // Volume ramp
+                this.droneGain.gain.cancelScheduledValues(now);
+                this.droneGain.gain.setValueAtTime(this.droneGain.gain.value, now);
+                this.droneGain.gain.linearRampToValueAtTime(s.volume, now + rampTime);
+
+                // Filter cutoff ramp
+                this.filter.frequency.cancelScheduledValues(now);
+                this.filter.frequency.setValueAtTime(this.filter.frequency.value, now);
+                this.filter.frequency.linearRampToValueAtTime(s.cutoff, now + rampTime);
+
+                // LFO speed (instant change)
+                this.lfo.frequency.value = s.lfoSpeed;
+
+                // Osc3 on/off with fade
+                this.osc3Gain.gain.cancelScheduledValues(now);
+                this.osc3Gain.gain.setValueAtTime(this.osc3Gain.gain.value, now);
+                this.osc3Gain.gain.linearRampToValueAtTime(s.osc3 ? 0.03 : 0, now + 1);
+
+                // Game over special: pitch bend down
+                if (state === 'gameOver') {
+                    this.osc1.frequency.linearRampToValueAtTime(30, now + 4);
+                    this.osc2.frequency.linearRampToValueAtTime(44, now + 4);
+                }
+            },
+
+            updateTension(tension) {
+                if (!this._started || this._state === 'menu' || this._state === 'skilltree' || this._state === 'gameOver') return;
+
+                // Map tension to playing sub-state
+                let targetState;
+                if (tension < 0.25) targetState = 'playing_calm';
+                else if (tension < 0.55) targetState = 'playing_tense';
+                else targetState = 'playing_intense';
+
+                if (targetState !== this._state) {
+                    this.setState(targetState);
+                }
+            },
+
+            setMusicVolume(v) {
+                this._musicVolume = Math.max(0, Math.min(1, v));
+                if (this.musicGain) {
+                    this.musicGain.gain.value = this._musicMuted ? 0 : this._musicVolume;
+                }
+                this._saveMusicSettings();
+            },
+
+            getMusicVolume() { return this._musicVolume; },
+
+            toggleMusicMute() {
+                this._musicMuted = !this._musicMuted;
+                if (this.musicGain) {
+                    this.musicGain.gain.value = this._musicMuted ? 0 : this._musicVolume;
+                }
+                this._saveMusicSettings();
+                return this._musicMuted;
+            },
+
+            isMusicMuted() { return this._musicMuted; },
+
+            _saveMusicSettings() {
+                try {
+                    localStorage.setItem('StellarSwarm_music', JSON.stringify({
+                        volume: this._musicVolume, muted: this._musicMuted
+                    }));
+                } catch(e) {}
+            }
+        };
+
+        function calculateMusicTension() {
+            const enemyCount = enemies.length;
+            const healthRatio = player.hp / playerMaxHP;
+            const timeAlive = gameTime;
+
+            let tension = 0;
+            tension += Math.min(enemyCount / 80, 1) * 0.4;
+            tension += (1 - healthRatio) * 0.3;
+            tension += Math.min(timeAlive / 300, 1) * 0.2;
+            // Wave intensity as proxy for boss-like pressure
+            tension += Math.min(waveNumber / 30, 1) * 0.1;
+
+            return Math.min(tension, 1);
+        }
+
         let lastTime = 0;
         let deltaTime = 0;
         let timeScale = 1;
@@ -2203,6 +2619,7 @@
 
         function startGame() {
             AudioManager.play('gameStart');
+            DroneEngine.setState('playing_calm');
             selectedStartingWeapon = STARTING_WEAPON_IDS[menuWeaponIndex] || 'laser_cannon';
 
             // From game over or demo end, skip menu animation — go straight to playing
@@ -2238,6 +2655,7 @@
         }
 
         function resetGame() {
+            AudioManager.stopAllLoops();
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
                 y: WORLD_HEIGHT / 2,  // Center of world (3240)
@@ -2398,6 +2816,11 @@
 
                 // Init audio on first interaction
                 AudioManager.init();
+                if (AudioManager.initialized && !DroneEngine._started) {
+                    DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
+                    DroneEngine.start();
+                    DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
+                }
 
                 // Dismiss cheat overlay on any key
                 if (showCheatOverlay) {
@@ -2516,6 +2939,12 @@
                 const scaleY = CANVAS_HEIGHT / rect.height;
                 const clickX = (e.clientX - rect.left) * scaleX;
                 const clickY = (e.clientY - rect.top) * scaleY;
+                AudioManager.init();
+                if (AudioManager.initialized && !DroneEngine._started) {
+                    DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
+                    DroneEngine.start();
+                    DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
+                }
                 AudioManager.play('uiClick');
 
                 if (showCheatOverlay) {
@@ -2542,6 +2971,52 @@
                     handleMenuClick(clickX, clickY);
                 }
             });
+
+            // Volume slider drag support
+            let draggingVolume = false;
+            let draggingMusic = false;
+            function getVolumeSliderBtn() {
+                return currentPauseButtons.find(b => b.type === 'volume_slider');
+            }
+            function getMusicSliderBtn() {
+                return currentPauseButtons.find(b => b.type === 'music_slider');
+            }
+            function canvasCoords(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+                    y: (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
+                };
+            }
+            canvas.addEventListener('mousedown', (e) => {
+                if (gameState !== 'paused') return;
+                const c = canvasCoords(e);
+                const btn = getVolumeSliderBtn();
+                if (btn && c.x >= btn.x && c.x <= btn.x + btn.w &&
+                    c.y >= btn.y && c.y <= btn.y + btn.h) {
+                    draggingVolume = true;
+                    AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
+                }
+                const musBtn = getMusicSliderBtn();
+                if (musBtn && c.x >= musBtn.x && c.x <= musBtn.x + musBtn.w &&
+                    c.y >= musBtn.y && c.y <= musBtn.y + musBtn.h) {
+                    draggingMusic = true;
+                    DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
+                }
+            });
+            canvas.addEventListener('mousemove', (e) => {
+                if (!draggingVolume && !draggingMusic) return;
+                const c = canvasCoords(e);
+                if (draggingVolume) {
+                    const btn = getVolumeSliderBtn();
+                    if (btn) AudioManager.setVolume(Math.max(0, Math.min(1, (c.x - btn.sliderX) / btn.sliderW)));
+                }
+                if (draggingMusic) {
+                    const musBtn = getMusicSliderBtn();
+                    if (musBtn) DroneEngine.setMusicVolume(Math.max(0, Math.min(1, (c.x - musBtn.sliderX) / musBtn.sliderW)));
+                }
+            });
+            window.addEventListener('mouseup', () => { draggingVolume = false; draggingMusic = false; });
 
         }
         
@@ -2572,6 +3047,11 @@
 
                 // Init audio on first touch
                 AudioManager.init();
+                if (AudioManager.initialized && !DroneEngine._started) {
+                    DroneEngine.init(AudioManager.ctx, AudioManager.masterGain);
+                    DroneEngine.start();
+                    DroneEngine.setState(gameState === 'menu' ? 'menu' : 'playing_calm');
+                }
 
                 // Helper to convert touch to canvas coordinates
                 function touchToCanvas(touch) {
@@ -2912,6 +3392,22 @@
             // Show/hide joystick based on game state (mobile only)
             const showJoystick = gameState === 'playing' || gameState === 'paused';
             joystickBaseEl.style.display = showJoystick ? 'block' : 'none';
+
+            // Volume ducking: lower SFX when not actively playing
+            if (gameState === 'paused' || gameState === 'skilltree') {
+                AudioManager.duck();
+                AudioManager.stopAllLoops();
+            } else {
+                AudioManager.unduck();
+            }
+
+            // Sync drone state with game state (catches all transitions)
+            if (DroneEngine._started) {
+                const droneMap = { menu: 'menu', shop: 'menu', tutorial: 'menu', demoEnd: 'menu',
+                                   paused: null, gameOver: 'gameOver', skilltree: 'skilltree' };
+                const target = droneMap[gameState];
+                if (target && DroneEngine._state !== target) DroneEngine.setState(target);
+            }
 
             // Update based on game state
             if (gameState === 'menu') {
@@ -3818,7 +4314,6 @@
         // Fire rockets in burst (360º enemy detection)
         // TODO: EVOLUTION - Armageddon Protocol: every 8s, fire a mega-missile with massive explosion
         function fireRocket(nearbyEnemies, stats) {
-            AudioManager.play('rocketFire');
             // Find closest enemy to aim at
             let closestEnemy = null;
             let closestDist = Infinity;
@@ -3832,6 +4327,7 @@
                 }
             }
             if (!closestEnemy) return;
+            AudioManager.play('rocketFire');
 
             // Disparar ráfaga de misiles con delays
             const burstCount = stats.rocketBurstCount; // 3 normal, 6 con habilidad
@@ -4744,7 +5240,7 @@
                 enemy.wasInSnare = false;
                 enemy.vulnerability = 0;
                 enemy.vulnerabilityTimer = 0;
-                if (type === 'LEVIATHAN') AudioManager.play('leviathanSpawn');
+                if (type === 'LEVIATHAN') AudioManager.play('leviathanSpawn', x, y);
                 enemies.push(enemy);
             }
         }
@@ -4937,7 +5433,7 @@
             // Guard: don't kill already-dead enemies twice
             if (enemy.dead) return;
             enemy.dead = true;
-            AudioManager.play('enemyDeath');
+            AudioManager.play('enemyDeath', enemy.x, enemy.y);
 
             const config = ENEMY_TYPES[enemy.type];
 
@@ -4956,7 +5452,7 @@
 
             // Leviathan splits into 4 aliens on death
             if (enemy.type === 'LEVIATHAN' && enemies.length < HARD_MAX_ENEMIES) {
-                AudioManager.play('leviathanSpawn');
+                AudioManager.play('leviathanSpawn', enemy.x, enemy.y);
                 const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
                 const alienConfig = ENEMY_TYPES['ALIEN'];
                 const scaledAlienHp = Math.ceil(alienConfig.hp * hpMultiplier);
@@ -4990,7 +5486,7 @@
 
             // Alien splits into 5 tanks on death
             if (enemy.type === 'ALIEN' && enemies.length < HARD_MAX_ENEMIES) {
-                AudioManager.play('tankSplit');
+                AudioManager.play('tankSplit', enemy.x, enemy.y);
                 const hpMultiplier = 1 + (playerLevel - 1) * 0.40;
                 const tankConfig = ENEMY_TYPES['TANK'];
                 const scaledTankHp = Math.ceil(tankConfig.hp * hpMultiplier);
@@ -5024,7 +5520,7 @@
 
             // Tank splits into scouts
             if (enemy.type === 'TANK' && enemies.length < HARD_MAX_ENEMIES) {
-                AudioManager.play('tankSplit');
+                AudioManager.play('tankSplit', enemy.x, enemy.y);
                 for (let i = 0; i < 2; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const scout = pools.enemy.acquire();
@@ -5895,6 +6391,7 @@
 
             upgradeSelectionActive = true;
             gameState = 'skilltree';
+            DroneEngine.setState('skilltree');
 
             // Capture blurred snapshot of game canvas for background
             const snapCanvas = document.createElement('canvas');
@@ -6566,6 +7063,7 @@
             upgradeOverlay.bgSnapshot = null;
 
             gameState = 'playing';
+            DroneEngine.setState('playing_calm'); // tension timer will adjust
         }
         
         // ============================================================
@@ -6675,7 +7173,7 @@
 
                     if (distSq < collisionDist * collisionDist) {
                         e.hp -= stats.orbDamage;
-                        AudioManager.play('orbitalHit');
+                        AudioManager.play('orbitalHit', e.x, e.y);
                         orb.hitEnemies[e.id] = 0.15;
 
                         spawnFloatingText(e.x, e.y - config.radius, stats.orbDamage.toString(), WEAPONS['orbital_shield'].color);
@@ -6733,7 +7231,7 @@
                 if (distSq < effectiveRadius * effectiveRadius) {
                     // Apply damage
                     e.hp -= stats.auraDamage;
-                    AudioManager.play('auraHit');
+                    AudioManager.play('auraHit', e.x, e.y);
 
                     // Visual feedback
                     spawnFloatingText(e.x, e.y - config.radius, stats.auraDamage.toString(), auraColor);
@@ -7204,7 +7702,7 @@
         // ============================================================
 
         function detonateMine(mine, index, stats) {
-            AudioManager.play('mineExplode');
+            AudioManager.play('mineExplode', mine.x, mine.y);
             // Deal damage to enemies in explosion radius
             const nearby = spatialGrid.queryRadius(mine.x, mine.y, stats.mineExplosionRadius);
             for (const e of nearby) {
@@ -7514,7 +8012,7 @@
 
                     t.fireTimer = fireInterval;
                     t.shotCount++;
-                    AudioManager.play('turretFire');
+                    AudioManager.play('turretFire', t.x, t.y);
 
                     const angleToTarget = Math.atan2(closestEnemy.y - t.y, closestEnemy.x - t.x);
                     const spread = (Math.random() - 0.5) * 0.12; // ±3.4° machine gun spread
@@ -7643,6 +8141,13 @@
             candidates.sort((a, b) => a.distSq - b.distSq);
             const currentTargets = candidates.slice(0, stats.beamTargets);
 
+            // Looping beam sound: start when targets exist, stop when none
+            if (currentTargets.length > 0) {
+                AudioManager.startLoop('fusionBeamLoop');
+            } else {
+                AudioManager.stopLoop('fusionBeamLoop');
+            }
+
             // Build new targets list, preserving ramp for existing targets
             const newTargets = [];
             for (const ct of currentTargets) {
@@ -7677,7 +8182,6 @@
                 const tickFired = t.tickTimer >= stats.beamTickRate;
                 if (tickFired) {
                     t.tickTimer -= stats.beamTickRate;
-                    AudioManager.play('fusionBeam');
                     const baseDamage = stats.beamDPS * stats.beamTickRate * (1 + t.rampCurrent);
 
                     // Primary target damage
@@ -7818,7 +8322,7 @@
         function explodePlayerRocket(b) {
             if (b.type !== 'rocket' && b.type !== 'mini_rocket' && b.type !== 'armageddon_rocket' && b.type !== 'turret_rocket') return;
             const isArmageddon = b.type === 'armageddon_rocket';
-            AudioManager.play(isArmageddon ? 'armageddonExplode' : 'rocketExplode');
+            AudioManager.play(isArmageddon ? 'armageddonExplode' : 'rocketExplode', b.x, b.y);
             const isTurretRocket = b.type === 'turret_rocket';
             const explosionX = b.x;
             const explosionY = b.y;
@@ -8296,7 +8800,9 @@
             // Prevent re-entry (player can keep getting hit after death)
             if (gameState === 'gameOver' || player._dead) return;
             player._dead = true;
+            AudioManager.stopAllLoops();
             AudioManager.play('playerDeath');
+            DroneEngine.setState('gameOver');
 
             // Close upgrade panel if it was open (die during level-up)
             if (upgradeOverlay.active) {
@@ -11422,6 +11928,34 @@
             }
 
             // ═══════════════════════════════════════
+            // MUTE INDICATOR (next to hamburger, only when muted)
+            // ═══════════════════════════════════════
+            if (AudioManager.isMuted()) {
+                const muteIconX = hbX + hbW + 10;
+                const muteIconY = hbY + hbH / 2;
+                ctx.strokeStyle = COLORS.HUD_RED;
+                ctx.lineWidth = 1.5;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(muteIconX, muteIconY - 3);
+                ctx.lineTo(muteIconX + 4, muteIconY - 3);
+                ctx.lineTo(muteIconX + 7, muteIconY - 6);
+                ctx.lineTo(muteIconX + 7, muteIconY + 6);
+                ctx.lineTo(muteIconX + 4, muteIconY + 3);
+                ctx.lineTo(muteIconX, muteIconY + 3);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(muteIconX + 10, muteIconY - 3);
+                ctx.lineTo(muteIconX + 15, muteIconY + 3);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(muteIconX + 15, muteIconY - 3);
+                ctx.lineTo(muteIconX + 10, muteIconY + 3);
+                ctx.stroke();
+            }
+
+            // ═══════════════════════════════════════
             // KILLS (centered above bar, prominent)
             // ═══════════════════════════════════════
             ctx.textAlign = 'center';
@@ -11868,6 +12402,24 @@
             for (const btn of currentPauseButtons) {
                 if (clickX >= btn.x && clickX <= btn.x + btn.w &&
                     clickY >= btn.y && clickY <= btn.y + btn.h) {
+                    if (btn.type === 'volume_slider') {
+                        const rel = Math.max(0, Math.min(1, (clickX - btn.sliderX) / btn.sliderW));
+                        AudioManager.setVolume(rel);
+                        return true;
+                    }
+                    if (btn.type === 'mute_toggle') {
+                        AudioManager.toggleMute();
+                        return true;
+                    }
+                    if (btn.type === 'music_slider') {
+                        const rel = Math.max(0, Math.min(1, (clickX - btn.sliderX) / btn.sliderW));
+                        DroneEngine.setMusicVolume(rel);
+                        return true;
+                    }
+                    if (btn.type === 'music_mute_toggle') {
+                        DroneEngine.toggleMusicMute();
+                        return true;
+                    }
                     if (btn.type === 'resume') {
                         AudioManager.play('pauseOut');
                         gameState = 'playing';
@@ -11960,7 +12512,7 @@
             const cx = CANVAS_WIDTH / 2;
             const cy = CANVAS_HEIGHT / 2;
             const panelW = isMobile() ? Math.min(CANVAS_WIDTH - 40, 500) : 460;
-            const panelH = 380;
+            const panelH = 480;
             const panelX = cx - panelW / 2;
             const panelY = cy - panelH / 2;
 
@@ -11985,11 +12537,178 @@
             ctx.fillText('ARSENAL', cx, panelY + 76);
             renderPauseWeaponInventory(cx, panelY + 86);
 
-            // Buttons
+            // ─── Volume control row ───
+            const volRowY = panelY + 170;
+            const sliderW = isMobile() ? panelW - 140 : 200;
+            const sliderH = 8;
+            const sliderX = cx - sliderW / 2;
+            const sliderY = volRowY + 2;
+            const vol = AudioManager.getVolume();
+            const muted = AudioManager.isMuted();
+
+            // "SFX" label
+            ctx.textAlign = 'left';
+            ctx.font = '11px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('SFX', panelX + 24, volRowY + 8);
+
+            // Slider track
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.beginPath();
+            ctx.roundRect(sliderX, sliderY, sliderW, sliderH, 4);
+            ctx.fill();
+
+            // Slider fill
+            const fillW = muted ? 0 : sliderW * vol;
+            if (fillW > 0) {
+                ctx.fillStyle = hexToRGBA(COLORS.PLAYER, muted ? 0.2 : 0.6);
+                ctx.beginPath();
+                ctx.roundRect(sliderX, sliderY, fillW, sliderH, 4);
+                ctx.fill();
+            }
+
+            // Slider thumb
+            const thumbX = sliderX + fillW;
+            ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.PLAYER;
+            ctx.beginPath();
+            ctx.arc(thumbX, sliderY + sliderH / 2, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Volume slider hit area (wider for easier clicking)
+            currentPauseButtons.push({
+                type: 'volume_slider', x: sliderX - 6, y: sliderY - 10,
+                w: sliderW + 12, h: sliderH + 20, sliderX, sliderW
+            });
+
+            // Mute button (speaker icon)
+            const muteX = sliderX + sliderW + 16;
+            const muteY = sliderY + sliderH / 2;
+            const muteSize = 12;
+            ctx.strokeStyle = muted ? COLORS.HUD_RED : COLORS.HUD_TEXT_SECONDARY;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            // Speaker body
+            ctx.beginPath();
+            ctx.moveTo(muteX, muteY - 4);
+            ctx.lineTo(muteX + 5, muteY - 4);
+            ctx.lineTo(muteX + 10, muteY - 8);
+            ctx.lineTo(muteX + 10, muteY + 8);
+            ctx.lineTo(muteX + 5, muteY + 4);
+            ctx.lineTo(muteX, muteY + 4);
+            ctx.closePath();
+            ctx.stroke();
+            if (muted) {
+                // X through speaker
+                ctx.beginPath();
+                ctx.moveTo(muteX + 14, muteY - 5);
+                ctx.lineTo(muteX + 22, muteY + 5);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(muteX + 22, muteY - 5);
+                ctx.lineTo(muteX + 14, muteY + 5);
+                ctx.stroke();
+            } else {
+                // Sound waves
+                ctx.beginPath();
+                ctx.arc(muteX + 12, muteY, 5, -0.6, 0.6);
+                ctx.stroke();
+                if (vol > 0.5) {
+                    ctx.beginPath();
+                    ctx.arc(muteX + 12, muteY, 9, -0.5, 0.5);
+                    ctx.stroke();
+                }
+            }
+            currentPauseButtons.push({
+                type: 'mute_toggle', x: muteX - 4, y: muteY - 12,
+                w: 30, h: 24
+            });
+
+            // SFX percentage text
+            ctx.textAlign = 'right';
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = muted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
+            ctx.fillText(muted ? 'MUTED' : Math.round(vol * 100) + '%', sliderX - 8, volRowY + 9);
+
+            // ─── Music volume control row ───
+            const musRowY = volRowY + 36;
+            const musVol = DroneEngine.getMusicVolume();
+            const musMuted = DroneEngine.isMusicMuted();
+            const musSliderY = musRowY + 2;
+
+            // "MUSIC" label
+            ctx.textAlign = 'left';
+            ctx.font = '11px "Segoe UI", sans-serif';
+            ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+            ctx.fillText('MUSIC', panelX + 24, musRowY + 8);
+
+            // Music slider track
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.beginPath();
+            ctx.roundRect(sliderX, musSliderY, sliderW, sliderH, 4);
+            ctx.fill();
+
+            // Music slider fill
+            const musFillW = musMuted ? 0 : sliderW * musVol;
+            if (musFillW > 0) {
+                ctx.fillStyle = hexToRGBA(COLORS.HUD_GOLD, musMuted ? 0.2 : 0.6);
+                ctx.beginPath();
+                ctx.roundRect(sliderX, musSliderY, musFillW, sliderH, 4);
+                ctx.fill();
+            }
+
+            // Music slider thumb
+            const musThumbX = sliderX + musFillW;
+            ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_GOLD;
+            ctx.beginPath();
+            ctx.arc(musThumbX, musSliderY + sliderH / 2, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            currentPauseButtons.push({
+                type: 'music_slider', x: sliderX - 6, y: musSliderY - 10,
+                w: sliderW + 12, h: sliderH + 20, sliderX, sliderW
+            });
+
+            // Music mute button (note icon)
+            const musMuteX = sliderX + sliderW + 16;
+            const musMuteY = musSliderY + sliderH / 2;
+            ctx.strokeStyle = musMuted ? COLORS.HUD_RED : COLORS.HUD_TEXT_SECONDARY;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            // Simple note icon
+            ctx.beginPath();
+            ctx.arc(musMuteX + 2, musMuteY + 3, 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(musMuteX + 5, musMuteY + 3);
+            ctx.lineTo(musMuteX + 5, musMuteY - 7);
+            ctx.lineTo(musMuteX + 10, musMuteY - 9);
+            ctx.stroke();
+            if (musMuted) {
+                ctx.beginPath();
+                ctx.moveTo(musMuteX + 14, musMuteY - 5);
+                ctx.lineTo(musMuteX + 22, musMuteY + 5);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(musMuteX + 22, musMuteY - 5);
+                ctx.lineTo(musMuteX + 14, musMuteY + 5);
+                ctx.stroke();
+            }
+            currentPauseButtons.push({
+                type: 'music_mute_toggle', x: musMuteX - 4, y: musMuteY - 12,
+                w: 30, h: 24
+            });
+
+            // Music percentage text
+            ctx.textAlign = 'right';
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = musMuted ? COLORS.HUD_TEXT_SECONDARY : COLORS.HUD_TEXT_PRIMARY;
+            ctx.fillText(musMuted ? 'MUTED' : Math.round(musVol * 100) + '%', sliderX - 8, musRowY + 9);
+
+            // ─── Action buttons ───
             const btnW = isMobile() ? panelW - 60 : 260;
             const btnH = isMobile() ? 52 : 44;
             const btnX = cx - btnW / 2;
-            const btnStartY = panelY + 186;
+            const btnStartY = panelY + 256;
             const btnGap = isMobile() ? 16 : 12;
 
             const buttons = [

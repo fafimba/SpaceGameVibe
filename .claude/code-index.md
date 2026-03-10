@@ -1,4 +1,4 @@
-# index.html Code Index (~12348 lines)
+# index.html Code Index (~13067 lines)
 
 Last updated: 2026-03-10
 
@@ -6,7 +6,7 @@ Last updated: 2026-03-10
 ```
 Lines 1-113:    HTML + CSS (styles, canvas, touch controls, upgradeCanvas)
 Lines 114-119:  HTML body (canvas#game, canvas#upgradeCanvas, joystick)
-Lines 120-12348: JavaScript IIFE
+Lines 120-12700+: JavaScript IIFE
 ```
 
 ---
@@ -51,199 +51,126 @@ Lines 120-12348: JavaScript IIFE
 ## 3. GAME STATE & VARIABLES (610-621)
 - L614-617: Canvas (`ctx`), upgradeCanvas (`uCtx`), gameState (`menu | playing | paused | gameOver | skilltree | tutorial | shop | demoEnd`)
 
-## 4. AUDIO SYSTEM (622-982)
-- L628-816: `SOUND_DEFS` — full sound catalog (33 sounds): playerShoot, rocketFire, rocketExplode, lightningZap, voidSlash, fusionBeam, orbitalHit, auraHit, droneFire, turretFire, mineExplode, snareActivate, novaBeamFire, armageddonLaunch, armageddonExplode, annihilationPulse, hiveMindSpawn, playerHit, shieldBreak, shieldRecharge, playerDeath, nearMiss, xpPickup, healthPickup, levelUp, upgradeSelect, uiClick, gameStart, waveAlert, pauseIn, pauseOut, enemyDeath, enemyShoot, kamikazeCharge, leviathanSpawn, tankSplit
-- L818-982: `AudioManager` singleton — Web Audio API synth engine with filter support (lowpass/highpass), volume/mute (localStorage), cooldowns, play(soundId), multi-note sounds
+## 4. AUDIO SYSTEM (622-1155)
+- L627-817: `SOUND_DEFS` — full sound catalog (33 sounds, modern neon minimalist style)
+- L820-826: `SOUND_LIMITS` — max simultaneous instances per sound type (rate limiting)
+- L827-832: `SOUND_COOLDOWNS` — per-sound cooldown overrides for high-frequency sounds
+- L834-840: `SOUND_PRIORITY` — priority levels (critical sounds bypass rate limits)
+- L842-1155: `AudioManager` singleton — Web Audio API synth engine, filter support, rate limiting, priority system, stereo panning (worldX), volume ducking (duck/unduck), volume/mute (localStorage), play(soundId, worldX), startLoop/stopLoop/stopAllLoops for continuous looping sounds (fusionBeamLoop)
 
-## 5. GAME STATE VARIABLES continued (983-990)
-- L983-987: Timing — `lastTime`, `deltaTime`, `timeScale`, `gameTime`, `totalKills`
+## 4B. DRONE ENGINE — Adaptive Ambient Music (1157-1395)
+- L1160-1167: `DRONE_STATES` — state presets (menu, playing_calm/tense/intense, skilltree, gameOver)
+- L1169-1373: `DroneEngine` singleton — 3 oscillators (sine fundamental + fifth + triangle texture), LFO breathing, lowpass filter, adaptive states, music volume control (separate from SFX), localStorage persistence
+  - `init(audioCtx, masterGain)` — creates audio node graph
+  - `start()` / `stop()` — oscillator lifecycle + tension polling interval
+  - `setState(state)` — smooth 2s transitions between drone states
+  - `updateTension(value)` — maps 0-1 tension to playing sub-states
+  - `setMusicVolume(v)` / `toggleMusicMute()` — independent music volume
+- L1376-1395: `calculateMusicTension()` — enemy count, health ratio, time alive, wave number
 
-## 6. META-PROGRESSION (990-1268)
-- L990: `PROGRESSION_SAVE_KEY`
-- L991: `WEAPON_IDS` array
-- L993: `calculateSkillFactor(runHistory)` — computes 0.75-1.25 factor from last 5 runs
+## 5. GAME STATE VARIABLES continued (1397-1414)
+- L1397-1402: Timing — `lastTime`, `deltaTime`, `timeScale`, `gameTime`, `totalKills`
 
-## 7. GAME STATE VARIABLES continued (1268-1590)
+## 6. META-PROGRESSION (1408-1691)
+- L1408: `PROGRESSION_SAVE_KEY`
+- L1409: `WEAPON_IDS` array
+
+## 7. GAME STATE VARIABLES continued (1691-2014)
 - Cheat codes, Touch state, Player, Entity arrays, Weapon state, Camera, Upgrade state, Effects
 
-## 8. PERFORMANCE OPTIMIZATIONS (1590-1795)
+## 8. PERFORMANCE OPTIMIZATIONS (2014-2219)
 - Spatial grid, Object pools, CULLING_DISTANCES, lerpColor, fastRemove, Performance monitor
 
-## 9. INITIALIZATION (1795-2394)
-- L2128: `init()`
-- L2204: `startGame()` — plays `gameStart` sound
-- L2230: `finishMenuExit()`
-- L2244: `resetGame()`
+## 9. INITIALIZATION (2219-2828)
+- L2545: `init()`
+- L2626: `startGame()` — plays `gameStart` sound, sets DroneEngine to playing_calm
+- L2662: `resetGame()` — calls `AudioManager.stopAllLoops()`
 
-## 10. INPUT HANDLING (2394-2710)
-- L2395: `setupInput()` — AudioManager.init() on first keydown, pauseIn/pauseOut sounds on Escape
-- L2520: `updateInput()`
-- L2535: `setupTouchControls()` — AudioManager.init() on first touch, pauseIn on hamburger
+## 10. INPUT HANDLING (2813-3166)
+- L2813: `setupInput()` — AudioManager.init() + DroneEngine.init()/start() on first keydown/touch, pauseIn/pauseOut sounds on Escape
+- L2975-3021: Volume slider drag support (SFX + Music sliders)
 
-## 11. COORDINATE SYSTEM (2710-2746)
-- L2711: `worldToScreen()`
-- L2719: `screenToWorld()`
-- L2727: `isInView()`
-- L2736: `shouldRenderEntity()`
+## 11. COORDINATE SYSTEM (3166-3202)
+- L3173: `worldToScreen()`
 
-## 12. SECTOR BOUNDARY SYSTEM (2747-2877)
-- L2747: `checkSectorBoundary()`
-- L2781: `transportEntities()`
+## 12. SECTOR BOUNDARY SYSTEM (3202-3339)
+- L3209: `checkSectorBoundary()`
 
-## 13. CAMERA UPDATE (2878-2891)
-- L2878: `updateCamera()`
+## 13. CAMERA UPDATE (3339-3353)
+- L3346: `updateCamera()`
 
-## 14. GAME LOOP (2880-3022)
-- L2880: `gameLoop(timestamp)`
-- L2937: `update(rawDt)`
+## 14. GAME LOOP (3353-3504)
+- L3360: `gameLoop(timestamp)` — includes volume ducking, drone state sync, stopAllLoops on pause/skilltree
 
-## 15. SHIELD ARC STATE MACHINE (3023-3088)
-- L3023: `updateShieldArcState(deltaTime)`
+## 15. SHIELD ARC STATE MACHINE (3504-3570)
+- L3519: `updateShieldArcState(deltaTime)`
 
-## 16. PLAYER SYSTEM (3089-4215)
-- L3089: `updatePlayer()` — shieldRecharge sound on full shield
-- L3249: `getWeaponStats()`
-- L3627: `fireBullet()` — plays `playerShoot`
-- L3760: `fireNovaBeam()` — plays `novaBeamFire`
-- L3815: `fireRocket()` — plays `rocketFire`
-- L3907: `fireArmageddonMissile()` — plays `armageddonLaunch`
-- L3971: `fireLightning()` — plays `lightningZap`
-- L4099: `spawnAlienDrone()` — plays `hiveMindSpawn`
-- L4135: `spawnThrusterParticle()`
+## 16. PLAYER SYSTEM (3570-4697)
+- L3585: `updatePlayer()` — shieldRecharge sound on full shield
+- L3745: `getWeaponStats()`
+- L4123: `fireBullet()` — plays `playerShoot`
 
-## 17. BULLETS (4216-4355)
-- L4216: `updateBullets()`
+## 17. BULLETS (4697-4837)
+- L4712: `updateBullets()`
 
-## 18. ALIEN DRONES (4356-4513)
-- L4356: `updateDrones()`
+## 18. ALIEN DRONES (4837-4995)
+- L4852: `updateDrones()`
 
-## 19. ENEMIES (4514-5078)
-- L4514: `updateOverwhelmCheck()` — mid-run safety valve
-- L4527: `updateSpawnSystem()`
-- L4570: `spawnWave()` — plays `waveAlert`
-- L4646: `getSpawnType()` — BERSERKER from 8min, LEVIATHAN from 12min
-- L4694: `spawnEnemy()` — plays `leviathanSpawn` for LEVIATHAN type
-- L4751: `updateEnemies()`
-- L4909: `updateEnemyBullets()`
-- L4936: `killEnemy(enemy)` — plays `enemyDeath`, `leviathanSpawn` on split, `tankSplit` on tank/alien split
-- L5065: `sweepDeadEnemies()`
+## 19. ENEMIES (4995-5567)
+- L5010: `updateOverwhelmCheck()` — mid-run safety valve
+- L5023: `updateSpawnSystem()`
+- L5066: `spawnWave()` — plays `waveAlert`
 
-## 20. PICKUPS (5079-5188)
-- L5079: `spawnPickup()`
-- L5102: `updatePickups()` — plays `healthPickup` or `xpPickup` based on type
+## 20. PICKUPS (5567-5670)
 
-## 21. XP & LEVEL SYSTEM (5189-5884)
-- L5189: `collectXP(amount)`
-- L5224: `levelUp(levelsGained)` — plays `levelUp`
-- L5241: `getAvailableUpgrades()`
-- L5299: `allSkillsUnlocked()`
-- L5318: `generateUpgradeOptions()`
-- L5326: `drawSkillIcon(ctx, icon, cx, cy, color)` — large icon library (~500 lines)
+## 21. XP & LEVEL SYSTEM (5670-6370)
+- L5685: `collectXP(amount)`
+- L5720: `levelUp(levelsGained)` — plays `levelUp`
 
-## 22. CANVAS UPGRADE OVERLAY (5885-6574) — Two-Canvas Architecture
-- L5885: `easeOutCubic()`, `easeOutQuart()`
-- L5889: `showUpgradePanel()`
-- L5947: `renderUpgradeOverlay()`
-- L6491: `handleUpgradeClick()`
-- L6507: `selectUpgrade(option)` — plays `upgradeSelect`
-- L6558: `hideUpgradePanel()`
+## 22. CANVAS UPGRADE OVERLAY (6370-7056) — Two-Canvas Architecture
+- L6385: `showUpgradePanel()`
 
-## 23. WEAPON SYSTEMS (6575-6831)
-- L6575: `updateWeapons()`
-- L6612: `updateLightningEffects()`
-- L6623: `updateNovaBeamEffects()`
-- L6633: `updateOrbitals()` — plays `orbitalHit` on enemy hit
-- L6697: `updateAura()` — plays `auraHit` on damage tick
-- L6747: `triggerAnnihilationExplosion()` — plays `annihilationPulse` on depth 0
+## 23. WEAPON SYSTEMS (7056-7313)
+- L7073: `updateWeapons()`
 
-## 24. VOID BLADE SYSTEM (6831-7026)
-- L6832: `updateVoidBlade()` — plays `voidSlash`
-- L6909: `performBlastDamage()`
-- L6978: `updateRiftZones()`
-- L7010: `updateSlashEffects()`
+## 24. VOID BLADE SYSTEM (7313-7508)
+- L7330: `updateVoidBlade()` — plays `voidSlash`
 
-## 25. WARP SNARE SYSTEM (7026-7224)
-- L7027: `updateWarpSnares()`
+## 25. WARP SNARE SYSTEM (7508-7709)
+- L7525: `updateWarpSnares()`
 
-## 26. GRAVITY MINES SYSTEM (7224-7432)
-- L7190: `detonateMine()` — plays `mineExplode`
-- L7270: `updateGravityMines()`
+## 26. GRAVITY MINES SYSTEM (7709-7914)
+- L7768: `updateGravityMines()`
 
-## 27. SENTRY TURRET SYSTEM (7432-7626)
-- L7433: `updateSentryTurrets()` — plays `turretFire` on bullet fire
+## 27. SENTRY TURRET SYSTEM (7914-8108)
+- L7931: `updateSentryTurrets()` — plays `turretFire` on bullet fire
 
-## 28. FUSION BEAM SYSTEM (7626-7817)
-- L7627: `updateFusionBeam()` — plays `fusionBeam` on damage tick
-- L7786: `handleBeamKill(enemy, stats)`
+## 28. FUSION BEAM SYSTEM (8108-8305)
+- L8125: `updateFusionBeam()` — starts/stops `fusionBeamLoop` looping sound based on active targets
+- L8272: `handleBeamKill(enemy, stats)`
 
-## 29. ROCKET EXPLOSION (7817-7901)
-- L7818: `explodePlayerRocket()` — plays `rocketExplode` or `armageddonExplode`
+## 29. ROCKET EXPLOSION (8305-8389)
+- L8322: `explodePlayerRocket()` — plays `rocketExplode` or `armageddonExplode`
 
-## 30. COLLISIONS (7901-8075)
-- L7902: `lineCircleCollision()`
-- L7935: `checkCollisions()`
+## 30. COLLISIONS (8389-8563)
+- L8439: `checkCollisions()`
 
-## 31. PLAYER DAMAGE & DEATH (8075-8413)
-- L8076: `damagePlayer()` — plays `playerHit`
-- L8112: `triggerShieldBreak()` — plays `shieldBreak`
-- L8138: `updateShieldBreakSequence(rawDt)`
-- L8235: `triggerLifeGain()`
-- L8247: `updateLifeGainAnimation(rawDt)`
-- L8274: `triggerNearMiss()` — plays `nearMiss`
-- L8295: `gameOver()` — plays `playerDeath`
-- L8370: `spawnDeathExplosion()`
+## 31. PLAYER DAMAGE & DEATH (8563-8902)
+- L8580: `damagePlayer()` — plays `playerHit`
+- L8799: `gameOver()` — calls `AudioManager.stopAllLoops()`, plays `playerDeath`, sets DroneEngine to gameOver
 
-## 32. PARTICLES & EFFECTS (8413-8533)
-- L8414: `spawnRing(x, y, color, maxSize)`
-- L8430: `spawnFloatingText()`
-- L8442: `updateParticles()`
-- L8475: `updateFloatingTexts()`
-- L8489: `updateEffects()`
-- L8510: `triggerShake()`
-- L8516: `triggerFlash()`
-- L8523: `triggerSlowmo()`
+## 32. PARTICLES & EFFECTS (8902-9022)
+- L8920: `spawnRing(x, y, color, maxSize)`
 
-## 33. RENDERING (8534-10308)
-- L8534: `render()`
-- L8611: `renderBackground()`
-- L8686: `renderShieldArc()` — **segmented bars**
-- L8748: `renderShieldBreakEffects()`
-- L8842: `renderLifeGainEffects()`
-- L8910: `renderPlayer()` — uses `drawShipPath(ctx, selectedStartingWeapon)`
-- L8992: `renderAura()`
-- L9051: `renderFusionBeam()`
-- L9212: `renderOrbitals()`
-- L9242: `renderLightning()`
-- L9282: `renderNovaBeam()`
-- L9314: `renderBullets()` — rockets use capsule shape + detached trail
-- L9563: `renderEnemyBullets()`
-- L9581: `renderDrones()`
-- L9678: `renderEnemies()` — batch renders SCOUT, KAMIKAZE, TANK, ALIEN, BERSERKER, LEVIATHAN
-- L9926: `renderPickups()`
-- L9970: `renderParticles()`
-- L10056: `renderFloatingTexts()`
-- L10080: `renderTurrets()`
-- L10176: `renderMines()`
-- L10308: `renderSnares()` — per-hex scale animation
+## 33. RENDERING (9022-10797)
+- L9040: `render()`
 
-## 34. UI RENDERING (10778-12126)
-- L10778: `renderUI()`
-- L10801: `renderMenu()` — includes inline shop, best kills record display
-- L11285: `renderArsenalGallery()`
-- L11366: `renderControlsHelp(startY)`
-- L11402: `renderHUD()` — hamburger menu, kills counter, life icons, level inside XP bar
-- L11614: `renderTutorial()`
-- L11690: `handleMenuClick(clickX, clickY)` — weapon cycling
-- L11738: `renderDemoEnd()`
-- L11842: `handleDemoEndClick(clickX, clickY)`
-- L11863: `handlePauseClick(clickX, clickY)` — pauseOut on resume
-- L11885: `renderPauseWeaponInventory(cx, y)`
-- L11948: `renderPauseOverlay()`
-- L12026: **`renderCheatOverlay()`**
-- L12096: `renderGameOver()`
+## 34. UI RENDERING (11266-12717)
+- L11266: `renderUI()`
+- L12482: `renderPauseOverlay()` — SFX volume slider + Music volume slider + action buttons
 
-## 35. UTILITIES (12327)
-- L12327: `normalizeAngle(angle)`
+## 35. UTILITIES (13044)
+- L13044: `normalizeAngle(angle)`
 
-## 36. START GAME (12329-12348)
-- L12337: `init()` call
+## 36. START GAME (13057+)
+- `init()` call

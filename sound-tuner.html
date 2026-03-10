@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellar Swarm — Sound Tuner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a14;
+    color: #c8d6e5;
+    font-family: 'Courier New', monospace;
+    overflow-x: hidden;
+}
+.header {
+    text-align: center;
+    padding: 18px 0 10px;
+    border-bottom: 1px solid #1a1a2e;
+    background: linear-gradient(180deg, #0f0f1e 0%, #0a0a14 100%);
+}
+.header h1 {
+    font-size: 22px;
+    color: #7fdbff;
+    text-shadow: 0 0 12px rgba(127,219,255,0.4);
+    letter-spacing: 3px;
+}
+.header p { font-size: 11px; color: #556; margin-top: 4px; }
+.main {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: calc(100vh - 80px);
+}
+.panel {
+    background: #0e0e1a;
+    border: 1px solid #1a1a2e;
+    border-radius: 8px;
+    padding: 16px;
+}
+.left { flex: 1; min-width: 340px; max-width: 460px; }
+.right { flex: 1.4; display: flex; flex-direction: column; gap: 12px; }
+
+/* Toolbar */
+.toolbar {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.toolbar select, .toolbar button {
+    background: #14142a;
+    color: #c8d6e5;
+    border: 1px solid #2a2a4a;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.toolbar select:hover, .toolbar button:hover {
+    border-color: #7fdbff;
+    background: #1a1a34;
+}
+.toolbar select { flex: 1; min-width: 140px; }
+.btn-play {
+    background: #1a3a2a !important;
+    color: #2ecc71 !important;
+    border-color: #2ecc71 !important;
+    font-weight: bold;
+    min-width: 70px;
+}
+.btn-play:hover { background: #1e4a30 !important; }
+.btn-random {
+    background: #2a1a3a !important;
+    color: #a76bff !important;
+    border-color: #a76bff !important;
+}
+.btn-random:hover { background: #341e4a !important; }
+
+/* Controls */
+.control-group {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1a1a2e;
+}
+.control-group:last-child { border-bottom: none; }
+.control-group h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #7fdbff;
+    margin-bottom: 8px;
+}
+.control-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.control-row label {
+    width: 80px;
+    font-size: 11px;
+    color: #889;
+    flex-shrink: 0;
+    text-align: right;
+}
+.control-row input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #1a1a2e;
+    border-radius: 2px;
+    outline: none;
+}
+.control-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #7fdbff;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(127,219,255,0.4);
+}
+.control-row .val {
+    width: 52px;
+    font-size: 11px;
+    color: #aab;
+    text-align: right;
+    flex-shrink: 0;
+}
+.wave-btns {
+    display: flex; gap: 4px; flex: 1;
+}
+.wave-btns button {
+    flex: 1;
+    background: #14142a;
+    color: #889;
+    border: 1px solid #2a2a4a;
+    border-radius: 3px;
+    padding: 5px 4px;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.wave-btns button.active {
+    color: #7fdbff;
+    border-color: #7fdbff;
+    background: #1a1a34;
+    box-shadow: 0 0 6px rgba(127,219,255,0.2);
+}
+.wave-btns button:hover { border-color: #556; }
+.decay-btns { display: flex; gap: 4px; flex: 1; }
+.decay-btns button {
+    flex: 1;
+    background: #14142a;
+    color: #889;
+    border: 1px solid #2a2a4a;
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+.decay-btns button.active {
+    color: #7fdbff;
+    border-color: #7fdbff;
+    background: #1a1a34;
+}
+/* Filter toggle */
+.filter-toggle {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.filter-toggle label { width: 80px; text-align: right; font-size: 11px; color: #889; }
+.toggle-btn {
+    background: #14142a;
+    color: #889;
+    border: 1px solid #2a2a4a;
+    border-radius: 3px;
+    padding: 4px 14px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+.toggle-btn.active { color: #2ecc71; border-color: #2ecc71; background: #1a2a1a; }
+.filter-type-btns { display: flex; gap: 4px; flex: 1; }
+.filter-type-btns button {
+    flex: 1;
+    background: #14142a;
+    color: #889;
+    border: 1px solid #2a2a4a;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+.filter-type-btns button.active {
+    color: #f0a030;
+    border-color: #f0a030;
+    background: #2a1a0a;
+}
+.filter-controls { margin-top: 6px; }
+.filter-controls.hidden { display: none; }
+
+/* Notes (multi-note) */
+.notes-section { margin-top: 8px; }
+.note-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    background: #12122a; border-radius: 4px; padding: 4px 8px;
+}
+.note-row label { width: 50px; font-size: 10px; color: #667; text-align: right; }
+.note-row input {
+    width: 52px;
+    background: #0a0a14;
+    color: #c8d6e5;
+    border: 1px solid #2a2a4a;
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-family: inherit;
+    font-size: 10px;
+    text-align: center;
+}
+.note-row .remove-note {
+    background: none; border: none; color: #a33; cursor: pointer;
+    font-size: 14px; padding: 0 4px;
+}
+.add-note-btn {
+    background: #14142a;
+    color: #889;
+    border: 1px solid #2a2a4a;
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    margin-top: 4px;
+}
+.add-note-btn:hover { border-color: #7fdbff; }
+
+/* Visualizer */
+.viz-panel { flex: 0 0 auto; }
+.viz-panel h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 2px;
+    color: #7fdbff; margin-bottom: 8px;
+}
+.viz-canvas {
+    width: 100%;
+    height: 120px;
+    background: #08080f;
+    border: 1px solid #1a1a2e;
+    border-radius: 4px;
+}
+
+/* Export */
+.export-panel { flex: 1; min-height: 180px; display: flex; flex-direction: column; }
+.export-panel h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 2px;
+    color: #7fdbff; margin-bottom: 8px;
+}
+.export-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.export-actions button {
+    background: #14142a; color: #c8d6e5; border: 1px solid #2a2a4a;
+    border-radius: 4px; padding: 5px 14px; font-family: inherit;
+    font-size: 11px; cursor: pointer;
+}
+.export-actions button:hover { border-color: #7fdbff; }
+.btn-copy { color: #2ecc71 !important; border-color: #2ecc71 !important; }
+.btn-copy:hover { background: #1a2a1a !important; }
+.btn-import { color: #f0a030 !important; border-color: #f0a030 !important; }
+.btn-import:hover { background: #2a1a0a !important; }
+.export-code {
+    flex: 1;
+    width: 100%;
+    background: #08080f;
+    color: #7fdbff;
+    border: 1px solid #1a1a2e;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.5;
+}
+.export-code:focus { outline: none; border-color: #7fdbff; }
+
+/* Toast */
+.toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #1a3a2a; color: #2ecc71; padding: 8px 20px;
+    border: 1px solid #2ecc71; border-radius: 4px; font-size: 12px;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
+}
+.toast.show { opacity: 1; }
+
+@media (max-width: 800px) {
+    .main { flex-direction: column; }
+    .left { max-width: none; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>STELLAR SWARM — SOUND TUNER</h1>
+    <p>Design, preview & export sounds for the game's Web Audio synth engine</p>
+</div>
+<div class="main">
+    <!-- LEFT: Controls -->
+    <div class="panel left">
+        <div class="toolbar">
+            <select id="presetSelect"><option value="">— Load Preset —</option></select>
+            <button class="btn-play" id="playBtn">▶ Play</button>
+            <button class="btn-random" id="randomBtn">⚄ Random</button>
+        </div>
+
+        <!-- Oscillator -->
+        <div class="control-group">
+            <h3>Oscillator</h3>
+            <div class="control-row">
+                <label>Wave</label>
+                <div class="wave-btns" id="waveBtns">
+                    <button data-wave="sine">sine</button>
+                    <button data-wave="square" class="active">square</button>
+                    <button data-wave="sawtooth">saw</button>
+                    <button data-wave="triangle">tri</button>
+                </div>
+            </div>
+            <div class="control-row">
+                <label>Freq Start</label>
+                <input type="range" id="freqStart" min="20" max="4000" value="880" step="1">
+                <span class="val" id="freqStartVal">880</span>
+            </div>
+            <div class="control-row">
+                <label>Freq End</label>
+                <input type="range" id="freqEnd" min="20" max="4000" value="440" step="1">
+                <span class="val" id="freqEndVal">440</span>
+            </div>
+            <div class="control-row">
+                <label>Detune</label>
+                <input type="range" id="detune" min="0" max="200" value="50" step="1">
+                <span class="val" id="detuneVal">50</span>
+            </div>
+        </div>
+
+        <!-- Envelope -->
+        <div class="control-group">
+            <h3>Envelope</h3>
+            <div class="control-row">
+                <label>Duration</label>
+                <input type="range" id="duration" min="0.01" max="1.0" value="0.08" step="0.01">
+                <span class="val" id="durationVal">0.08</span>
+            </div>
+            <div class="control-row">
+                <label>Volume</label>
+                <input type="range" id="volume" min="0.01" max="1.0" value="0.3" step="0.01">
+                <span class="val" id="volumeVal">0.30</span>
+            </div>
+            <div class="control-row">
+                <label>Decay</label>
+                <div class="decay-btns" id="decayBtns">
+                    <button data-decay="exp" class="active">exponential</button>
+                    <button data-decay="linear">linear</button>
+                </div>
+            </div>
+            <div class="control-row">
+                <label>Noise Mix</label>
+                <input type="range" id="noise" min="0" max="1.0" value="0" step="0.01">
+                <span class="val" id="noiseVal">0.00</span>
+            </div>
+        </div>
+
+        <!-- Filter -->
+        <div class="control-group">
+            <h3>Filter</h3>
+            <div class="filter-toggle">
+                <label>Enabled</label>
+                <button class="toggle-btn" id="filterToggle">OFF</button>
+            </div>
+            <div class="filter-controls hidden" id="filterControls">
+                <div class="control-row">
+                    <label>Type</label>
+                    <div class="filter-type-btns" id="filterTypeBtns">
+                        <button data-ftype="lowpass" class="active">lowpass</button>
+                        <button data-ftype="highpass">highpass</button>
+                        <button data-ftype="bandpass">bandpass</button>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <label>Freq Start</label>
+                    <input type="range" id="filterFreqStart" min="20" max="8000" value="2000" step="1">
+                    <span class="val" id="filterFreqStartVal">2000</span>
+                </div>
+                <div class="control-row">
+                    <label>Freq End</label>
+                    <input type="range" id="filterFreqEnd" min="20" max="8000" value="500" step="1">
+                    <span class="val" id="filterFreqEndVal">500</span>
+                </div>
+                <div class="control-row">
+                    <label>Q</label>
+                    <input type="range" id="filterQ" min="0.1" max="20" value="1" step="0.1">
+                    <span class="val" id="filterQVal">1.0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="control-group">
+            <h3>Multi-Note</h3>
+            <div class="notes-section" id="notesSection"></div>
+            <button class="add-note-btn" id="addNoteBtn">+ Add Note</button>
+        </div>
+    </div>
+
+    <!-- RIGHT: Visualizer + Export -->
+    <div class="right">
+        <div class="panel viz-panel">
+            <h3>Waveform</h3>
+            <canvas class="viz-canvas" id="vizCanvas"></canvas>
+        </div>
+        <div class="panel export-panel">
+            <h3>Export</h3>
+            <div class="export-actions">
+                <input type="text" id="soundName" placeholder="soundName" style="
+                    background:#0a0a14;color:#c8d6e5;border:1px solid #2a2a4a;
+                    border-radius:4px;padding:5px 10px;font-family:inherit;font-size:11px;
+                    flex:1;min-width:100px;
+                ">
+                <button class="btn-copy" id="copyBtn">Copy</button>
+                <button class="btn-import" id="importBtn">Import</button>
+            </div>
+            <textarea class="export-code" id="exportCode" readonly></textarea>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// STELLAR SWARM — SOUND TUNER
+// ============================================================
+
+// --- SOUND_DEFS (from the game) ---
+const PRESETS = {
+    playerShoot: { wave:'square', freq:[880,440], duration:0.08, volume:0.25, decay:'exp', noise:0, detune:50, category:'sfx' },
+    rocketFire: { wave:'sawtooth', freq:[150,80], duration:0.15, volume:0.3, decay:'exp', noise:0.3, detune:40, category:'sfx', filter:{type:'lowpass',freq:[1200,400],Q:2} },
+    rocketExplode: { wave:'sine', freq:[120,40], duration:0.25, volume:0.35, decay:'exp', noise:0.6, detune:20, category:'sfx', filter:{type:'lowpass',freq:[800,200],Q:1} },
+    lightningZap: { wave:'sawtooth', freq:[2000,800], duration:0.06, volume:0.2, decay:'exp', noise:0.5, detune:100, category:'sfx', filter:{type:'highpass',freq:[500,1000],Q:3} },
+    voidSlash: { wave:'sawtooth', freq:[600,120], duration:0.1, volume:0.25, decay:'exp', noise:0.15, detune:60, category:'sfx' },
+    fusionBeam: { wave:'sine', freq:[340,360], duration:0.12, volume:0.12, decay:'linear', noise:0.05, detune:20, category:'sfx' },
+    orbitalHit: { wave:'triangle', freq:[1400,800], duration:0.04, volume:0.12, decay:'exp', noise:0, detune:80, category:'sfx' },
+    auraHit: { wave:'sine', freq:[180,120], duration:0.05, volume:0.08, decay:'exp', noise:0, detune:40, category:'sfx' },
+    droneFire: { wave:'square', freq:[700,350], duration:0.06, volume:0.15, decay:'exp', noise:0.1, detune:60, category:'sfx' },
+    turretFire: { wave:'square', freq:[1000,600], duration:0.04, volume:0.12, decay:'exp', noise:0.15, detune:70, category:'sfx' },
+    mineExplode: { wave:'sine', freq:[200,30], duration:0.3, volume:0.35, decay:'exp', noise:0.5, detune:15, category:'sfx', filter:{type:'lowpass',freq:[600,100],Q:2} },
+    snareActivate: { wave:'sine', freq:[400,800], duration:0.15, volume:0.15, decay:'linear', noise:0.1, detune:30, category:'sfx', filter:{type:'lowpass',freq:[2000,600],Q:4} },
+    novaBeamFire: { wave:'sawtooth', freq:[600,400], duration:0.12, volume:0.3, decay:'exp', noise:0.1, detune:20, category:'sfx', filter:{type:'lowpass',freq:[3000,1500],Q:3} },
+    armageddonLaunch: { wave:'sawtooth', freq:[100,50], duration:0.3, volume:0.35, decay:'exp', noise:0.4, detune:10, category:'sfx', filter:{type:'lowpass',freq:[600,200],Q:2} },
+    armageddonExplode: { wave:'sine', freq:[80,20], duration:0.5, volume:0.4, decay:'exp', noise:0.7, detune:10, category:'sfx', filter:{type:'lowpass',freq:[500,80],Q:1} },
+    annihilationPulse: { wave:'sine', freq:[250,60], duration:0.35, volume:0.35, decay:'exp', noise:0.3, detune:15, category:'sfx', filter:{type:'lowpass',freq:[1000,200],Q:2} },
+    hiveMindSpawn: { wave:'triangle', freq:[1200,600], duration:0.1, volume:0.15, decay:'exp', noise:0.1, detune:100, category:'sfx' },
+    playerHit: { wave:'sawtooth', freq:[300,80], duration:0.12, volume:0.35, decay:'exp', noise:0.4, detune:30, category:'sfx' },
+    shieldBreak: { wave:'square', freq:[500,100], duration:0.2, volume:0.35, decay:'exp', noise:0.3, detune:20, category:'sfx', filter:{type:'lowpass',freq:[2000,300],Q:2} },
+    shieldRecharge: { wave:'sine', freq:[400,800], duration:0.2, volume:0.15, decay:'linear', noise:0, detune:0, category:'sfx' },
+    playerDeath: { wave:'sawtooth', freq:[200,30], duration:0.6, volume:0.4, decay:'exp', noise:0.6, detune:10, category:'sfx', filter:{type:'lowpass',freq:[1000,100],Q:1} },
+    nearMiss: { wave:'sine', freq:[600,900], duration:0.08, volume:0.1, decay:'linear', noise:0.05, detune:40, category:'sfx' },
+    xpPickup: { wave:'sine', freq:[1200,1600], duration:0.06, volume:0.2, decay:'linear', noise:0, detune:30, category:'sfx' },
+    healthPickup: { wave:'triangle', freq:[500,900], duration:0.15, volume:0.25, decay:'linear', noise:0, detune:10, category:'sfx' },
+    levelUp: { wave:'square', freq:[440,880], duration:0.25, volume:0.3, decay:'linear', noise:0, detune:0, category:'sfx', notes:[{freq:[523,523],delay:0,duration:0.08},{freq:[659,659],delay:0.09,duration:0.08},{freq:[784,784],delay:0.18,duration:0.12}] },
+    upgradeSelect: { wave:'triangle', freq:[800,1200], duration:0.1, volume:0.2, decay:'linear', noise:0, detune:0, category:'sfx' },
+    uiClick: { wave:'square', freq:[1000,800], duration:0.03, volume:0.12, decay:'exp', noise:0, detune:0, category:'ui' },
+    gameStart: { wave:'sawtooth', freq:[300,600], duration:0.2, volume:0.25, decay:'linear', noise:0.1, detune:0, category:'ui', filter:{type:'lowpass',freq:[1500,3000],Q:2} },
+    waveAlert: { wave:'square', freq:[600,400], duration:0.15, volume:0.2, decay:'exp', noise:0, detune:0, category:'sfx', notes:[{freq:[500,500],delay:0,duration:0.08},{freq:[700,700],delay:0.1,duration:0.08}] },
+    pauseIn: { wave:'sine', freq:[600,300], duration:0.1, volume:0.12, decay:'exp', noise:0, detune:0, category:'ui' },
+    pauseOut: { wave:'sine', freq:[300,600], duration:0.1, volume:0.12, decay:'exp', noise:0, detune:0, category:'ui' },
+    enemyDeath: { wave:'sine', freq:[600,150], duration:0.15, volume:0.3, decay:'exp', noise:0.2, detune:80, category:'sfx' },
+    enemyShoot: { wave:'square', freq:[200,120], duration:0.06, volume:0.12, decay:'exp', noise:0.2, detune:50, category:'sfx' },
+    kamikazeCharge: { wave:'sawtooth', freq:[200,500], duration:0.2, volume:0.12, decay:'linear', noise:0.1, detune:30, category:'sfx' },
+    leviathanSpawn: { wave:'sawtooth', freq:[60,30], duration:0.4, volume:0.3, decay:'exp', noise:0.3, detune:10, category:'sfx', filter:{type:'lowpass',freq:[400,100],Q:1} },
+    tankSplit: { wave:'square', freq:[400,200], duration:0.1, volume:0.2, decay:'exp', noise:0.3, detune:60, category:'sfx' }
+};
+
+// --- State ---
+let audioCtx = null;
+let analyser = null;
+let analyserGain = null;
+let currentNotes = [];
+let autoPlayEnabled = true;
+
+// --- DOM refs ---
+const $ = id => document.getElementById(id);
+const presetSelect = $('presetSelect');
+const playBtn = $('playBtn');
+const randomBtn = $('randomBtn');
+const waveBtns = $('waveBtns');
+const decayBtns = $('decayBtns');
+const filterToggle = $('filterToggle');
+const filterControls = $('filterControls');
+const filterTypeBtns = $('filterTypeBtns');
+const notesSection = $('notesSection');
+const addNoteBtn = $('addNoteBtn');
+const vizCanvas = $('vizCanvas');
+const exportCode = $('exportCode');
+const soundName = $('soundName');
+const copyBtn = $('copyBtn');
+const importBtn = $('importBtn');
+const toast = $('toast');
+
+// Sliders
+const sliders = {
+    freqStart: $('freqStart'), freqEnd: $('freqEnd'), detune: $('detune'),
+    duration: $('duration'), volume: $('volume'), noise: $('noise'),
+    filterFreqStart: $('filterFreqStart'), filterFreqEnd: $('filterFreqEnd'), filterQ: $('filterQ')
+};
+const vals = {
+    freqStart: $('freqStartVal'), freqEnd: $('freqEndVal'), detune: $('detuneVal'),
+    duration: $('durationVal'), volume: $('volumeVal'), noise: $('noiseVal'),
+    filterFreqStart: $('filterFreqStartVal'), filterFreqEnd: $('filterFreqEndVal'), filterQ: $('filterQVal')
+};
+
+// --- Init Audio ---
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyserGain = audioCtx.createGain();
+    analyserGain.connect(audioCtx.destination);
+    analyserGain.connect(analyser);
+}
+
+// --- Populate presets ---
+(function() {
+    const groups = {
+        'Player Weapons': ['playerShoot','rocketFire','rocketExplode','lightningZap','voidSlash','fusionBeam','orbitalHit','auraHit','droneFire','turretFire','mineExplode','snareActivate'],
+        'Evolutions': ['novaBeamFire','armageddonLaunch','armageddonExplode','annihilationPulse','hiveMindSpawn'],
+        'Player & Combat': ['playerHit','shieldBreak','shieldRecharge','playerDeath','nearMiss'],
+        'Pickups & Progression': ['xpPickup','healthPickup','levelUp','upgradeSelect'],
+        'UI & Menus': ['uiClick','gameStart','waveAlert','pauseIn','pauseOut'],
+        'Enemies': ['enemyDeath','enemyShoot','kamikazeCharge','leviathanSpawn','tankSplit']
+    };
+    for (const [group, ids] of Object.entries(groups)) {
+        const og = document.createElement('optgroup');
+        og.label = group;
+        for (const id of ids) {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = id;
+            og.appendChild(opt);
+        }
+        presetSelect.appendChild(og);
+    }
+})();
+
+// --- Read current state from UI ---
+function getState() {
+    const wave = waveBtns.querySelector('.active').dataset.wave;
+    const decay = decayBtns.querySelector('.active').dataset.decay;
+    const filterEnabled = filterToggle.classList.contains('active');
+    const filterType = filterTypeBtns.querySelector('.active')?.dataset.ftype || 'lowpass';
+
+    const state = {
+        wave,
+        freq: [+sliders.freqStart.value, +sliders.freqEnd.value],
+        duration: +sliders.duration.value,
+        volume: +sliders.volume.value,
+        decay,
+        noise: +sliders.noise.value,
+        detune: +sliders.detune.value,
+        category: 'sfx'
+    };
+
+    if (filterEnabled) {
+        state.filter = {
+            type: filterType,
+            freq: [+sliders.filterFreqStart.value, +sliders.filterFreqEnd.value],
+            Q: +sliders.filterQ.value
+        };
+    }
+
+    if (currentNotes.length > 0) {
+        state.notes = currentNotes.map(n => ({
+            freq: [+n.freqStart, +n.freqEnd],
+            delay: +n.delay,
+            duration: +n.duration
+        }));
+    }
+
+    return state;
+}
+
+// --- Apply state to UI ---
+function setState(def) {
+    // Wave
+    waveBtns.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.wave === def.wave));
+    // Decay
+    decayBtns.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.decay === def.decay));
+    // Sliders
+    const fs = Array.isArray(def.freq) ? def.freq[0] : def.freq;
+    const fe = Array.isArray(def.freq) ? def.freq[1] : def.freq;
+    sliders.freqStart.value = fs; vals.freqStart.textContent = fs;
+    sliders.freqEnd.value = fe; vals.freqEnd.textContent = fe;
+    sliders.detune.value = def.detune || 0; vals.detune.textContent = def.detune || 0;
+    sliders.duration.value = def.duration; vals.duration.textContent = def.duration.toFixed(2);
+    sliders.volume.value = def.volume; vals.volume.textContent = def.volume.toFixed(2);
+    sliders.noise.value = def.noise || 0; vals.noise.textContent = (def.noise || 0).toFixed(2);
+    // Filter
+    if (def.filter) {
+        filterToggle.classList.add('active');
+        filterToggle.textContent = 'ON';
+        filterControls.classList.remove('hidden');
+        filterTypeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.ftype === def.filter.type));
+        const ffs = Array.isArray(def.filter.freq) ? def.filter.freq[0] : def.filter.freq;
+        const ffe = Array.isArray(def.filter.freq) ? def.filter.freq[1] : def.filter.freq;
+        sliders.filterFreqStart.value = ffs; vals.filterFreqStart.textContent = ffs;
+        sliders.filterFreqEnd.value = ffe; vals.filterFreqEnd.textContent = ffe;
+        sliders.filterQ.value = def.filter.Q || 1; vals.filterQ.textContent = (def.filter.Q || 1).toFixed(1);
+    } else {
+        filterToggle.classList.remove('active');
+        filterToggle.textContent = 'OFF';
+        filterControls.classList.add('hidden');
+    }
+    // Notes
+    currentNotes = [];
+    if (def.notes) {
+        for (const n of def.notes) {
+            currentNotes.push({
+                freqStart: Array.isArray(n.freq) ? n.freq[0] : n.freq,
+                freqEnd: Array.isArray(n.freq) ? n.freq[1] : n.freq,
+                delay: n.delay,
+                duration: n.duration
+            });
+        }
+    }
+    renderNotes();
+    updateExport();
+}
+
+// --- Notes UI ---
+function renderNotes() {
+    notesSection.innerHTML = '';
+    currentNotes.forEach((n, i) => {
+        const row = document.createElement('div');
+        row.className = 'note-row';
+        row.innerHTML = `
+            <label>Note ${i+1}</label>
+            <input type="number" value="${n.freqStart}" min="20" max="4000" step="1" data-idx="${i}" data-field="freqStart" title="Freq Start">
+            <span style="color:#556;font-size:10px">→</span>
+            <input type="number" value="${n.freqEnd}" min="20" max="4000" step="1" data-idx="${i}" data-field="freqEnd" title="Freq End">
+            <input type="number" value="${n.delay}" min="0" max="2" step="0.01" data-idx="${i}" data-field="delay" title="Delay" style="width:44px">
+            <input type="number" value="${n.duration}" min="0.01" max="1" step="0.01" data-idx="${i}" data-field="duration" title="Duration" style="width:44px">
+            <button class="remove-note" data-idx="${i}">×</button>
+        `;
+        notesSection.appendChild(row);
+    });
+    // Events
+    notesSection.querySelectorAll('input').forEach(inp => {
+        inp.addEventListener('change', () => {
+            const idx = +inp.dataset.idx;
+            currentNotes[idx][inp.dataset.field] = +inp.value;
+            updateExport();
+        });
+    });
+    notesSection.querySelectorAll('.remove-note').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentNotes.splice(+btn.dataset.idx, 1);
+            renderNotes();
+            updateExport();
+        });
+    });
+}
+
+addNoteBtn.addEventListener('click', () => {
+    currentNotes.push({ freqStart: 523, freqEnd: 523, delay: currentNotes.length * 0.1, duration: 0.08 });
+    renderNotes();
+    updateExport();
+});
+
+// --- SynthEngine (same as game) ---
+function synthPlay(def, destination) {
+    if (!audioCtx) return;
+    const ctx = audioCtx;
+    const t = ctx.currentTime + 0.01;
+    const dest = destination || analyserGain;
+
+    // Multi-note
+    if (def.notes) {
+        for (const note of def.notes) {
+            synthSingle({
+                wave: def.wave, freq: note.freq, duration: note.duration,
+                volume: def.volume, decay: def.decay, noise: def.noise || 0, detune: 0
+            }, t + note.delay, dest);
+        }
+        return;
+    }
+    synthSingle(def, t, dest);
+}
+
+function synthSingle(def, t, dest) {
+    const ctx = audioCtx;
+    const dur = def.duration;
+    const endT = t + dur;
+
+    const osc = ctx.createOscillator();
+    osc.type = def.wave;
+    const freqStart = Array.isArray(def.freq) ? def.freq[0] : def.freq;
+    const freqEnd = Array.isArray(def.freq) ? def.freq[1] : def.freq;
+    osc.frequency.setValueAtTime(freqStart, t);
+    if (freqStart !== freqEnd) osc.frequency.linearRampToValueAtTime(freqEnd, endT);
+
+    // No random detune in tuner — we want consistent preview
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(def.volume, t);
+    if (def.decay === 'exp') {
+        gain.gain.exponentialRampToValueAtTime(0.001, endT);
+    } else {
+        gain.gain.linearRampToValueAtTime(0, endT);
+    }
+
+    if (def.filter) {
+        const filt = ctx.createBiquadFilter();
+        filt.type = def.filter.type;
+        const ffs = Array.isArray(def.filter.freq) ? def.filter.freq[0] : def.filter.freq;
+        const ffe = Array.isArray(def.filter.freq) ? def.filter.freq[1] : def.filter.freq;
+        filt.frequency.setValueAtTime(ffs, t);
+        if (ffs !== ffe) filt.frequency.linearRampToValueAtTime(ffe, endT);
+        filt.Q.value = def.filter.Q || 1;
+        osc.connect(filt);
+        filt.connect(gain);
+    } else {
+        osc.connect(gain);
+    }
+
+    if (def.noise > 0) {
+        const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * dur));
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * def.noise;
+        const noiseSrc = ctx.createBufferSource();
+        noiseSrc.buffer = noiseBuffer;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(def.volume, t);
+        if (def.decay === 'exp') {
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, endT);
+        } else {
+            noiseGain.gain.linearRampToValueAtTime(0, endT);
+        }
+        noiseSrc.connect(noiseGain);
+        noiseGain.connect(dest);
+        noiseSrc.start(t);
+        noiseSrc.stop(endT);
+    }
+
+    gain.connect(dest);
+    osc.start(t);
+    osc.stop(endT);
+}
+
+// --- Visualizer ---
+const vizCtx = vizCanvas.getContext('2d');
+let vizAnimId = null;
+
+function resizeViz() {
+    const rect = vizCanvas.getBoundingClientRect();
+    vizCanvas.width = rect.width * devicePixelRatio;
+    vizCanvas.height = rect.height * devicePixelRatio;
+}
+resizeViz();
+window.addEventListener('resize', resizeViz);
+
+function drawViz() {
+    if (!analyser) {
+        vizAnimId = requestAnimationFrame(drawViz);
+        return;
+    }
+    const w = vizCanvas.width;
+    const h = vizCanvas.height;
+    const bufLen = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufLen);
+    analyser.getByteTimeDomainData(dataArray);
+
+    vizCtx.fillStyle = '#08080f';
+    vizCtx.fillRect(0, 0, w, h);
+
+    // Grid lines
+    vizCtx.strokeStyle = '#1a1a2e';
+    vizCtx.lineWidth = 1;
+    vizCtx.beginPath();
+    vizCtx.moveTo(0, h/2); vizCtx.lineTo(w, h/2);
+    vizCtx.moveTo(0, h/4); vizCtx.lineTo(w, h/4);
+    vizCtx.moveTo(0, 3*h/4); vizCtx.lineTo(w, 3*h/4);
+    vizCtx.stroke();
+
+    // Waveform
+    vizCtx.strokeStyle = '#7fdbff';
+    vizCtx.lineWidth = 2 * devicePixelRatio;
+    vizCtx.shadowColor = 'rgba(127,219,255,0.5)';
+    vizCtx.shadowBlur = 4 * devicePixelRatio;
+    vizCtx.beginPath();
+    const sliceWidth = w / bufLen;
+    let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * h / 2;
+        if (i === 0) vizCtx.moveTo(x, y);
+        else vizCtx.lineTo(x, y);
+        x += sliceWidth;
+    }
+    vizCtx.stroke();
+    vizCtx.shadowBlur = 0;
+
+    vizAnimId = requestAnimationFrame(drawViz);
+}
+drawViz();
+
+// --- Export code generation ---
+function updateExport() {
+    const state = getState();
+    const name = soundName.value || 'mySound';
+    let code = `${name}: {\n`;
+    code += `    wave: '${state.wave}', freq: [${state.freq[0]}, ${state.freq[1]}], duration: ${state.duration}, volume: ${state.volume},\n`;
+    code += `    decay: '${state.decay}', noise: ${state.noise}, detune: ${state.detune}, category: '${state.category}'`;
+    if (state.filter) {
+        code += `,\n    filter: { type: '${state.filter.type}', freq: [${state.filter.freq[0]}, ${state.filter.freq[1]}], Q: ${state.filter.Q} }`;
+    }
+    if (state.notes && state.notes.length > 0) {
+        code += `,\n    notes: [\n`;
+        code += state.notes.map(n =>
+            `        { freq: [${n.freq[0]}, ${n.freq[1]}], delay: ${n.delay}, duration: ${n.duration} }`
+        ).join(',\n');
+        code += `\n    ]`;
+    }
+    code += `\n}`;
+    exportCode.value = code;
+}
+
+// --- Events ---
+
+// Slider updates
+for (const [key, slider] of Object.entries(sliders)) {
+    slider.addEventListener('input', () => {
+        const v = +slider.value;
+        if (key === 'duration' || key === 'volume' || key === 'noise') {
+            vals[key].textContent = v.toFixed(2);
+        } else if (key === 'filterQ') {
+            vals[key].textContent = v.toFixed(1);
+        } else {
+            vals[key].textContent = Math.round(v);
+        }
+        updateExport();
+    });
+}
+
+// Auto-play on slider release
+for (const slider of Object.values(sliders)) {
+    slider.addEventListener('change', () => {
+        if (autoPlayEnabled) { initAudio(); synthPlay(getState()); }
+    });
+}
+
+// Wave buttons
+waveBtns.addEventListener('click', e => {
+    if (!e.target.dataset.wave) return;
+    waveBtns.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    updateExport();
+    if (autoPlayEnabled) { initAudio(); synthPlay(getState()); }
+});
+
+// Decay buttons
+decayBtns.addEventListener('click', e => {
+    if (!e.target.dataset.decay) return;
+    decayBtns.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    updateExport();
+    if (autoPlayEnabled) { initAudio(); synthPlay(getState()); }
+});
+
+// Filter toggle
+filterToggle.addEventListener('click', () => {
+    filterToggle.classList.toggle('active');
+    const on = filterToggle.classList.contains('active');
+    filterToggle.textContent = on ? 'ON' : 'OFF';
+    filterControls.classList.toggle('hidden', !on);
+    updateExport();
+    if (autoPlayEnabled && on) { initAudio(); synthPlay(getState()); }
+});
+
+// Filter type
+filterTypeBtns.addEventListener('click', e => {
+    if (!e.target.dataset.ftype) return;
+    filterTypeBtns.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    updateExport();
+    if (autoPlayEnabled) { initAudio(); synthPlay(getState()); }
+});
+
+// Play
+playBtn.addEventListener('click', () => {
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    synthPlay(getState());
+});
+
+// Preset
+presetSelect.addEventListener('change', () => {
+    const id = presetSelect.value;
+    if (!id || !PRESETS[id]) return;
+    soundName.value = id;
+    setState(PRESETS[id]);
+});
+
+// Random
+randomBtn.addEventListener('click', () => {
+    const waves = ['sine','square','sawtooth','triangle'];
+    const decays = ['exp','linear'];
+    const r = (min,max) => Math.random()*(max-min)+min;
+    const ri = (min,max) => Math.floor(r(min,max));
+
+    const def = {
+        wave: waves[ri(0,4)],
+        freq: [ri(30,2000), ri(30,2000)],
+        duration: +r(0.02,0.6).toFixed(2),
+        volume: +r(0.05,0.5).toFixed(2),
+        decay: decays[ri(0,2)],
+        noise: +r(0,0.7).toFixed(2),
+        detune: ri(0,120),
+        category: 'sfx'
+    };
+    // 40% chance of filter
+    if (Math.random() < 0.4) {
+        def.filter = {
+            type: Math.random() < 0.7 ? 'lowpass' : 'highpass',
+            freq: [ri(200,4000), ri(100,2000)],
+            Q: +(r(0.5,8)).toFixed(1)
+        };
+    }
+    soundName.value = 'randomSound';
+    setState(def);
+    initAudio();
+    synthPlay(getState());
+});
+
+// Copy
+copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(exportCode.value).then(() => showToast('Copied to clipboard!'));
+});
+
+// Import
+importBtn.addEventListener('click', () => {
+    const code = prompt('Paste a SOUND_DEF entry (e.g. mySound: { wave: \'sine\', ... })');
+    if (!code) return;
+    try {
+        // Extract the name and body
+        const nameMatch = code.match(/^(\w+)\s*:/);
+        const bodyMatch = code.match(/\{[\s\S]+\}/);
+        if (!bodyMatch) throw new Error('No object found');
+        // Use Function constructor to eval safely-ish
+        const obj = (new Function('return (' + bodyMatch[0] + ')'))();
+        if (nameMatch) soundName.value = nameMatch[1];
+        setState(obj);
+        showToast('Imported!');
+    } catch(e) {
+        showToast('Import failed: ' + e.message);
+    }
+});
+
+// Toast
+function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        playBtn.click();
+    }
+});
+
+// Initial export
+updateExport();
+</script>
+</body>
+</html>
