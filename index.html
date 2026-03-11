@@ -1644,8 +1644,8 @@
             }
         }
 
-        // Full version flag (separate key for IAP integration)
-        let isFullVersion = false;
+        // Full version flag — set true for web release (demo lock only used in TWA/Play Store)
+        let isFullVersion = true;
 
         function loadFullVersion() {
             try {
