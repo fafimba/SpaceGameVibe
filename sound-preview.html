@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellar Swarm — Music Preview</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a12;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+.container {
+    width: 500px;
+    padding: 40px;
+}
+h1 {
+    color: #00e5ff;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+.subtitle {
+    color: #555;
+    font-size: 13px;
+    margin-bottom: 32px;
+}
+.sequence-btn {
+    display: block;
+    width: 100%;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    background: #12121e;
+    border: 1px solid #222;
+    border-radius: 8px;
+    color: #ccc;
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+}
+.sequence-btn:hover {
+    border-color: #00e5ff;
+    color: #fff;
+}
+.sequence-btn.active {
+    border-color: #00e5ff;
+    background: #0d1a2a;
+    color: #00e5ff;
+}
+.sequence-btn .name {
+    font-weight: 600;
+    font-size: 15px;
+}
+.sequence-btn .info {
+    color: #666;
+    font-size: 12px;
+    margin-top: 4px;
+}
+.sequence-btn.active .info { color: #00e5ff88; }
+
+.controls {
+    margin-top: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.stop-btn {
+    padding: 10px 24px;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #888;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.stop-btn:hover { border-color: #ff4444; color: #ff4444; }
+
+.volume-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+.volume-group label { color: #555; font-size: 12px; }
+.volume-group input[type="range"] {
+    flex: 1;
+    accent-color: #00e5ff;
+    height: 4px;
+}
+
+.status {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: #0d0d18;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #444;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    min-height: 40px;
+    line-height: 1.6;
+}
+
+canvas {
+    display: block;
+    margin-top: 20px;
+    border-radius: 6px;
+    width: 100%;
+    height: 60px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Stellar Swarm</h1>
+    <p class="subtitle">Music Sequence Preview — click a sequence to play</p>
+
+    <div id="buttons"></div>
+
+    <div class="controls">
+        <button class="stop-btn" onclick="stopAll()">Stop</button>
+        <div class="volume-group">
+            <label>Vol</label>
+            <input type="range" id="volume" min="0" max="100" value="70" oninput="setVolume(this.value)">
+        </div>
+    </div>
+
+    <canvas id="viz"></canvas>
+    <div class="status" id="status">Ready — click a sequence to start</div>
+</div>
+
+<script>
+// ============================================================
+// SEQUENCES DATA (from extraction)
+// ============================================================
+const MUSIC_SEQUENCES = {
+    menu_theme: {
+        bpm: 90,
+        loopBeats: 32,
+        voices: [
+            {
+                name: 'bass',
+                wave: 'sine',
+                volume: 0.10,
+                filter: { type: 'lowpass', freq: 400, Q: 0.5 },
+                notes: [
+                    [51, 0.5, 0.0],[51, 0.5, 0.5],[48, 0.5, 1.0],[39, 0.5, 1.5],
+                    [48, 0.5, 2.0],[48, 0.5, 2.5],[39, 0.5, 3.0],[39, 0.5, 3.5],
+                    [48, 0.5, 4.0],[48, 0.5, 4.5],[48, 0.5, 5.0],[48, 0.5, 5.5],
+                    [48, 0.5, 6.0],[48, 0.5, 6.5],[39, 0.5, 7.0],[39, 0.5, 7.5],
+                    [39, 0.5, 8.0],[39, 0.5, 8.5],[39, 0.5, 9.0],[50, 0.5, 9.5],
+                    [50, 0.5, 10.0],[39, 0.5, 10.5],[50, 0.5, 11.0],[50, 0.5, 11.5],
+                    [50, 0.5, 12.0],[39, 0.5, 12.5],[39, 0.5, 13.0],[39, 0.5, 13.5],
+                    [50, 0.5, 14.0],[39, 0.5, 14.5],[39, 0.5, 15.0],[39, 0.5, 15.5],
+                    [50, 0.5, 16.0],[50, 0.5, 16.5],[46, 0.5, 17.0],[50, 0.5, 17.5],
+                    [46, 0.5, 18.0],[50, 0.5, 18.5],[46, 0.5, 19.0],[50, 0.5, 19.5],
+                    [46, 0.5, 20.0],[50, 0.5, 20.5],[46, 0.5, 21.0],[50, 0.5, 21.5],
+                    [46, 0.5, 22.0],[50, 0.5, 22.5],[46, 0.5, 23.0],[50, 0.5, 23.5],
+                    [39, 0.5, 24.0],[43, 0.5, 24.5],[48, 0.5, 25.0],[43, 0.5, 25.5],
+                    [48, 0.5, 26.0],[43, 0.5, 26.5],[48, 0.5, 27.0],[43, 0.5, 27.5],
+                    [48, 0.5, 28.0],[39, 0.5, 28.5],[39, 0.5, 29.0],[48, 0.5, 29.5],
+                    [48, 0.5, 30.0],[39, 0.5, 31.0],[43, 0.5, 31.5]
+                ]
+            },
+            {
+                name: 'melody',
+                wave: 'sine',
+                volume: 0.12,
+                filter: { type: 'lowpass', freq: 3000, Q: 0.5 },
+                notes: [
+                    [55, 0.5, 0.5],[55, 0.5, 1.0],[62, 0.5, 1.5],[62, 0.5, 2.0],
+                    [62, 1.0, 2.5],[55, 0.5, 3.0],[62, 0.5, 3.5],[62, 0.5, 4.0],
+                    [62, 0.5, 4.5],[62, 0.5, 5.0],[62, 0.5, 5.5],[62, 0.5, 6.0],
+                    [62, 0.5, 6.5],[62, 0.5, 7.0],[55, 0.5, 7.5],[62, 0.5, 8.5],
+                    [62, 0.5, 9.0],[62, 0.5, 9.5],[62, 0.5, 10.0],[58, 0.5, 10.5],
+                    [58, 0.5, 11.0],[58, 0.5, 11.5],[58, 0.5, 12.0],[62, 0.5, 12.5],
+                    [58, 0.5, 13.0],[62, 0.5, 13.5],[62, 0.5, 14.0],[62, 0.5, 14.5],
+                    [62, 0.5, 15.0],[62, 0.5, 15.5],[57, 0.5, 16.5],[57, 0.5, 17.5],
+                    [57, 0.5, 18.0],[57, 0.5, 18.5],[57, 0.5, 19.0],[57, 0.5, 19.5],
+                    [57, 0.5, 20.0],[57, 0.5, 20.5],[57, 0.5, 21.5],[57, 0.5, 22.0],
+                    [57, 0.5, 22.5],[57, 0.5, 23.0],[57, 0.5, 23.5],[57, 0.5, 24.0],
+                    [62, 0.5, 24.5],[55, 0.5, 25.0],[62, 0.5, 25.5],[62, 0.5, 26.0],
+                    [62, 0.5, 26.5],[62, 0.5, 27.0],[62, 0.5, 27.5],[62, 0.5, 28.0],
+                    [62, 0.5, 28.5],[62, 0.5, 29.0],[55, 0.5, 29.5],[55, 0.5, 30.0],
+                    [62, 0.5, 30.5],[55, 0.5, 31.0],[62, 0.5, 31.5]
+                ]
+            }
+        ]
+    },
+    menu_theme_alt: {
+        bpm: 90,
+        loopBeats: 32,
+        voices: [
+            {
+                name: 'bass',
+                wave: 'sine',
+                volume: 0.10,
+                filter: { type: 'lowpass', freq: 400, Q: 0.5 },
+                notes: [
+                    [39, 0.5, 0.0],[39, 0.5, 0.5],[50, 0.5, 1.0],[27, 1.0, 1.5],
+                    [50, 0.5, 2.0],[39, 0.5, 2.5],[50, 0.5, 3.0],[39, 0.5, 3.5],
+                    [50, 0.5, 4.0],[50, 0.5, 5.0],[39, 0.5, 5.5],[50, 0.5, 6.0],
+                    [27, 1.0, 6.5],[50, 0.5, 7.0],[27, 0.5, 7.5],[50, 0.5, 8.0],
+                    [31, 0.5, 8.5],[31, 0.5, 9.0],[50, 0.5, 9.5],[31, 0.5, 10.0],
+                    [50, 0.5, 10.5],[46, 0.5, 11.0],[50, 0.5, 11.5],[31, 0.5, 12.0],
+                    [50, 0.5, 12.5],[31, 0.5, 13.0],[31, 1.0, 13.5],[31, 0.5, 14.0],
+                    [31, 0.5, 14.5],[31, 1.5, 15.0],[50, 0.5, 15.5],[43, 0.5, 16.0],
+                    [27, 1.0, 16.5],[39, 0.5, 17.0],[27, 0.5, 17.5],[39, 0.5, 18.0],
+                    [48, 0.5, 19.0],[43, 0.5, 19.5],[27, 0.5, 20.0],[27, 1.0, 20.5],
+                    [27, 0.5, 21.0],[27, 0.5, 21.5],[27, 0.5, 22.0],[27, 0.5, 22.5],
+                    [27, 1.0, 23.0],[43, 0.5, 23.5],[31, 0.5, 24.0],[31, 0.5, 24.5],
+                    [43, 0.5, 25.0],[31, 0.5, 25.5],[50, 0.5, 26.0],[31, 1.0, 26.5],
+                    [50, 0.5, 27.0],[31, 0.5, 27.5],[31, 0.5, 28.0],[31, 0.5, 28.5],
+                    [31, 0.5, 29.0],[31, 0.5, 29.5],[31, 0.5, 30.0],[31, 0.5, 30.5],
+                    [31, 0.5, 31.0],[31, 0.5, 31.5]
+                ]
+            },
+            {
+                name: 'melody',
+                wave: 'sine',
+                volume: 0.12,
+                filter: { type: 'lowpass', freq: 3000, Q: 0.5 },
+                notes: [
+                    [62, 0.5, 0.5],[62, 0.5, 1.5],[58, 0.5, 2.0],[62, 0.5, 2.5],
+                    [62, 0.5, 3.5],[62, 0.5, 4.5],[62, 0.5, 5.5],[62, 0.5, 6.5],
+                    [62, 0.5, 7.5],[57, 0.5, 8.5],[57, 0.5, 9.5],[57, 0.5, 10.5],
+                    [57, 0.5, 11.0],[57, 1.0, 11.5],[57, 0.5, 12.5],[57, 0.5, 13.5],
+                    [57, 0.5, 14.5],[57, 0.5, 15.5],[62, 0.5, 16.5],[62, 0.5, 17.0],
+                    [55, 0.5, 17.5],[55, 0.5, 18.5],[55, 0.5, 19.0],[62, 1.0, 19.5],
+                    [55, 0.5, 20.5],[55, 0.5, 21.5],[62, 0.5, 22.5],[62, 0.5, 23.0],
+                    [62, 0.5, 23.5],[62, 0.5, 24.0],[62, 0.5, 24.5],[62, 0.5, 25.5],
+                    [62, 0.5, 26.5],[58, 0.5, 27.5],[62, 0.5, 28.5],[62, 0.5, 29.5],
+                    [74, 0.5, 30.0],[74, 0.5, 30.5],[74, 0.5, 31.0],[74, 0.5, 31.5]
+                ]
+            }
+        ]
+    },
+    menu_bass_stem: {
+        bpm: 90,
+        loopBeats: 32,
+        voices: [{
+            name: 'bass',
+            wave: 'sine',
+            volume: 0.15,
+            filter: { type: 'lowpass', freq: 3000, Q: 0.5 },
+            notes: [
+                [51, 0.5, 0.0],[55, 0.25, 0.5],[62, 0.5, 0.75],[39, 0.25, 1.0],
+                [48, 0.25, 1.25],[62, 0.25, 1.5],[55, 0.5, 1.75],[62, 0.5, 2.0],
+                [55, 0.25, 2.25],[62, 0.25, 2.5],[62, 1.0, 2.75],[48, 0.25, 3.0],
+                [55, 0.25, 3.25],[62, 0.5, 3.5],[39, 0.25, 3.75],[39, 0.25, 4.0],
+                [62, 0.5, 4.25],[62, 0.5, 4.5],[55, 0.5, 4.75],[62, 0.25, 5.25],
+                [55, 0.25, 5.5],[62, 0.75, 5.75],[39, 0.25, 6.0],[48, 0.25, 6.25],
+                [62, 0.5, 6.5],[39, 0.25, 6.75],[62, 0.5, 7.25],[62, 0.75, 7.75],
+                [39, 0.25, 8.0],[39, 0.25, 8.25],[58, 0.25, 8.5],[62, 0.25, 8.75],
+                [39, 0.25, 9.0],[39, 0.5, 9.25],[62, 0.25, 9.5],[50, 0.25, 9.75],
+                [50, 0.5, 10.0],[39, 0.25, 10.25],[58, 0.25, 10.5],[62, 0.25, 10.75],
+                [58, 0.25, 11.25],[58, 0.25, 11.5],[62, 0.25, 11.75],[50, 0.25, 12.0],
+                [58, 0.25, 12.25],[39, 0.25, 12.5],[62, 0.5, 12.75],[39, 0.25, 13.0],
+                [39, 0.25, 13.25],[58, 0.25, 13.5],[62, 0.25, 13.75],[39, 0.25, 14.0],
+                [39, 0.5, 14.25],[58, 0.25, 14.5],[62, 0.25, 14.75],[50, 0.25, 15.0],
+                [39, 0.25, 15.25],[39, 0.25, 15.5],[62, 0.25, 15.75],[43, 0.25, 16.0],
+                [43, 0.25, 16.25],[50, 0.25, 16.5],[43, 0.25, 16.75],[46, 0.25, 17.25],
+                [50, 0.25, 17.5],[57, 0.25, 17.75],[43, 0.25, 18.0],[46, 0.25, 18.25],
+                [38, 0.25, 18.5],[57, 0.25, 18.75],[46, 0.25, 19.0],[50, 0.25, 19.25],
+                [57, 0.5, 19.5],[50, 0.25, 19.75],[43, 0.25, 20.0],[46, 0.25, 20.25],
+                [50, 0.25, 20.5],[57, 0.25, 20.75],[46, 0.5, 21.0],[50, 0.25, 21.25],
+                [50, 0.25, 21.5],[43, 0.25, 21.75],[46, 0.25, 22.0],[50, 0.25, 22.25],
+                [50, 0.25, 22.5],[57, 0.25, 22.75],[43, 0.25, 23.0],[46, 0.25, 23.25],
+                [50, 0.5, 23.5],[57, 0.25, 23.75],[39, 0.25, 24.0],[55, 0.25, 24.25],
+                [62, 0.75, 24.5],[43, 0.5, 24.75],[39, 0.25, 25.0],[48, 0.25, 25.25],
+                [55, 0.25, 25.5],[62, 0.25, 25.75],[62, 0.5, 26.0],[48, 0.25, 26.25],
+                [55, 0.25, 26.5],[62, 0.5, 26.75],[39, 0.25, 27.0],[62, 0.25, 27.25],
+                [55, 0.25, 27.5],[43, 0.25, 27.75],[48, 0.25, 28.0],[62, 0.25, 28.25],
+                [62, 0.25, 28.5],[62, 0.5, 28.75],[48, 0.25, 29.0],[55, 0.25, 29.25],
+                [62, 0.25, 29.5],[62, 0.75, 29.75],[48, 0.25, 30.25],[55, 0.25, 30.5],
+                [62, 0.75, 30.75],[39, 0.25, 31.0],[55, 0.25, 31.25],[55, 0.25, 31.5],
+                [62, 1.0, 31.75]
+            ]
+        }]
+    },
+    menu_bass_stem_alt: {
+        bpm: 90,
+        loopBeats: 32,
+        voices: [{
+            name: 'bass',
+            wave: 'sine',
+            volume: 0.15,
+            filter: { type: 'lowpass', freq: 3000, Q: 0.5 },
+            notes: [
+                [43, 0.25, 0.0],[27, 1.75, 0.25],[55, 0.25, 0.5],[62, 0.5, 0.75],
+                [39, 0.25, 1.0],[46, 0.25, 1.25],[55, 0.25, 1.5],[62, 0.25, 1.75],
+                [27, 5.0, 2.0],[55, 0.5, 2.25],[62, 0.25, 2.75],[48, 0.25, 3.25],
+                [55, 0.5, 3.5],[62, 0.25, 3.75],[55, 0.25, 4.5],[62, 0.25, 4.75],
+                [55, 0.25, 5.25],[62, 0.5, 5.75],[55, 0.25, 6.0],[55, 0.5, 6.5],
+                [27, 0.5, 7.25],[55, 0.25, 7.5],[27, 0.25, 7.75],[31, 1.25, 8.25],
+                [62, 0.25, 8.75],[51, 0.25, 9.25],[31, 0.75, 9.5],[50, 0.25, 10.0],
+                [31, 0.25, 10.5],[31, 0.25, 10.75],[31, 0.5, 11.0],[51, 0.25, 11.25],
+                [31, 0.25, 11.5],[43, 0.5, 11.75],[43, 0.25, 12.0],[31, 1.75, 12.25],
+                [43, 0.5, 12.5],[50, 0.25, 12.75],[43, 0.25, 13.0],[43, 0.5, 13.5],
+                [62, 0.25, 13.75],[31, 0.25, 14.25],[31, 0.25, 14.5],[31, 0.25, 14.75],
+                [31, 0.25, 15.0],[31, 0.25, 15.25],[43, 0.75, 15.5],[62, 0.25, 15.75],
+                [43, 0.25, 16.0],[27, 6.0, 16.25],[55, 0.25, 16.5],[55, 0.25, 17.0],
+                [55, 0.25, 18.0],[39, 0.25, 18.25],[55, 0.25, 18.5],[62, 0.25, 18.75],
+                [55, 0.25, 19.5],[39, 0.25, 20.0],[39, 0.25, 20.25],[55, 0.25, 21.0],
+                [55, 0.25, 21.5],[55, 0.25, 21.75],[27, 1.75, 22.25],[55, 0.25, 22.5],
+                [55, 0.25, 23.25],[62, 0.25, 23.75],[31, 0.25, 24.0],[31, 0.25, 24.25],
+                [31, 0.5, 24.5],[31, 0.75, 25.0],[43, 0.25, 25.25],[55, 0.25, 25.5],
+                [31, 0.5, 25.75],[31, 0.25, 26.25],[31, 0.25, 26.5],[43, 0.75, 26.75],
+                [43, 0.75, 27.5],[62, 0.25, 27.75],[31, 2.0, 28.25],[43, 0.25, 29.25],
+                [43, 1.0, 29.5],[62, 0.25, 29.75],[31, 0.25, 30.25],[31, 1.75, 30.5],
+                [62, 0.25, 30.75],[43, 0.25, 31.5],[43, 0.5, 31.75]
+            ]
+        }]
+    }
+};
+
+// ============================================================
+// SYNTH ENGINE
+// ============================================================
+let audioCtx = null;
+let masterGain = null;
+let analyser = null;
+let activeOscillators = [];
+let loopTimer = null;
+let currentSequence = null;
+let isPlaying = false;
+let currentBeat = 0;
+let loopStartTime = 0;
+
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new AudioContext();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.7;
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    masterGain.connect(analyser);
+    analyser.connect(audioCtx.destination);
+}
+
+function midiToFreq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function playNote(voice, midiNote, durationBeats, beatDuration, time) {
+    const freq = midiToFreq(midiNote);
+    const duration = durationBeats * beatDuration;
+
+    // Oscillator
+    const osc = audioCtx.createOscillator();
+    osc.type = voice.wave;
+    osc.frequency.setValueAtTime(freq, time);
+
+    // Gain with envelope
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(voice.volume, time + 0.01); // fast attack
+    gain.gain.setValueAtTime(voice.volume, time + duration - 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration); // smooth release
+
+    // Optional filter
+    if (voice.filter) {
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = voice.filter.type;
+        filter.frequency.value = voice.filter.freq;
+        filter.Q.value = voice.filter.Q;
+        osc.connect(filter);
+        filter.connect(gain);
+    } else {
+        osc.connect(gain);
+    }
+
+    gain.connect(masterGain);
+
+    osc.start(time);
+    osc.stop(time + duration + 0.01);
+
+    activeOscillators.push(osc);
+    osc.onended = () => {
+        const idx = activeOscillators.indexOf(osc);
+        if (idx >= 0) activeOscillators.splice(idx, 1);
+    };
+}
+
+function scheduleLoop(seq, startTime) {
+    const beatDuration = 60 / seq.bpm;
+    const loopDuration = seq.loopBeats * beatDuration;
+
+    for (const voice of seq.voices) {
+        for (const [midi, dur, beat] of voice.notes) {
+            const noteTime = startTime + (beat * beatDuration);
+            if (noteTime >= audioCtx.currentTime - 0.1) {
+                playNote(voice, midi, dur, beatDuration, noteTime);
+            }
+        }
+    }
+
+    loopStartTime = startTime;
+
+    // Schedule next loop
+    const nextLoopTime = startTime + loopDuration;
+    const msUntilReschedule = (nextLoopTime - audioCtx.currentTime - 0.5) * 1000;
+    loopTimer = setTimeout(() => {
+        if (isPlaying) scheduleLoop(seq, nextLoopTime);
+    }, Math.max(msUntilReschedule, 100));
+}
+
+function playSequence(name) {
+    initAudio();
+    stopAll();
+
+    const seq = MUSIC_SEQUENCES[name];
+    if (!seq) return;
+
+    currentSequence = name;
+    isPlaying = true;
+
+    // Update UI
+    document.querySelectorAll('.sequence-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.name === name);
+    });
+
+    const beatDuration = 60 / seq.bpm;
+    const loopDuration = seq.loopBeats * beatDuration;
+    updateStatus(`Playing: ${name} | ${seq.bpm} BPM | ${seq.loopBeats} beats (${loopDuration.toFixed(1)}s loop) | ${seq.voices.length} voices`);
+
+    scheduleLoop(seq, audioCtx.currentTime + 0.1);
+    startVisualization();
+}
+
+function stopAll() {
+    isPlaying = false;
+    currentSequence = null;
+    if (loopTimer) clearTimeout(loopTimer);
+
+    activeOscillators.forEach(osc => {
+        try { osc.stop(); } catch(e) {}
+    });
+    activeOscillators = [];
+
+    document.querySelectorAll('.sequence-btn').forEach(btn => btn.classList.remove('active'));
+    updateStatus('Stopped');
+}
+
+function setVolume(val) {
+    if (masterGain) masterGain.gain.value = val / 100;
+}
+
+function updateStatus(text) {
+    document.getElementById('status').textContent = text;
+}
+
+// ============================================================
+// VISUALIZATION
+// ============================================================
+const canvas = document.getElementById('viz');
+const ctx2d = canvas.getContext('2d');
+let animFrame = null;
+
+function startVisualization() {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    canvas.width = canvas.offsetWidth * 2;
+    canvas.height = canvas.offsetHeight * 2;
+
+    function draw() {
+        if (!isPlaying || !analyser) { ctx2d.clearRect(0, 0, canvas.width, canvas.height); return; }
+
+        const bufLen = analyser.frequencyBinCount;
+        const data = new Uint8Array(bufLen);
+        analyser.getByteTimeDomainData(data);
+
+        ctx2d.fillStyle = '#0a0a12';
+        ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx2d.beginPath();
+        ctx2d.strokeStyle = '#00e5ff';
+        ctx2d.lineWidth = 2;
+
+        const sliceWidth = canvas.width / bufLen;
+        let x = 0;
+        for (let i = 0; i < bufLen; i++) {
+            const v = data[i] / 128.0;
+            const y = v * canvas.height / 2;
+            if (i === 0) ctx2d.moveTo(x, y);
+            else ctx2d.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx2d.stroke();
+
+        // Beat indicator
+        if (currentSequence && loopStartTime) {
+            const seq = MUSIC_SEQUENCES[currentSequence];
+            const beatDuration = 60 / seq.bpm;
+            const elapsed = audioCtx.currentTime - loopStartTime;
+            const currentBeat = (elapsed / beatDuration) % seq.loopBeats;
+            const progress = currentBeat / seq.loopBeats;
+
+            ctx2d.fillStyle = '#00e5ff22';
+            ctx2d.fillRect(0, canvas.height - 6, canvas.width * progress, 6);
+            ctx2d.fillStyle = '#00e5ff';
+            ctx2d.fillRect(canvas.width * progress - 2, canvas.height - 6, 4, 6);
+        }
+
+        animFrame = requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+// ============================================================
+// BUILD UI
+// ============================================================
+const btnContainer = document.getElementById('buttons');
+for (const [name, seq] of Object.entries(MUSIC_SEQUENCES)) {
+    const totalNotes = seq.voices.reduce((sum, v) => sum + v.notes.length, 0);
+    const voiceNames = seq.voices.map(v => v.name).join(' + ');
+    const loopSec = (seq.loopBeats * 60 / seq.bpm).toFixed(1);
+
+    const btn = document.createElement('button');
+    btn.className = 'sequence-btn';
+    btn.dataset.name = name;
+    btn.innerHTML = `<div class="name">${name}</div><div class="info">${seq.bpm} BPM | ${voiceNames} | ${totalNotes} notes | ${loopSec}s loop</div>`;
+    btn.onclick = () => playSequence(name);
+    btnContainer.appendChild(btn);
+}
+</script>
+</body>
+</html>
