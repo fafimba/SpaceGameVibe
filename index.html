@@ -3089,24 +3089,14 @@
                     }
                 }
                 
-                if (e.code === 'Escape') {
+                // P key pauses/unpauses the game
+                if (e.code === 'KeyP') {
                     if (gameState === 'playing') {
                         AudioManager.play('pauseIn');
                         capturePauseBg();
                         gameState = 'paused';
                     } else if (gameState === 'paused') {
                         AudioManager.play('pauseOut');
-                        gameState = 'playing';
-                    }
-                    // skilltree: no ESC close - must choose an upgrade
-                }
-
-                // P key pauses the game (skip if cheat code buffer is active)
-                if (e.code === 'KeyP' && !cheatCodeBuffer) {
-                    if (gameState === 'playing') {
-                        capturePauseBg();
-                        gameState = 'paused';
-                    } else if (gameState === 'paused') {
                         gameState = 'playing';
                     }
                 }
@@ -3135,11 +3125,11 @@
                 }
 
                 // Shop navigation
-                if (gameState === 'menu' && (e.code === 'KeyS' || (e.code === 'Escape' && menuMode === 'shop'))) {
+                if (gameState === 'menu' && (e.code === 'KeyS' || (e.code === 'KeyP' && menuMode === 'shop'))) {
                     menuMode = menuMode === 'main' ? 'shop' : 'main';
                 }
                 // Settings navigation
-                if (gameState === 'menu' && e.code === 'Escape' && menuMode === 'settings') {
+                if (gameState === 'menu' && e.code === 'KeyP' && menuMode === 'settings') {
                     menuMode = 'main';
                     currentPauseButtons = [];
                 }
@@ -3147,11 +3137,11 @@
                 if (e.code === 'KeyR' && gameState === 'gameOver') {
                     startGame();
                 }
-                if (e.code === 'Escape' && gameState === 'gameOver') {
+                if (e.code === 'KeyP' && gameState === 'gameOver') {
                     gameState = 'menu';
                     resetMenuAnimation();
                 }
-                if (e.code === 'Escape' && gameState === 'demoEnd') {
+                if (e.code === 'KeyP' && gameState === 'demoEnd') {
                     gameState = 'menu';
                     resetMenuAnimation();
                 }
