@@ -111,9 +111,50 @@
             }
         }
 
+        /* Landscape orientation blocker for mobile */
+        #landscapeBlocker {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            z-index: 99999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: #7FDBFF;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #landscapeBlocker svg {
+            width: 80px; height: 80px;
+            margin-bottom: 24px;
+            animation: rotatePhone 1.5s ease-in-out infinite;
+        }
+        #landscapeBlocker p {
+            font-size: 20px;
+            opacity: 0.9;
+        }
+        @keyframes rotatePhone {
+            0%, 100% { transform: rotate(90deg); }
+            50% { transform: rotate(0deg); }
+        }
+        @media (pointer: coarse) and (orientation: landscape) {
+            #landscapeBlocker { display: flex !important; }
+            #gameContainer { display: none !important; }
+        }
+
     </style>
 </head>
 <body>
+    <div id="landscapeBlocker">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7FDBFF" stroke-width="1.5">
+            <rect x="5" y="2" width="14" height="20" rx="2" />
+            <line x1="12" y1="18" x2="12" y2="18.01" stroke-width="2" stroke-linecap="round" />
+        </svg>
+        <p>Rotate your device to portrait</p>
+    </div>
     <div id="gameContainer">
         <canvas id="game"></canvas>
         <canvas id="upgradeCanvas"></canvas>
@@ -2649,6 +2690,13 @@
         function init() {
             loadFullVersion();
             initDigitalGoods(); // async, no await — runs in background
+
+            // Lock orientation to portrait on mobile
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('portrait').catch(() => {});
+                }
+            } catch(e) {}
 
             // Set canvas dimensions based on device
             if (isMobile()) {

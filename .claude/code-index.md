@@ -1,20 +1,21 @@
-# index.html Code Index (~13470 lines)
+# index.html Code Index (~13510 lines)
 
 Last updated: 2026-03-11
 
 ## File Structure
 ```
-Lines 1-113:    HTML + CSS (styles, canvas, touch controls, upgradeCanvas)
-Lines 114-119:  HTML body (canvas#game, canvas#upgradeCanvas, joystick)
-Lines 120-12700+: JavaScript IIFE
+Lines 1-145:    HTML + CSS (styles, canvas, touch controls, upgradeCanvas, landscape blocker)
+Lines 146-157:  HTML body (landscapeBlocker, gameContainer, canvas#game, canvas#upgradeCanvas, joystick)
+Lines 158-13510+: JavaScript IIFE
 ```
 
 ---
 
-## 1. HTML/CSS (1-119)
-- L12-113: `<style>` — CSS for body, canvas, touch controls, joystick, upgradeCanvas overlay
+## 1. HTML/CSS (1-157)
+- L12-143: `<style>` — CSS for body, canvas, touch controls, joystick, upgradeCanvas overlay, landscape blocker
 - L44-52: `#upgradeCanvas` — absolute positioned overlay canvas (display:none, pointer-events:none)
-- L117-119: `<body>` — gameContainer, canvas#game, canvas#upgradeCanvas, touchControls
+- L108-142: `#landscapeBlocker` — CSS for mobile landscape orientation blocker overlay
+- L146-157: `<body>` — landscapeBlocker, gameContainer, canvas#game, canvas#upgradeCanvas, touchControls
 
 ## 2. CONSTANTS (128-608)
 - L131-132: `CANVAS_WIDTH/HEIGHT` — 1920x1080
