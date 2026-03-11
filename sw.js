@@ -5,10 +5,16 @@ const ASSETS = [
   '/SpaceGameVibe/manifest.json'
 ];
 
-// Install: cache all game assets
+// Install: cache assets individually (skip any that fail to fetch)
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(
+        ASSETS.map(url =>
+          cache.add(url).catch(() => console.warn('SW: failed to cache', url))
+        )
+      )
+    )
   );
   self.skipWaiting();
 });

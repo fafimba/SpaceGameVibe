@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>MIDI Preview Player</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a1a; color: #e0e0e0; font-family: 'Courier New', monospace; padding: 20px; }
+h1 { color: #00ffcc; margin-bottom: 5px; font-size: 22px; }
+.subtitle { color: #666; font-size: 12px; margin-bottom: 20px; }
+
+#dropzone {
+    border: 2px dashed #333; border-radius: 8px; padding: 40px; text-align: center;
+    color: #555; margin-bottom: 20px; transition: all 0.2s;
+}
+#dropzone.hover { border-color: #00ffcc; color: #00ffcc; background: rgba(0,255,204,0.03); }
+#dropzone .icon { font-size: 36px; margin-bottom: 8px; }
+#dropzone .hint { font-size: 13px; }
+
+#songlist { display: flex; flex-direction: column; gap: 8px; }
+.song-card {
+    background: #111; border: 1px solid #222; border-radius: 6px; padding: 12px 16px;
+    cursor: pointer; transition: all 0.15s;
+}
+.song-card:hover { border-color: #444; }
+.song-card.active { border-color: #00ffcc; background: #0a1a18; }
+.song-card .title { color: #00ffcc; font-size: 14px; font-weight: bold; }
+.song-card .meta { color: #666; font-size: 11px; margin-top: 4px; }
+.song-card .voices { color: #888; font-size: 11px; margin-top: 3px; }
+.song-card .remove { float: right; color: #444; cursor: pointer; font-size: 16px; }
+.song-card .remove:hover { color: #ff4444; }
+
+#controls { margin: 16px 0; display: flex; align-items: center; gap: 10px; }
+button {
+    background: #1a1a3a; color: #00ffcc; border: 1px solid #00ffcc; padding: 8px 20px;
+    font-size: 14px; cursor: pointer; border-radius: 4px; font-family: inherit;
+}
+button:hover { background: #00ffcc; color: #0a0a1a; }
+button:disabled { opacity: 0.3; cursor: default; }
+#time { color: #ffcc00; font-size: 16px; }
+#vol-label { color: #666; font-size: 11px; margin-left: 10px; }
+#volume { width: 80px; accent-color: #00ffcc; }
+
+#nowplaying { color: #555; font-size: 12px; margin-top: 4px; min-height: 16px; }
+</style></head><body>
+
+<h1>MIDI Preview Player</h1>
+<div class="subtitle">Drag & drop .mid files — sine wave synthesis</div>
+
+<div id="dropzone">
+    <div class="icon">♪</div>
+    <div>Drop .mid files here</div>
+    <div class="hint">(or click to browse)</div>
+    <input type="file" id="fileinput" accept=".mid,.midi" multiple style="display:none">
+</div>
+
+<div id="songlist"></div>
+
+<div id="controls">
+    <button id="btnPlay" onclick="togglePlay()" disabled>&#9654; Play</button>
+    <button id="btnStop" onclick="stopAll()" disabled>&#9632; Stop</button>
+    <span id="time">0:00</span>
+    <span id="vol-label">Vol</span>
+    <input type="range" id="volume" min="0" max="100" value="50">
+</div>
+<div id="nowplaying"></div>
+
+<script>
+// ─── MIDI Parser ───
+function parseMidi(buf) {
+    const d = new DataView(buf);
+    let pos = 0;
+    function readU16() { const v = d.getUint16(pos); pos += 2; return v; }
+    function readU32() { const v = d.getUint32(pos); pos += 4; return v; }
+    function readVarLen() {
+        let v = 0;
+        for (let i = 0; i < 4; i++) {
+            const b = d.getUint8(pos++);
+            v = (v << 7) | (b & 0x7F);
+            if (!(b & 0x80)) break;
+        }
+        return v;
+    }
+
+    // Header
+    const hdrMagic = readU32();
+    if (hdrMagic !== 0x4D546864) throw new Error('Not a MIDI file');
+    const hdrLen = readU32();
+    const format = readU16();
+    const numTracks = readU16();
+    const tpb = readU16();
+
+    const tracks = [];
+    for (let t = 0; t < numTracks; t++) {
+        const trkMagic = readU32();
+        if (trkMagic !== 0x4D54726B) { pos += readU32(); continue; }
+        const trkLen = readU32();
+        const trkEnd = pos + trkLen;
+        const events = [];
+        let runningStatus = 0;
+        let absTick = 0;
+
+        while (pos < trkEnd) {
+            const delta = readVarLen();
+            absTick += delta;
+            let status = d.getUint8(pos);
+
+            if (status < 0x80) {
+                status = runningStatus;
+            } else {
+                pos++;
+                if (status < 0xF0) runningStatus = status;
+            }
+
+            const type = status & 0xF0;
+
+            if (status === 0xFF) { // Meta
+                const metaType = d.getUint8(pos++);
+                const len = readVarLen();
+                if (metaType === 0x51 && len === 3) { // Tempo
+                    const tempo = (d.getUint8(pos) << 16) | (d.getUint8(pos+1) << 8) | d.getUint8(pos+2);
+                    events.push({ tick: absTick, type: 'tempo', tempo });
+                } else if (metaType === 0x03) { // Track name
+                    let name = '';
+                    for (let i = 0; i < len; i++) name += String.fromCharCode(d.getUint8(pos + i));
+                    events.push({ tick: absTick, type: 'name', name });
+                }
+                pos += len;
+            } else if (status >= 0xF0 && status <= 0xFE) { // SysEx
+                const len = readVarLen();
+                pos += len;
+            } else if (type === 0x90) { // Note On
+                const note = d.getUint8(pos++);
+                const vel = d.getUint8(pos++);
+                events.push({ tick: absTick, type: vel > 0 ? 'on' : 'off', note, vel });
+            } else if (type === 0x80) { // Note Off
+                const note = d.getUint8(pos++);
+                pos++; // velocity
+                events.push({ tick: absTick, type: 'off', note, vel: 0 });
+            } else if (type === 0xA0 || type === 0xB0 || type === 0xE0) {
+                pos += 2;
+            } else if (type === 0xC0 || type === 0xD0) {
+                pos += 1;
+            }
+        }
+        pos = trkEnd;
+        tracks.push(events);
+    }
+    return { tpb, tracks };
+}
+
+function midiToSong(parsed) {
+    const { tpb, tracks } = parsed;
+    let tempo = 500000; // default 120 BPM
+
+    // Find tempo from any track
+    for (const trk of tracks) {
+        for (const ev of trk) {
+            if (ev.type === 'tempo') { tempo = ev.tempo; break; }
+        }
+    }
+    const bpm = 60000000 / tempo;
+
+    function tickToSec(tick) { return (tick / tpb) * (tempo / 1000000); }
+
+    const voices = [];
+    for (const trk of tracks) {
+        let name = '';
+        const notesOn = {};
+        const notes = [];
+
+        for (const ev of trk) {
+            if (ev.type === 'name') name = ev.name;
+            if (ev.type === 'on') {
+                notesOn[ev.note] = { tick: ev.tick, vel: ev.vel };
+            } else if (ev.type === 'off' && notesOn[ev.note]) {
+                const start = notesOn[ev.note];
+                const t = tickToSec(start.tick);
+                const dur = tickToSec(ev.tick - start.tick);
+                notes.push([+t.toFixed(3), ev.note, +(Math.max(dur, 0.05)).toFixed(3), start.vel]);
+                delete notesOn[ev.note];
+            }
+        }
+
+        if (notes.length === 0) continue;
+        notes.sort((a, b) => a[0] - b[0]);
+
+        // Auto-detect type
+        const durs = notes.map(n => n[2]).sort((a,b) => a-b);
+        const pitches = notes.map(n => n[1]).sort((a,b) => a-b);
+        const medDur = durs[Math.floor(durs.length/2)];
+        const medPitch = pitches[Math.floor(pitches.length/2)];
+
+        const type = medDur < 0.4 ? 'plucked' : (medDur < 1.2 ? 'balanced' : 'pad');
+        const sub = medPitch < 48;
+
+        voices.push({ name: name || `Voice ${voices.length+1}`, type, sub, notes });
+    }
+
+    const lastNote = Math.max(...voices.flatMap(v => v.notes.map(n => n[0] + n[2])));
+    return { bpm, voices, duration: lastNote };
+}
+
+// ─── Audio Engine ───
+let ac = null, masterGain = null, playing = false, startTime = 0, offsetTime = 0;
+let timerInterval = null, schedInterval = null, voiceIdx = [];
+let currentSongIdx = -1;
+const songs = [];
+
+const volSlider = document.getElementById('volume');
+volSlider.addEventListener('input', () => {
+    if (masterGain) masterGain.gain.value = volSlider.value / 100;
+});
+
+function initAudio() {
+    if (ac) return;
+    ac = new AudioContext();
+    masterGain = ac.createGain();
+    masterGain.gain.value = volSlider.value / 100;
+    masterGain.connect(ac.destination);
+}
+
+function scheduleNote(voice, t, midi, dur, vel) {
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+    const v = vel / 127, ds = Math.max(dur, 0.05);
+    const FADE = 0.015; // 15ms anti-click fade out
+
+    if (voice.name.toLowerCase().includes('drum')) {
+        // Deep sub-bass boom: pure sine, slow attack ~40ms, long decay ~300ms
+        // From WAV analysis: 96.9% sub-bass, dominant 50-90Hz, zero HF
+        const osc = ac.createOscillator(), g = ac.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(90, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(v * 0.55, t + 0.04);
+        g.gain.setValueAtTime(v * 0.5, t + 0.06);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        g.gain.linearRampToValueAtTime(0, t + 0.32);
+        const lp = ac.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 150; lp.Q.value = 0.7;
+        osc.connect(g); g.connect(lp); lp.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.35);
+        return;
+    }
+
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    const type = voice.type;
+
+    if (type === 'plucked') {
+        o.connect(g); g.connect(masterGain);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(v * 0.35, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.001, t + ds - FADE);
+        g.gain.linearRampToValueAtTime(0, t + ds);
+    } else if (type === 'pad') {
+        const o2 = ac.createOscillator(), g2 = ac.createGain();
+        o2.type = 'sine'; o2.frequency.value = freq * 1.003;
+        const fl = ac.createBiquadFilter();
+        fl.type = 'lowpass'; fl.frequency.value = 1200; fl.Q.value = 0.5;
+        o2.connect(g2); g2.connect(fl); fl.connect(masterGain);
+        const att = Math.min(0.4, ds * 0.25);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(v * 0.07, t + att);
+        g.gain.setValueAtTime(v * 0.05, t + ds * 0.7);
+        g.gain.linearRampToValueAtTime(0, t + ds);
+        g2.gain.setValueAtTime(0, t);
+        g2.gain.linearRampToValueAtTime(v * 0.025, t + att);
+        g2.gain.linearRampToValueAtTime(0, t + ds);
+        const fl2 = ac.createBiquadFilter();
+        fl2.type = 'lowpass'; fl2.frequency.value = 1200; fl2.Q.value = 0.5;
+        o.connect(g); g.connect(fl2); fl2.connect(masterGain);
+        o2.start(t); o2.stop(t + ds + 0.02);
+    } else {
+        o.connect(g); g.connect(masterGain);
+        const att = Math.min(0.05, ds * 0.1);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(v * 0.38, t + att);
+        g.gain.setValueAtTime(v * 0.3, t + ds * 0.6);
+        g.gain.linearRampToValueAtTime(0, t + ds);
+    }
+    o.start(t); o.stop(t + ds + 0.02);
+}
+
+const LOOKAHEAD = 4;
+function scheduleBatch() {
+    if (!playing || currentSongIdx < 0) return;
+    const song = songs[currentSongIdx];
+    const elapsed = ac.currentTime - offsetTime;
+    const horizon = elapsed + LOOKAHEAD;
+
+    for (let vi = 0; vi < song.voices.length; vi++) {
+        const voice = song.voices[vi];
+        const notes = voice.notes;
+        while (voiceIdx[vi] < notes.length) {
+            const n = notes[voiceIdx[vi]];
+            if (n[0] > horizon) break;
+            if (n[0] >= elapsed - 0.1) {
+                scheduleNote(voice, offsetTime + n[0], n[1], n[2], n[3]);
+            }
+            voiceIdx[vi]++;
+        }
+    }
+
+    let allDone = true;
+    for (let vi = 0; vi < song.voices.length; vi++) {
+        if (voiceIdx[vi] < song.voices[vi].notes.length) { allDone = false; break; }
+    }
+    if (allDone) setTimeout(() => { if (playing) stopAll(); }, 3000);
+}
+
+function playSong(idx) {
+    stopAll();
+    currentSongIdx = idx;
+    renderList();
+    initAudio();
+    if (ac.state === 'suspended') ac.resume();
+    playing = true;
+    const song = songs[idx];
+    voiceIdx = song.voices.map(() => 0);
+    offsetTime = ac.currentTime + 0.1;
+    startTime = offsetTime;
+    scheduleBatch();
+    schedInterval = setInterval(scheduleBatch, 500);
+    timerInterval = setInterval(updateTime, 200);
+    document.getElementById('btnPlay').innerHTML = '&#9646;&#9646; Pause';
+    document.getElementById('btnStop').disabled = false;
+    document.getElementById('nowplaying').textContent = '♪ ' + song.name;
+}
+
+function togglePlay() {
+    if (playing) {
+        stopAll();
+    } else if (currentSongIdx >= 0) {
+        playSong(currentSongIdx);
+    } else if (songs.length > 0) {
+        playSong(0);
+    }
+}
+
+function stopAll() {
+    playing = false;
+    if (timerInterval) clearInterval(timerInterval);
+    if (schedInterval) clearInterval(schedInterval);
+    timerInterval = null; schedInterval = null;
+    // Disconnect master briefly to kill all sound
+    if (ac && masterGain) {
+        masterGain.disconnect();
+        masterGain = ac.createGain();
+        masterGain.gain.value = volSlider.value / 100;
+        masterGain.connect(ac.destination);
+    }
+    document.getElementById('time').textContent = '0:00';
+    document.getElementById('btnPlay').innerHTML = '&#9654; Play';
+    document.getElementById('nowplaying').textContent = '';
+}
+
+function updateTime() {
+    if (!playing) return;
+    const e = ac.currentTime - startTime;
+    const m = Math.floor(e / 60), s = Math.floor(e % 60);
+    document.getElementById('time').textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+// ─── Song List ───
+function renderList() {
+    const el = document.getElementById('songlist');
+    el.innerHTML = '';
+    songs.forEach((song, i) => {
+        const card = document.createElement('div');
+        card.className = 'song-card' + (i === currentSongIdx ? ' active' : '');
+        const voicesStr = song.voices.map(v =>
+            v.name + ' (' + v.type + (v.sub ? '/sub' : '') + ', ' + v.notes.length + ' notes)'
+        ).join(' · ');
+        const durMin = Math.floor(song.duration / 60);
+        const durSec = Math.floor(song.duration % 60);
+        card.innerHTML =
+            '<span class="remove" title="Remove">&times;</span>' +
+            '<div class="title">' + song.name + '</div>' +
+            '<div class="meta">' + song.bpm.toFixed(1) + ' BPM · ' + durMin + ':' + String(durSec).padStart(2,'0') + ' · ' + song.voices.length + ' voice(s)</div>' +
+            '<div class="voices">' + voicesStr + '</div>';
+        card.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove')) {
+                songs.splice(i, 1);
+                if (currentSongIdx === i) { stopAll(); currentSongIdx = -1; }
+                else if (currentSongIdx > i) currentSongIdx--;
+                renderList();
+                updateButtons();
+                return;
+            }
+            playSong(i);
+        });
+        el.appendChild(card);
+    });
+}
+
+function updateButtons() {
+    document.getElementById('btnPlay').disabled = songs.length === 0;
+    document.getElementById('btnStop').disabled = !playing;
+}
+
+// ─── Drag & Drop ───
+const dropzone = document.getElementById('dropzone');
+const fileinput = document.getElementById('fileinput');
+
+dropzone.addEventListener('click', () => fileinput.click());
+fileinput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+['dragenter','dragover'].forEach(ev => {
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('hover'); });
+});
+['dragleave','drop'].forEach(ev => {
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('hover'); });
+});
+dropzone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+
+// Also allow drop anywhere on page
+document.body.addEventListener('dragover', (e) => e.preventDefault());
+document.body.addEventListener('drop', (e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
+
+function handleFiles(files) {
+    for (const file of files) {
+        if (!file.name.match(/\.midi?$/i)) continue;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const parsed = parseMidi(e.target.result);
+                const song = midiToSong(parsed);
+                song.name = file.name.replace(/\.midi?$/i, '');
+                songs.push(song);
+                renderList();
+                updateButtons();
+                if (currentSongIdx < 0) currentSongIdx = 0;
+                renderList();
+            } catch (err) {
+                console.error('Failed to parse ' + file.name, err);
+                alert('Error parsing ' + file.name + ': ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+}
+
+updateButtons();
+</script></body></html>
