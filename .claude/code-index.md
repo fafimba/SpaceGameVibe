@@ -80,6 +80,7 @@ Lines 158-13510+: JavaScript IIFE
 
 ## 7. GAME STATE VARIABLES continued (1700-2149)
 - Cheat codes, Touch state, Player, Entity arrays, Weapon state, Camera, Upgrade state, Effects
+- L1883-1884: `controlsHintVisible`, `controlsHintFadeStart` — desktop controls hint state
 
 ## 8. PERFORMANCE OPTIMIZATIONS (2149-2420)
 - Spatial grid, Object pools, CULLING_DISTANCES, lerpColor, fastRemove, Performance monitor

@@ -1879,7 +1879,11 @@
             reverse: false,
             pause: false
         };
-        
+
+        // Desktop controls hint (minimalist tutorial)
+        let controlsHintVisible = true;
+        let controlsHintFadeStart = 0;
+
         // Cheat code system
         let cheatCodeBuffer = '';
         let cheatCodeTimer = 0; // auto-clear buffer after inactivity
@@ -2808,6 +2812,8 @@
 
         function resetGame() {
             AudioManager.stopAllLoops();
+            controlsHintVisible = true;
+            controlsHintFadeStart = 0;
             player = {
                 x: WORLD_WIDTH / 2,   // Center of world (5760)
                 y: WORLD_HEIGHT / 2,  // Center of world (3240)
@@ -3046,6 +3052,12 @@
 
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
+
+                // Dismiss desktop controls hint on movement key
+                if (controlsHintVisible && !controlsHintFadeStart &&
+                    ['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
+                    controlsHintFadeStart = Date.now();
+                }
 
                 // Init audio on first interaction
                 _initAudioOnInteraction();
@@ -12607,6 +12619,77 @@
                 ctx.restore();
             }
 
+            // ═══════════════════════════════════════
+            // DESKTOP CONTROLS HINT (bottom center)
+            // ═══════════════════════════════════════
+            if (controlsHintVisible && !isMobile()) {
+                let alpha = 0.4 + Math.sin(Date.now() / 400) * 0.2;
+                if (controlsHintFadeStart > 0) {
+                    const elapsed = (Date.now() - controlsHintFadeStart) / 1000;
+                    if (elapsed >= 1) {
+                        controlsHintVisible = false;
+                    } else {
+                        alpha *= (1 - elapsed);
+                    }
+                }
+                if (controlsHintVisible) {
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = 'bold 13px "Segoe UI", sans-serif';
+
+                    const ks = 28;       // key square size
+                    const kg = 4;        // gap between keys
+                    const groupGap = 24; // gap between WASD group and arrow group
+                    const baseY = CANVAS_HEIGHT - 80;
+                    const cx = CANVAS_WIDTH / 2;
+
+                    // Helper: draw a single key cap
+                    const drawKey = (x, y, label) => {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+                        ctx.strokeStyle = COLORS.HUD_TEXT_SECONDARY;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.roundRect(x - ks / 2, y - ks / 2, ks, ks, 5);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                        ctx.fillText(label, x, y);
+                    };
+
+                    // WASD group — centered left of midpoint
+                    //    [W]
+                    // [A][S][D]
+                    const wasdCx = cx - (ks * 1.5 + kg + groupGap / 2);
+                    drawKey(wasdCx, baseY - ks / 2 - kg / 2, 'W');                          // W (top row, center)
+                    drawKey(wasdCx - ks - kg, baseY + ks / 2 + kg / 2, 'A');                 // A
+                    drawKey(wasdCx, baseY + ks / 2 + kg / 2, 'S');                           // S
+                    drawKey(wasdCx + ks + kg, baseY + ks / 2 + kg / 2, 'D');                 // D
+
+                    // Separator "/"
+                    ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                    ctx.font = '16px "Segoe UI", sans-serif';
+                    ctx.fillText('/', cx, baseY);
+
+                    // Arrow group — centered right of midpoint
+                    //    [↑]
+                    // [←][↓][→]
+                    ctx.font = 'bold 13px "Segoe UI", sans-serif';
+                    const arrowCx = cx + (ks * 1.5 + kg + groupGap / 2);
+                    drawKey(arrowCx, baseY - ks / 2 - kg / 2, '\u2191');                     // ↑
+                    drawKey(arrowCx - ks - kg, baseY + ks / 2 + kg / 2, '\u2190');           // ←
+                    drawKey(arrowCx, baseY + ks / 2 + kg / 2, '\u2193');                     // ↓
+                    drawKey(arrowCx + ks + kg, baseY + ks / 2 + kg / 2, '\u2192');           // →
+
+                    // "to move" label below
+                    ctx.font = '12px "Segoe UI", sans-serif';
+                    ctx.fillStyle = COLORS.HUD_TEXT_SECONDARY;
+                    ctx.fillText('to move', cx, baseY + ks + kg + 14);
+
+                    ctx.restore();
+                }
+            }
 
         }
         // ============================================================
