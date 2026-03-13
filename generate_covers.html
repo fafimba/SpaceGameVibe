@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head><title>Stellar Swarm — Cover Generator</title></head>
+<body style="background:#111; margin:20px; font-family:sans-serif; color:#fff;">
+<h2>Stellar Swarm Cover Generator</h2>
+<canvas id="landscape" width="1920" height="1080"></canvas><br><br>
+<canvas id="portrait" width="800" height="1200"></canvas><br><br>
+<canvas id="square" width="800" height="800"></canvas>
+<script>
+// Game-accurate colors from ENEMY_TYPES + COLORS
+const COLORS = {
+    PLAYER: '#7FDBFF',
+    SCOUT: '#FF6B6B',
+    KAMIKAZE: '#FF9A6B',
+    TANK: '#C792FF',
+    ALIEN: '#FF3366',
+    BERSERKER: '#FF4422',
+    BERSERKER_OUTLINE: '#CC2200',
+    LEVIATHAN: '#AA33DD',
+    LEVIATHAN_OUTLINE: '#7722AA',
+    ENEMY_BULLET: '#FF6B6B',
+};
+
+// Radii from ENEMY_TYPES
+const RADII = { SCOUT: 10, KAMIKAZE: 10, TANK: 22, ALIEN: 34, BERSERKER: 18, LEVIATHAN: 50 };
+
+function rng(s) { s = Math.sin(s) * 43758.5453; return s - Math.floor(s); }
+
+function drawCover(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // Background gradient
+    const bg = ctx.createRadialGradient(W*0.5, H*0.45, 0, W*0.5, H*0.45, W*0.7);
+    bg.addColorStop(0, '#0A1628');
+    bg.addColorStop(0.5, '#060E1A');
+    bg.addColorStop(1, '#020610');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Sparse stars
+    for (let i = 0; i < 90; i++) {
+        const x = rng(i*7.3)*W, y = rng(i*13.7)*H;
+        const b = 0.12 + rng(i*3.1)*0.25;
+        const sz = 0.5 + rng(i*5.9)*1.2;
+        ctx.fillStyle = `rgba(180,200,255,${b})`;
+        ctx.beginPath(); ctx.arc(x, y, sz, 0, Math.PI*2); ctx.fill();
+    }
+
+    const scale = Math.min(W, H) / 1080;
+    const isPortrait = H > W;
+    const isSquare = Math.abs(W - H) < 200;
+
+    let px, py, titleY;
+    if (isPortrait) { px = W*0.5; py = H*0.50; titleY = H*0.15; }
+    else if (isSquare) { px = W*0.5; py = H*0.55; titleY = H*0.16; }
+    else { px = W*0.48; py = H*0.52; titleY = H*0.15; }
+
+    // --- ENEMY DRAWING FUNCTIONS (game-accurate) ---
+
+    // Scout: circle + inner circle at 0.6r, color #FF6B6B
+    function drawScout(x, y, s) {
+        const r = RADII.SCOUT * s;
+        ctx.strokeStyle = COLORS.SCOUT;
+        ctx.lineWidth = 3 * s;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5 * s;
+        ctx.beginPath(); ctx.arc(x, y, r*0.6, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Kamikaze: chevron — (r,0)→(-r,-r*0.7)→(-r*0.5,0)→(-r,r*0.7), color #FF9A6B
+    function drawKamikaze(x, y, s, angle) {
+        const r = RADII.KAMIKAZE * s;
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        const rot = (rx, ry) => [x + rx*ca - ry*sa, y + rx*sa + ry*ca];
+        ctx.strokeStyle = COLORS.KAMIKAZE;
+        ctx.lineWidth = 3 * s;
+        ctx.beginPath();
+        const [x0,y0] = rot(r,0), [x1,y1] = rot(-r,-r*0.7), [x2,y2] = rot(-r*0.5,0), [x3,y3] = rot(-r,r*0.7);
+        ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3);
+        ctx.closePath(); ctx.stroke();
+    }
+
+    // Tank: circle + inner circle, radius 22, color #C792FF
+    function drawTank(x, y, s) {
+        const r = RADII.TANK * s;
+        ctx.strokeStyle = COLORS.TANK;
+        ctx.lineWidth = 3 * s;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5 * s;
+        ctx.beginPath(); ctx.arc(x, y, r*0.6, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Alien: circle + inner circle + pulsing core, radius 34, color #FF3366
+    function drawAlien(x, y, s) {
+        const r = RADII.ALIEN * s;
+        ctx.strokeStyle = COLORS.ALIEN;
+        ctx.lineWidth = 3 * s;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5 * s;
+        ctx.beginPath(); ctx.arc(x, y, r*0.6, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = COLORS.ALIEN;
+        ctx.beginPath(); ctx.arc(x, y, r*0.3, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
+    // Berserker: chevron like kamikaze but bigger (radius 18), with inner detail diamond
+    function drawBerserker(x, y, s, angle) {
+        const r = RADII.BERSERKER * s;
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        const rot = (rx, ry) => [x + rx*ca - ry*sa, y + rx*sa + ry*ca];
+        // Outer chevron
+        ctx.strokeStyle = COLORS.BERSERKER;
+        ctx.lineWidth = 3.5 * s;
+        ctx.beginPath();
+        ctx.moveTo(...rot(r,0)); ctx.lineTo(...rot(-r,-r*0.7));
+        ctx.lineTo(...rot(-r*0.5,0)); ctx.lineTo(...rot(-r,r*0.7));
+        ctx.closePath(); ctx.stroke();
+        // Inner detail at 0.55 scale
+        const inn = 0.55;
+        ctx.strokeStyle = COLORS.BERSERKER_OUTLINE;
+        ctx.lineWidth = 1.5 * s;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(...rot(r*inn,0)); ctx.lineTo(...rot(-r*inn,-r*0.7*inn));
+        ctx.lineTo(...rot(-r*0.5*inn,0)); ctx.lineTo(...rot(-r*inn,r*0.7*inn));
+        ctx.closePath(); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Leviathan: triple concentric circles + core, radius 50, color #AA33DD
+    function drawLeviathan(x, y, s) {
+        const r = RADII.LEVIATHAN * s;
+        // Outer
+        ctx.strokeStyle = COLORS.LEVIATHAN;
+        ctx.lineWidth = 4 * s;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+        // Middle ring
+        ctx.strokeStyle = COLORS.LEVIATHAN_OUTLINE;
+        ctx.lineWidth = 2 * s;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath(); ctx.arc(x, y, r*0.75, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Inner ring
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.5 * s;
+        ctx.beginPath(); ctx.arc(x, y, r*0.5, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        // Core
+        ctx.fillStyle = COLORS.LEVIATHAN;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath(); ctx.arc(x, y, r*0.25, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
+    // Player ship (laser_cannon): (22,0)→(-12,-16)→(-10,0)→(-12,16), stroke only + glow
+    function drawPlayer(x, y, s) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.lineWidth = 3 * s;
+        ctx.shadowColor = COLORS.PLAYER;
+        ctx.shadowBlur = 30 * s;
+        ctx.beginPath();
+        ctx.moveTo(22*s, 0);
+        ctx.lineTo(-12*s, -16*s);
+        ctx.lineTo(-10*s, 0);
+        ctx.lineTo(-12*s, 16*s);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.stroke(); // double pass for stronger glow
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    // Cyan bullet line
+    function drawBullet(x, y, angle, s) {
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        ctx.strokeStyle = COLORS.PLAYER;
+        ctx.lineWidth = 2 * s;
+        ctx.beginPath();
+        ctx.moveTo(x - 5*s*ca, y - 5*s*sa);
+        ctx.lineTo(x + 5*s*ca, y + 5*s*sa);
+        ctx.stroke();
+    }
+
+    // Enemy bullet (red circle)
+    function drawEnemyBullet(x, y, s) {
+        ctx.strokeStyle = COLORS.ENEMY_BULLET;
+        ctx.lineWidth = 2 * s;
+        ctx.beginPath(); ctx.arc(x, y, 3*s, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // --- Draw enemies around the player ---
+    const enemyCount = isPortrait ? 40 : (isSquare ? 35 : 55);
+    const minY = isPortrait ? H*0.30 : H*0.25;
+
+    for (let i = 0; i < enemyCount; i++) {
+        const angle = rng(i*2.7+0.5) * Math.PI * 2;
+        const dist = 80*scale + rng(i*4.3) * (isPortrait ? 300 : 450) * scale;
+        const ex = px + Math.cos(angle) * dist;
+        const ey = py + Math.sin(angle) * dist;
+        if (ex < -20 || ex > W+20 || ey < minY || ey > H+20) continue;
+
+        const etype = rng(i*9.1);
+        const face = Math.atan2(py-ey, px-ex);
+        const es = scale * (0.9 + rng(i*6.2)*0.4);
+
+        if (etype < 0.35) drawScout(ex, ey, es);
+        else if (etype < 0.52) drawKamikaze(ex, ey, es, face);
+        else if (etype < 0.67) drawTank(ex, ey, es);
+        else if (etype < 0.78) drawBerserker(ex, ey, es, face);
+        else if (etype < 0.90) drawAlien(ex, ey, es);
+        else drawLeviathan(ex, ey, es);
+    }
+
+    // Cyan bullets from player
+    for (let i = 0; i < 14; i++) {
+        const a = rng(i*11.3+1)*Math.PI*2;
+        const d = 25*scale + rng(i*8.7)*140*scale;
+        drawBullet(px+Math.cos(a)*d, py+Math.sin(a)*d, a, scale);
+    }
+
+    // Enemy bullets
+    for (let i = 0; i < 8; i++) {
+        const a = rng(i*15.3+3)*Math.PI*2;
+        const d = 60*scale + rng(i*12.1)*180*scale;
+        drawEnemyBullet(px+Math.cos(a)*d, py+Math.sin(a)*d, scale);
+    }
+
+    // Player ship on top
+    drawPlayer(px, py, scale * 2.5);
+
+    // --- Title ---
+    const cx = W * 0.5;
+    const tSize1 = isPortrait ? 72 : (isSquare ? 68 : 100);
+    const tSize2 = isPortrait ? 82 : (isSquare ? 78 : 115);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // "STELLAR" white with glow
+    ctx.save();
+    ctx.shadowColor = 'rgba(200, 220, 255, 0.6)';
+    ctx.shadowBlur = 20;
+    ctx.font = `900 ${tSize1}px "Segoe UI", Arial, sans-serif`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('STELLAR', cx, titleY);
+    ctx.fillText('STELLAR', cx, titleY);
+    ctx.restore();
+
+    // "SWARM" cyan with strong glow
+    const swarmY = titleY + tSize1*0.5 + 10 + tSize2*0.4;
+    ctx.save();
+    ctx.shadowColor = COLORS.PLAYER;
+    ctx.shadowBlur = 35;
+    ctx.font = `900 ${tSize2}px "Segoe UI", Arial, sans-serif`;
+    ctx.fillStyle = COLORS.PLAYER;
+    ctx.fillText('SWARM', cx, swarmY);
+    ctx.fillText('SWARM', cx, swarmY);
+    ctx.restore();
+
+    // Vignette
+    const vig = ctx.createRadialGradient(W*0.5, H*0.5, W*0.25, W*0.5, H*0.5, W*0.8);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+}
+
+drawCover('landscape');
+drawCover('portrait');
+drawCover('square');
+
+function downloadCanvas(id, filename) {
+    const c = document.getElementById(id);
+    const a = document.createElement('a');
+    a.download = filename;
+    a.href = c.toDataURL('image/png');
+    a.click();
+}
+</script>
+<br>
+<button onclick="downloadCanvas('landscape','cover-landscape-1920x1080.png')" style="padding:12px 24px;font-size:16px;margin:5px;background:#7FDBFF;color:#000;border:none;border-radius:6px;cursor:pointer;">Download Landscape (1920x1080)</button>
+<button onclick="downloadCanvas('portrait','cover-portrait-800x1200.png')" style="padding:12px 24px;font-size:16px;margin:5px;background:#7FDBFF;color:#000;border:none;border-radius:6px;cursor:pointer;">Download Portrait (800x1200)</button>
+<button onclick="downloadCanvas('square','cover-square-800x800.png')" style="padding:12px 24px;font-size:16px;margin:5px;background:#7FDBFF;color:#000;border:none;border-radius:6px;cursor:pointer;">Download Square (800x800)</button>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Stellar Swarm — Bruno Ace vs Exo 2</title>
+<link href="https://fonts.googleapis.com/css2?family=Bruno+Ace&family=Exo+2:wght@300;400&display=swap" rel="stylesheet">
+<style>
+body { background: #020610; margin: 0; padding: 20px; }
+canvas { display: block; margin: 10px auto; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="800"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 1920, rowH = 400;
+
+const fonts = [
+    { name: 'Bruno Ace', weight: '400', size: 75, label: 'BRUNO ACE (Regular 400)' },
+    { name: 'Exo 2', weight: '300', size: 80, label: 'EXO 2 (Light 300)' },
+];
+
+function drawTitle(fontFamily, fontWeight, fontSize, y, label) {
+    const cx = W / 2;
+
+    ctx.fillStyle = '#020610';
+    ctx.fillRect(0, y, W, rowH);
+
+    const bg = ctx.createRadialGradient(cx, y + rowH/2, 0, cx, y + rowH/2, 500);
+    bg.addColorStop(0, 'rgba(10, 22, 40, 0.6)');
+    bg.addColorStop(1, 'rgba(2, 6, 16, 0)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, y, W, rowH);
+
+    ctx.font = '14px "Exo 2", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, y + 30);
+
+    const titleY = y + rowH * 0.52;
+    const letterSpacing = 20;
+    const wordGap = 45;
+    const font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;
+
+    function measureSpaced(text) {
+        ctx.font = font;
+        let w = 0;
+        for (let i = 0; i < text.length; i++) {
+            w += ctx.measureText(text[i]).width + (i < text.length - 1 ? letterSpacing : 0);
+        }
+        return w;
+    }
+
+    function drawSpaced(text, startX, yPos) {
+        ctx.font = font;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        let currentX = startX;
+        for (let i = 0; i < text.length; i++) {
+            ctx.fillText(text[i], currentX, yPos);
+            currentX += ctx.measureText(text[i]).width + letterSpacing;
+        }
+    }
+
+    const w1 = measureSpaced('STELLAR');
+    const w2 = measureSpaced('SWARM');
+    const totalW = w1 + wordGap + w2;
+    const startX = cx - totalW / 2;
+    const endX = startX + totalW;
+
+    // Diffuse glow
+    ctx.save();
+    ctx.shadowColor = '#7FDBFF';
+    ctx.shadowBlur = 60;
+    ctx.fillStyle = 'rgba(127, 219, 255, 0.4)';
+    drawSpaced('STELLAR', startX, titleY);
+    drawSpaced('SWARM', startX + w1 + wordGap, titleY);
+    ctx.restore();
+
+    // Main text
+    ctx.save();
+    ctx.shadowColor = '#7FDBFF';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#7FDBFF';
+    drawSpaced('STELLAR', startX, titleY);
+    drawSpaced('SWARM', startX + w1 + wordGap, titleY);
+    drawSpaced('STELLAR', startX, titleY);
+    drawSpaced('SWARM', startX + w1 + wordGap, titleY);
+    ctx.restore();
+
+    // Fading lines
+    const lineInset = totalW * 0.15;
+    const lineStartX = startX + lineInset;
+    const lineEndX = endX - lineInset;
+    const lineOffset = 45;
+
+    function drawFadeLine(ly) {
+        const grad = ctx.createLinearGradient(lineStartX, 0, lineEndX, 0);
+        grad.addColorStop(0, 'rgba(127, 219, 255, 0)');
+        grad.addColorStop(0.15, 'rgba(127, 219, 255, 0.35)');
+        grad.addColorStop(0.5, 'rgba(127, 219, 255, 0.45)');
+        grad.addColorStop(0.85, 'rgba(127, 219, 255, 0.35)');
+        grad.addColorStop(1, 'rgba(127, 219, 255, 0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(lineStartX, ly);
+        ctx.lineTo(lineEndX, ly);
+        ctx.stroke();
+    }
+
+    drawFadeLine(titleY - lineOffset);
+    drawFadeLine(titleY + lineOffset);
+}
+
+// Force load fonts before drawing
+async function loadFonts() {
+    await document.fonts.load('400 75px "Bruno Ace"');
+    await document.fonts.load('300 80px "Exo 2"');
+    await document.fonts.ready;
+    // Extra safety delay
+    await new Promise(r => setTimeout(r, 500));
+}
+
+loadFonts().then(() => {
+    ctx.fillStyle = '#020610';
+    ctx.fillRect(0, 0, W, canvas.height);
+    fonts.forEach((f, i) => drawTitle(f.name, f.weight, f.size, i * rowH, f.label));
+});
+</script>
+</body>
+</html>
